@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
+import { plantUmlRendererLimits } from '../src/limits.js';
 import {
   parsePlantUmlStandardReport,
   sanitizePlantUmlDiagnostics,
@@ -134,6 +135,17 @@ test('fails closed for unsupported or malformed known fields and invalid UTF-8',
     diagnostics: [],
   });
   assert.deepEqual(parsePlantUmlStandardReport('status=OK'), {
+    protocolVersion: null,
+    status: 'invalid',
+    diagnostics: [],
+  });
+});
+
+test('rejects public standard reports above the authoritative diagnostic maximum', () => {
+  const oversized = new Uint8Array(
+    plantUmlRendererLimits.maxDiagnosticBytes.maximum + 1,
+  );
+  assert.deepEqual(parsePlantUmlStandardReport(oversized), {
     protocolVersion: null,
     status: 'invalid',
     diagnostics: [],
