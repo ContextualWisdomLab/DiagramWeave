@@ -34,17 +34,96 @@ jobs:
         with:
           node-version: 24
           package-manager-cache: false
-      - name: Apply reviewed patch
+      - name: Apply reviewed fixes deterministically
         shell: bash
         run: |
           set -euo pipefail
-          base64 --decode .bootstrap/review-fixes.patch.b64 > /tmp/review-fixes.patch
-          sha256sum /tmp/review-fixes.patch
-          printf '%s  %s\n' \
-            '0ef241b96ff24878c1eb406a28e6b8ffb0236b827cf409de0b658fb9c39b0edb' \
-            '/tmp/review-fixes.patch' | sha256sum --check --strict
-          git apply --check /tmp/review-fixes.patch
-          git apply /tmp/review-fixes.patch
+          node <<'NODE'
+          import { readFileSync, writeFileSync } from 'node:fs';
+
+          function replaceExactly(text, before, after, label) {
+            const count = text.split(before).length - 1;
+            if (count !== 1) {
+              throw new Error(`${label}: expected one replacement target, found ${count}`);
+            }
+            return text.replace(before, after);
+          }
+
+          const rendererPath = 'packages/plantuml-renderer/src/renderer.js';
+          let renderer = readFileSync(rendererPath, 'utf8');
+          const insertionAnchor = `  return -1;\n}\n\n/**\n * Return whether one complete opening tag uses the XML empty-element marker.`;
+          const prologueHelpers = `  return -1;\n}\n\n/**\n * Find the end of a bounded processing instruction or comment.\n *\n * @param {string} text - Decoded candidate document.\n * @param {number} index - First character after the opening delimiter.\n * @param {string} delimiter - Closing delimiter.\n * @param {number} boundary - Exclusive document boundary.\n * @returns {number} First index after the delimiter, or -1 when incomplete.\n */\nfunction findDelimitedMarkupEnd(text, index, delimiter, boundary) {\n  const end = text.indexOf(delimiter, index);\n  return end === -1 || end + delimiter.length > boundary\n    ? -1\n    : end + delimiter.length;\n}\n\n/**\n * Find the end of one XML document type declaration.\n *\n * The scan respects quoted identifiers and an optional internal subset so a\n * declaration containing nested \\`>\\` characters does not terminate early.\n *\n * @param {string} text - Decoded candidate document.\n * @param {number} index - First character after \\`<!DOCTYPE\\`.\n * @param {number} boundary - Exclusive document boundary.\n * @returns {number} First index after the declaration, or -1 when malformed.\n */\nfunction findDoctypeEnd(text, index, boundary) {\n  let quote = null;\n  let subsetDepth = 0;\n  for (let cursor = index; cursor < boundary; cursor += 1) {\n    const character = text[cursor];\n    if (quote !== null) {\n      if (character === quote) {\n        quote = null;\n      }\n    } else if (character === '\"' || character === \"'\") {\n      quote = character;\n    } else if (character === '[') {\n      subsetDepth += 1;\n    } else if (character === ']') {\n      if (subsetDepth === 0) {\n        return -1;\n      }\n      subsetDepth -= 1;\n    } else if (character === '>' && subsetDepth === 0) {\n      return cursor + 1;\n    }\n  }\n  return -1;\n}\n\n/**\n * Return whether a processing instruction uses the reserved XML target.\n *\n * @param {string} text - Decoded candidate document.\n * @param {number} index - Processing-instruction start.\n * @param {number} boundary - Exclusive document boundary.\n * @returns {boolean} True for a case-insensitive \\`xml\\` target boundary.\n */\nfunction isXmlDeclarationTarget(text, index, boundary) {\n  const targetEnd = index + 5;\n  if (targetEnd >= boundary || !matchesAsciiToken(text, index, '<?xml')) {\n    return false;\n  }\n  const character = text[targetEnd];\n  return character === '?' || isDocumentWhitespace(character);\n}\n\n/**\n * Skip the restricted XML prologue accepted before the SVG root.\n *\n * One XML declaration may appear first. Comments, non-XML processing\n * instructions, and one SVG DOCTYPE may follow. Any other declaration, a\n * duplicate XML declaration, a duplicate DOCTYPE, or malformed markup fails\n * closed so non-SVG wrappers cannot be skipped accidentally.\n *\n * @param {string} text - Decoded candidate document.\n * @param {number} index - First non-whitespace document index.\n * @param {number} boundary - Exclusive document boundary.\n * @returns {number|false} First actual element index, or false when malformed.\n */\nfunction skipSvgPrologue(text, index, boundary) {\n  let cursor = index;\n  let sawNode = false;\n  let sawDoctype = false;\n  while (cursor < boundary) {\n    if (isXmlDeclarationTarget(text, cursor, boundary)) {\n      if (sawNode) {\n        return false;\n      }\n      const end = findDelimitedMarkupEnd(text, cursor + 5, '?>', boundary);\n      if (end === -1) {\n        return false;\n      }\n      sawNode = true;\n      cursor = skipDocumentWhitespace(text, end, boundary, 1);\n      continue;\n    }\n    if (text.startsWith('<!--', cursor)) {\n      const end = findDelimitedMarkupEnd(text, cursor + 4, '-->', boundary);\n      if (end === -1) {\n        return false;\n      }\n      sawNode = true;\n      cursor = skipDocumentWhitespace(text, end, boundary, 1);\n      continue;\n    }\n    if (text.startsWith('<?', cursor)) {\n      const end = findDelimitedMarkupEnd(text, cursor + 2, '?>', boundary);\n      if (end === -1) {\n        return false;\n      }\n      sawNode = true;\n      cursor = skipDocumentWhitespace(text, end, boundary, 1);\n      continue;\n    }\n    if (\n      matchesAsciiToken(text, cursor, '<!doctype') &&\n      cursor + 9 < boundary &&\n      isDocumentWhitespace(text[cursor + 9])\n    ) {\n      if (sawDoctype) {\n        return false;\n      }\n      const nameStart = skipDocumentWhitespace(text, cursor + 9, boundary, 1);\n      if (\n        !matchesAsciiToken(text, nameStart, 'svg') ||\n        !isXmlNameBoundary(text[nameStart + 3])\n      ) {\n        return false;\n      }\n      const end = findDoctypeEnd(text, nameStart + 3, boundary);\n      if (end === -1) {\n        return false;\n      }\n      sawNode = true;\n      sawDoctype = true;\n      cursor = skipDocumentWhitespace(text, end, boundary, 1);\n      continue;\n    }\n    return cursor;\n  }\n  return cursor;\n}\n\n/**\n * Return whether one complete opening tag uses the XML empty-element marker.`;
+          renderer = replaceExactly(
+            renderer,
+            insertionAnchor,
+            prologueHelpers,
+            'renderer prologue helper insertion',
+          );
+          const oldDeclaration = `  if (matchesAsciiToken(text, start, '<?xml')) {\n    const declarationEnd = text.indexOf('?>', start + 5);\n    if (declarationEnd === -1 || declarationEnd + 2 > end) {\n      return false;\n    }\n    start = skipDocumentWhitespace(text, declarationEnd + 2, end, 1);\n  }\n`;
+          const newDeclaration = `  start = skipSvgPrologue(text, start, end);\n  if (start === false || start === end) {\n    return false;\n  }\n`;
+          renderer = replaceExactly(
+            renderer,
+            oldDeclaration,
+            newDeclaration,
+            'renderer prologue call',
+          );
+          writeFileSync(rendererPath, renderer);
+
+          const hardeningPath = 'packages/plantuml-renderer/test/hardening.test.js';
+          let hardening = readFileSync(hardeningPath, 'utf8');
+          const acceptedBefore = `    '<?xml version=\"1.0\"?><svg><!-- comment --><![CDATA[<svg></svg>]]><?instruction value?><g data-value=\">\">text</g><svg /></svg>',\n    '<svg><svg/><svg></svg></svg>',`;
+          const acceptedAfter = `    '<?xml version=\"1.0\"?><svg><!-- comment --><![CDATA[<svg></svg>]]><?instruction value?><g data-value=\">\">text</g><svg /></svg>',\n    '<!-- generated --><svg/>',\n    '<?plantuml 1.2026.7?><svg/>',\n    '<!DOCTYPE svg><svg/>',\n    '<!DOCTYPE svg [<!ELEMENT svg ANY><!ENTITY label \"a>b\">]><svg/>',\n    '<!DOCTYPE svg SYSTEM \"urn:diagram:weave\"><svg/>',\n    '<?xml version=\"1.0\"?><!-- generated --><?plantuml 1.2026.7?><!DOCTYPE svg><svg/>',\n    '<svg><svg/><svg></svg></svg>',`;
+          hardening = replaceExactly(
+            hardening,
+            acceptedBefore,
+            acceptedAfter,
+            'accepted SVG prologue cases',
+          );
+          const rejectedBefore = `    '<?xml version=\"1.0\"<svg></svg>',\n    '<!-- unterminated<svg></svg>',`;
+          const rejectedAfter = `    '<?xml version=\"1.0\"<svg></svg>',\n    '<!-- generated --><?xml version=\"1.0\"?><svg/>',\n    '<?xml version=\"1.0\"?><?xml version=\"1.0\"?><svg/>',\n    '<!DOCTYPE svg><!DOCTYPE svg><svg/>',\n    '<!DOCTYPE html><svg/>',\n    '<!DOCTYPE svg [<!ELEMENT svg ANY><svg/>',\n    '<!DOCTYPE svg ]><svg/>',\n    '<!-- generated -->',\n    '<!ENTITY svg \"external\"><svg/>',\n    '<!-- unterminated<svg></svg>',`;
+          hardening = replaceExactly(
+            hardening,
+            rejectedBefore,
+            rejectedAfter,
+            'rejected SVG prologue cases',
+          );
+          writeFileSync(hardeningPath, hardening);
+
+          const packageReadmePath = 'packages/plantuml-renderer/README.md';
+          let packageReadme = readFileSync(packageReadmePath, 'utf8');
+          packageReadme = replaceExactly(
+            packageReadme,
+            "`spawnImpl` is a deterministic test-only seam used by this package's process-boundary tests. It is not a production extension point; production hosts must omit `spawnImpl` so the package uses Node.js `spawn` with the fixed command contract.",
+            "spawnImpl is a test-only process seam. It supports this package's deterministic process-boundary tests and is not a production extension point. Production hosts must omit `spawnImpl` so the package uses Node.js `spawn` with the fixed command contract.",
+            'package README process seam contract',
+          );
+          writeFileSync(packageReadmePath, packageReadme);
+
+          const operationsPath = 'docs/operations/plantuml-renderer.md';
+          let operations = readFileSync(operationsPath, 'utf8');
+          operations = replaceExactly(
+            operations,
+            '`spawnImpl` is a test-only process seam. Production hosts must omit it so the package uses Node.js `spawn` with the fixed argument, environment, and stdio contract documented above.',
+            'spawnImpl is a test-only process seam. Production hosts must omit `spawnImpl` so the package uses Node.js `spawn` with the fixed argument, environment, and stdio contract documented above.',
+            'operations process seam contract',
+          );
+          writeFileSync(operationsPath, operations);
+
+          writeFileSync(
+            'tests/renderer-hardening-contract.test.js',
+            `import assert from 'node:assert/strict';\nimport { readFile } from 'node:fs/promises';\nimport test from 'node:test';\n\nasync function readRepositoryFile(path) {\n  return readFile(new URL(\`../\${path}\`, import.meta.url), 'utf8');\n}\n\ntest('renderer documentation exposes limits and keeps the process seam test-only', async () => {\n  const rootReadme = await readRepositoryFile('README.md');\n  const packageReadme = await readRepositoryFile('packages/plantuml-renderer/README.md');\n  const operations = await readRepositoryFile('docs/operations/plantuml-renderer.md');\n\n  assert.match(rootReadme, /plantUmlRendererLimits/);\n  assert.match(packageReadme, /plantUmlRendererLimits/);\n  assert.match(packageReadme, /spawnImpl is a test-only process seam\\./i);\n  assert.match(packageReadme, /production hosts must omit \\`spawnImpl\\`/i);\n  assert.match(operations, /plantUmlRendererLimits/);\n  assert.match(operations, /spawnImpl is a test-only process seam\\./i);\n  assert.match(operations, /production hosts must omit \\`spawnImpl\\`/i);\n  assert.match(\n    operations,\n    /^\\|\\s*deadline\\s*\\|\\s*15 seconds\\s*\\|\\s*10 ms–120 seconds\\s*\\|$/im,\n  );\n  assert.match(\n    operations,\n    /^\\|\\s*source\\s*\\|\\s*1 MiB UTF-8\\s*\\|\\s*1 byte–16 MiB\\s*\\|$/im,\n  );\n});\n`,
+          );
+
+          const changelogPath = 'CHANGELOG.md';
+          let changelog = readFileSync(changelogPath, 'utf8');
+          changelog = replaceExactly(
+            changelog,
+            'single-pass SVG document validation',
+            'single-pass SVG document and restricted XML prologue validation',
+            'CHANGELOG renderer validation description',
+          );
+          writeFileSync(changelogPath, changelog);
+          NODE
           rm -rf .bootstrap
           rm -f .github/workflows/apply-renderer-review-fixes.yml
       - name: Install locked workspace
