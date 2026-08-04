@@ -151,6 +151,7 @@ test('returns an immutable help report without a runtime', async () => {
     helpTopic: 'validate',
     errorCode: null,
     errorMessage: null,
+    diagnostics: [],
     totals: { selected: 0, succeeded: 0, failed: 0 },
     files: [],
   });

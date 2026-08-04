@@ -5,6 +5,7 @@ import { TextDecoder } from 'node:util';
 import { hashSource } from '@contextualwisdomlab/diagramweave-core';
 
 import { PlantUmlRendererError } from './errors.js';
+import { parsePlantUmlStandardReport } from './standard-report.js';
 import { plantUmlRendererLimits } from './limits.js';
 const pngSignature = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 const pngEnd = Buffer.from([0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82]);
@@ -651,37 +652,6 @@ function isValidOutput(output, format) {
 }
 
 /**
- * Inspect the bounded PlantUML standard report without exposing its contents.
- *
- * The `-stdrpt:1` protocol emits line-oriented `status=OK` or
- * `status=ERROR` fields. An error field wins even when another status line is
- * present. Empty or older-version diagnostic output remains `unknown` so
- * successful rendering does not depend on stderr being nonempty. Invalid
- * UTF-8 fails closed because the report cannot be interpreted safely.
- *
- * @param {Buffer} diagnostics - Bounded stderr bytes from PlantUML.
- * @returns {'ok'|'error'|'unknown'|'invalid'} Interpreted standard-report state.
- */
-function inspectStandardReport(diagnostics) {
-  let text;
-  try {
-    text = utf8Decoder.decode(diagnostics);
-  } catch {
-    return 'invalid';
-  }
-  let status = 'unknown';
-  for (const line of text.split(/\r?\n/u)) {
-    if (line === 'status=ERROR') {
-      return 'error';
-    }
-    if (line === 'status=OK') {
-      status = 'ok';
-    }
-  }
-  return status;
-}
-
-/**
  * Create an immutable JSON-serializable render artifact.
  *
  * Base64 avoids exposing a mutable Buffer through the public package boundary
@@ -890,16 +860,16 @@ function renderRequest(options, request) {
       if (settled) {
         return;
       }
-      const diagnosticStatus = inspectStandardReport(
+      const standardReport = parsePlantUmlStandardReport(
         Buffer.concat(diagnosticChunks, diagnosticBytes),
       );
       if (
         exitCode !== 0 ||
         signal !== null ||
-        diagnosticStatus === 'error' ||
-        diagnosticStatus === 'invalid'
+        standardReport.status === 'error' ||
+        standardReport.status === 'invalid'
       ) {
-        const details = {};
+        const details = { diagnostics: standardReport.diagnostics };
         if (Number.isInteger(exitCode)) {
           details.exitCode = exitCode;
         }
