@@ -54,8 +54,9 @@ CLI never discovers or downloads executables.
 
 Add `--json` to receive one newline-terminated `CliExecutionReport`. Human and
 JSON output include only normalized paths, stable status and error codes,
-counts, and source revision hashes. They never include source text, raw renderer
-stderr, environment values, Java/JAR paths, or base64 artifacts.
+counts, source revision hashes, and validated source-free diagnostics. They
+never include source text, raw renderer stderr, raw PlantUML labels, environment
+values, Java/JAR paths, or base64 artifacts.
 
 | Exit code | Meaning |
 |---:|---|
@@ -65,6 +66,48 @@ stderr, environment values, Java/JAR paths, or base64 artifacts.
 
 The executor continues after per-diagram renderer failures so CI receives a
 complete deterministic batch result. Operational failures return exit code `2`.
+
+### Structured diagnostic example
+
+A PlantUML syntax failure at source line 2 is printed as:
+
+```text
+FAIL flows/checkout.puml [renderer_failed] PlantUML rejected the source or failed to render it.
+  flows/checkout.puml:2 ERROR [plantuml.syntax] PlantUML reported a syntax error.
+Summary: 0/1 succeeded; 1 failed.
+```
+
+The matching JSON file result contains an LSP-compatible range:
+
+```json
+{
+  "relativePath": "flows/checkout.puml",
+  "status": "failed",
+  "sourceRevisionHash": null,
+  "outputPath": null,
+  "errorCode": "renderer_failed",
+  "errorMessage": "PlantUML rejected the source or failed to render it.",
+  "diagnostics": [
+    {
+      "range": {
+        "start": { "line": 1, "character": 0 },
+        "end": { "line": 1, "character": 0 }
+      },
+      "severity": 1,
+      "code": "plantuml.syntax",
+      "source": "plantuml",
+      "message": "PlantUML reported a syntax error.",
+      "data": { "plantUmlLineNumber": 2 }
+    }
+  ]
+}
+```
+
+PlantUML reports a one-based line; the LSP range is zero-based. Reports and file
+results always own frozen `diagnostics` arrays. The CLI revalidates and clones
+renderer diagnostics before publication, so a hostile thrown object cannot
+inject arbitrary messages, source excerpts, paths, labels, or metadata. An
+error without a valid line remains a failure with an empty diagnostics array.
 
 ## Safe filesystem contract
 
