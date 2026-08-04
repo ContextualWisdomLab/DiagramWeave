@@ -9,7 +9,6 @@ import {
 
 const utf8Decoder = new TextDecoder('utf-8', { fatal: true });
 const safeCode = /^[a-z][a-z0-9_]*$/u;
-const sourceRevisionHashPattern = /^[0-9a-f]{64}$/u;
 const unsafeMessageCharacters = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/u;
 
 /**
@@ -120,7 +119,7 @@ function decodeArtifact(artifact, format) {
     ) ||
     typeof artifact.byteLength !== 'number' ||
     typeof artifact.sourceRevisionHash !== 'string' ||
-    !sourceRevisionHashPattern.test(artifact.sourceRevisionHash)
+    artifact.sourceRevisionHash.length === 0
   ) {
     throw new CliError('internal_cli_error', 'The renderer returned an invalid artifact contract.');
   }
