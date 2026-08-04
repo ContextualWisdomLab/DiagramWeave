@@ -17,6 +17,7 @@ Every render uses this fixed command shape:
 -charset UTF-8
 -nometadata
 -stdrpt:1
+-failfast2
 -t<svg|png>
 -pipe
 ```
@@ -79,9 +80,11 @@ sourceRevisionHash
 
 Base64 prevents a caller from mutating a shared Buffer and permits the same contract to cross a Worker, local process, or service boundary. A host may decode a private copy for display or file export.
 
+SVG is active, untrusted content even when PlantUML produced it. A host must not inject the decoded text with `innerHTML`; display it through a constrained image URL or an independently reviewed sanitizer and Content Security Policy. PNG remains untrusted binary input to the host image decoder.
+
 ## Output validation
 
-The renderer accepts only:
+The fixed `-failfast2` option performs a checking pass before generation so syntax errors do not become accepted error-image artifacts. The renderer accepts only:
 
 - one UTF-8 SVG document with one `<svg>` root and no trailing payload; or
 - one PNG stream with the PNG signature, terminal `IEND`, and no second PNG signature.
