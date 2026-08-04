@@ -81,21 +81,32 @@ function cloneDiagnostic(value) {
  * Sanitize a bounded collection of public PlantUML diagnostics.
  *
  * The entire collection fails closed when its shape is absent, oversized,
- * hostile, or contains an unsupported record. Returned diagnostics never retain
- * caller-owned objects and are safe to cross renderer, CLI, worker, or service
- * boundaries.
+ * hostile, or contains an unsupported record. Array length and indexed element
+ * access are isolated so a Proxy cannot escape the source-free boundary or
+ * replace the bounded iteration contract with an unbounded custom iterator.
+ * Returned diagnostics never retain caller-owned objects.
  *
  * @param {unknown} value - Untrusted diagnostics collection.
  * @returns {readonly Readonly<object>[]} Frozen source-free diagnostics.
  */
 export function sanitizePlantUmlDiagnostics(value) {
-  if (!Array.isArray(value) || value.length > 32) {
+  let length;
+  try {
+    if (!Array.isArray(value)) {
+      return emptyDiagnostics;
+    }
+    length = value.length;
+  } catch {
     return emptyDiagnostics;
   }
+  if (!Number.isInteger(length) || length < 0 || length > 32) {
+    return emptyDiagnostics;
+  }
+
   const diagnostics = [];
   try {
-    for (const item of value) {
-      const diagnostic = cloneDiagnostic(item);
+    for (let index = 0; index < length; index += 1) {
+      const diagnostic = cloneDiagnostic(value[index]);
       if (diagnostic === null) {
         return emptyDiagnostics;
       }
