@@ -19,12 +19,7 @@ concurrency:
 # scheduler receives the exact permissions it needs from this caller and then
 # narrows them again at its own job boundary.
 permissions:
-  actions: write
-  checks: read
-  contents: write
-  id-token: write
-  pull-requests: write
-  statuses: read
+  contents: read
 
 jobs:
   dispatch-review-fix:
@@ -85,6 +80,13 @@ jobs:
   review-merge:
     needs: dispatch-review-fix
     if: ${{ always() }}
+    permissions:
+      actions: write
+      checks: read
+      contents: write
+      id-token: write
+      pull-requests: write
+      statuses: read
     uses: ContextualWisdomLab/.github/.github/workflows/pr-review-merge-scheduler.yml@3f65dbee6672b78802e7d71d49c390f3817bb03b
     with:
       base_branch: "main"
