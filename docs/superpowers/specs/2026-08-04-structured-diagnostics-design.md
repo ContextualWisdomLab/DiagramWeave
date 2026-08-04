@@ -60,7 +60,7 @@ The parser:
 - maps a one-based PlantUML line to a zero-based, zero-width LSP range at character zero;
 - deeply freezes the result, diagnostics array, range, positions, and data.
 
-`sanitizePlantUmlDiagnostics` revalidates, bounds, clones, and freezes public diagnostics crossing package or service boundaries. It accepts at most 32 exact contract records and fails the entire collection closed when any record is malformed or hostile.
+`sanitizePlantUmlDiagnostics` revalidates, bounds, clones, and freezes public diagnostics crossing package or service boundaries. It accepts at most 32 exact contract records and fails the entire collection closed when any record is malformed or hostile. Proxy array length and indexed element access are isolated, and custom iterators are never used.
 
 ## Renderer contract
 
@@ -150,9 +150,10 @@ The test corpus covers:
 - unsupported protocol versions and invalid UTF-8;
 - renderer error propagation and immutability;
 - CLI revalidation, hostile getter isolation, JSON propagation, and human formatting;
+- hostile, revoked, noninteger-length, negative-length, oversized, and custom-iterator diagnostic arrays;
 - empty diagnostics for non-renderer failures.
 
-The verified clean tree passes 242 tests, has no skipped or todo tests, and reports 100% production line, branch, and function coverage plus 100% production JSDoc coverage.
+The current test suite contains 245 tests, no skipped or todo tests, and retains the exact 100% production line, branch, function, and JSDoc gates. GitHub exact-head verification remains authoritative for the final evidence.
 
 ## Documentation
 
@@ -172,8 +173,13 @@ Package versions remain `0.0.0` and changes remain under `Unreleased`. Structure
 
 ## References
 
-Microsoft. (2026). *Language Server Protocol specification, version 3.18*. https://microsoft.github.io/language-server-protocol/specifications/lsp/3.18/specification/
+Microsoft. (n.d.). *Language Server Protocol specification, version 3.18*.
+Retrieved August 4, 2026, from
+https://microsoft.github.io/language-server-protocol/specifications/lsp/3.18/specification/
 
-OASIS Open. (2020). *Static Analysis Results Interchange Format (SARIF) Version 2.1.0*. https://docs.oasis-open.org/sarif/sarif/v2.1.0/sarif-v2.1.0.html
+OASIS Open. (2023, August 28). *Static Analysis Results Interchange Format
+(SARIF) Version 2.1.0 Plus Errata 01*.
+https://docs.oasis-open.org/sarif/sarif/v2.1.0/sarif-v2.1.0.html
 
-PlantUML. (2026). *Command-line usage: Standard report (stdrpt)*. https://plantuml.com/command-line
+PlantUML. (n.d.). *Command-line usage: Standard report (stdrpt)*. Retrieved
+August 4, 2026, from https://plantuml.com/command-line
