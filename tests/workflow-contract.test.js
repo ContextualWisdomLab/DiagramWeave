@@ -54,7 +54,7 @@ test('hourly PR maintenance securely dispatches repair and pins merge governance
   );
 });
 
-test('hourly product development fails closed and creates one bounded agent task', async () => {
+test('hourly product development fails closed and proposes one bounded NIM increment', async () => {
   const workflow = await readRepositoryFile(
     '.github/workflows/hourly-product-development.yml',
   );
@@ -64,22 +64,19 @@ test('hourly product development fails closed and creates one bounded agent task
   assert.match(workflow, /group: hourly-product-development-\$\{\{ github\.repository \}\}/);
   assert.match(workflow, /cancel-in-progress: false/);
   assert.match(workflow, new RegExp(`github\\.repository == '${repositoryName}'`));
-  assert.match(workflow, /COPILOT_GITHUB_TOKEN/);
+  assert.match(workflow, /NVIDIA_API_KEY: \$\{\{ secrets\.NVIDIA_NIM_API_KEY \}\}/);
   assert.match(workflow, /gh pr list/);
   assert.match(workflow, /--state open/);
   assert.match(workflow, /reason=open_pull_request/);
-  assert.match(workflow, /reason=agent_task_token_unavailable/);
-  assert.match(workflow, /reason=task_inventory_unavailable/g);
-  assert.match(workflow, /unexpected schema/i);
-  assert.match(workflow, /active or in an unknown state/i);
-  assert.match(workflow, /\/agents\/repos\/\$\{GITHUB_REPOSITORY\}\/tasks\?per_page=100/);
-  assert.match(workflow, /X-GitHub-Api-Version: 2026-03-10/);
-  assert.match(workflow, /completed/);
-  assert.match(workflow, /failed/);
-  assert.match(workflow, /timed_out/);
-  assert.match(workflow, /cancelled/);
-  assert.match(workflow, /create_pull_request: true/);
-  assert.match(workflow, /base_ref: \$base/);
+  assert.match(workflow, /reason=pull_request_inventory_unavailable/);
+  assert.match(workflow, /reason=nim_api_key_unavailable/);
+  assert.match(workflow, /https:\/\/integrate\.api\.nvidia\.com\/v1/);
+  assert.match(workflow, /\{env:NVIDIA_API_KEY\}/);
+  assert.match(workflow, /persist-credentials: false/);
+  assert.match(workflow, /env -u GH_TOKEN -u GITHUB_TOKEN -u REPOSITORY_TOKEN/);
+  assert.match(workflow, /OPENCODE_VERSION: ["']1\.17\.13["']/);
+  assert.match(workflow, /sha256sum -c -/);
+  assert.match(workflow, /gh pr create/);
   assert.match(workflow, /exactly one bounded pull request/i);
   assert.match(workflow, /ContextualWisdomLab\/contextual-orchestrator/);
   assert.match(workflow, /source-first/i);
@@ -94,16 +91,17 @@ test('hourly product development fails closed and creates one bounded agent task
   assert.match(workflow, /Figma or Product Design/i);
   assert.match(workflow, /Do not merge, publish, release, or bypass/i);
   assert.match(workflow, /CHANGELOG\.md/);
-  assert.doesNotMatch(workflow, /AGENT_TASK_TOKEN: \$\{\{ github\.token \}\}/);
+  assert.doesNotMatch(workflow, /COPILOT_GITHUB_TOKEN/);
+  assert.doesNotMatch(workflow, /\/agents\/repos\//);
+  assert.doesNotMatch(workflow, /gh pr merge/);
 });
 
 test('hourly operations guide documents activation, credentials, and disablement', async () => {
   const guide = await readRepositoryFile('docs/operations/hourly-development.md');
 
   assert.match(guide, /default branch/i);
-  assert.match(guide, /COPILOT_GITHUB_TOKEN/);
-  assert.match(guide, /Agent tasks.*read\/write/is);
-  assert.match(guide, /public preview/i);
+  assert.match(guide, /NVIDIA_NIM_API_KEY/);
+  assert.match(guide, /OpenCode/);
   assert.match(guide, /dry run/i);
   assert.match(guide, /fail(?:s)? closed/i);
   assert.match(guide, /schedule.*delay|delay.*schedule/is);

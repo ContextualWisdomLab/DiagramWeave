@@ -21,9 +21,9 @@ To adopt a later merge-scheduler revision, review the `.github` repository chang
 
 ## Product-development loop
 
-`.github/workflows/hourly-product-development.yml` runs at minute 47 of each hour. It creates no work while any pull request is open. It also creates no work when an Agent Task is queued, in progress, idle, waiting for user input, or in an unknown state.
+`.github/workflows/hourly-product-development.yml` runs at minute 47 of each hour. It creates no work while any pull request is open, and its single concurrency group keeps agent sessions single-flight.
 
-When the repository has no open pull request and no active task, it creates exactly one bounded Copilot cloud-agent task that must produce one pull request. The delegated task must preserve DiagramWeave's source-first manual editing mode, use or improve Contextual Orchestrator for product LLM work, retain modular MSA compatibility with central `.github`, naruon, and other CWL services, and satisfy the repository's test, coverage, docstring, security, documentation, and design rules.
+When the repository has no open pull request, it runs exactly one bounded in-workflow OpenCode agent session against NVIDIA NIM and packages the resulting working tree as one pull request. The delegated session must preserve DiagramWeave's source-first manual editing mode, use or improve Contextual Orchestrator for product LLM work, retain modular MSA compatibility with central `.github`, naruon, and other CWL services, and satisfy the repository's test, coverage, docstring, security, documentation, and design rules.
 
 The delegated agent is forbidden from merging, publishing, releasing, weakening gates, or bypassing branch protection. The pull-request maintenance loop owns review, repair, exact-head revalidation, and merge.
 
@@ -35,31 +35,29 @@ Configure an organization or repository secret named `CWL_AUTOMATION_TOKEN` with
 
 If this secret is absent, the repair-dispatch job fails closed and emits `central_dispatch_token_unavailable`. The pinned review-and-merge scheduler still runs through `if: always()`, so missing repair credentials cannot disable exact-head review, branch-update, or policy-compliant merge evaluation.
 
-### Product-development task creation
+### Product-development agent credential
 
-The Agent Tasks API is in public preview and may change. It requires a user-to-server credential; GitHub's built-in `GITHUB_TOKEN` and GitHub App installation tokens are not accepted for this API.
+The agent authenticates to NVIDIA NIM with the `NVIDIA_NIM_API_KEY` organization secret, bound inside the job to `NVIDIA_API_KEY` for the pinned, SHA256-verified OpenCode CLI. This replaces the retired Copilot Agent Tasks integration and its `COPILOT_GITHUB_TOKEN` user token: no Copilot subscription is required, and the Agent Tasks public preview API is no longer called. The built-in token handles pull-request inventory, the branch push, and pull-request creation; the OpenCode agent process runs with every GitHub credential stripped from its environment.
 
-Configure an organization or repository secret named `COPILOT_GITHUB_TOKEN` with a fine-grained personal access token or GitHub App user token limited to this repository. It needs **Agent tasks read/write** permission. The workflow uses the built-in read-only token for pull-request inventory and uses `COPILOT_GITHUB_TOKEN` only for Agent Task inventory and creation.
-
-If the secret is missing, task inventory fails, the response schema changes, an open pull request exists, or an active or unknown task exists, the product-development workflow fails closed and creates nothing.
+If the secret is missing, pull-request inventory fails, or an open pull request exists, the product-development workflow fails closed and creates nothing.
 
 ## Dry run
 
 Use the Actions interface to run either workflow with `dry_run: true`.
 
 - PR maintenance prints the static central repair-dispatch payload and asks the pinned merge scheduler to run in dry-run mode.
-- Product development evaluates all gates and prints the exact bounded task prompt without creating an Agent Task.
+- Product development evaluates all gates and prints the exact bounded agent prompt without starting an agent session.
 
-A dry run still requires readable pull-request inventory. Product-development dry run also requires `COPILOT_GITHUB_TOKEN` because it must prove there is no active or unknown Agent Task.
+A dry run still requires readable pull-request inventory and the configured `NVIDIA_NIM_API_KEY`, because the gate proves the session could actually start.
 
 ## Contextual Orchestrator boundary
 
-All product LLM functionality must use or improve `ContextualWisdomLab/contextual-orchestrator` through the DiagramWeave adapter. The hourly workflow itself does not call the product inference API; it delegates repository work to GitHub's cloud agent and instructs that agent to preserve the Contextual Orchestrator product boundary.
+All product LLM functionality must use or improve `ContextualWisdomLab/contextual-orchestrator` through the DiagramWeave adapter. The hourly workflow itself does not call the product inference API; its OpenCode session uses NVIDIA NIM only as the delegated development agent's own reasoning backend and instructs that agent to preserve the Contextual Orchestrator product boundary.
 
 ## Failure handling
 
-- Inventory failure: emit a reason and create no task.
-- Unknown API schema or state: treat it as active and create no task.
+- Inventory failure: emit a reason and start no session.
+- Every NVIDIA NIM model candidate fails: discard partial work, fail the run visibly, and propose nothing.
 - Open pull request: allow PR maintenance to finish before new development starts.
 - Required Check or independent review failure: do not merge or release.
 - Delayed schedule: rely on the next scheduled run or use a manual dry run; do not add a duplicate scheduler.
@@ -70,4 +68,4 @@ All product LLM functionality must use or improve `ContextualWisdomLab/contextua
 
 To disable only autonomous product creation, disable `Hourly Product Development` in GitHub Actions or remove its `schedule` event through a pull request. To disable repository-local hourly PR maintenance, disable `Hourly PR Maintenance`; the organization-central event and sweep policies may still process pull requests according to organization policy.
 
-Deleting `COPILOT_GITHUB_TOKEN` also disables product task creation safely, but workflow disablement is preferable when the pause is intentional because the workflow summary then avoids recurring credential warnings.
+Removing this repository's access to `NVIDIA_NIM_API_KEY` also disables product development safely, but workflow disablement is preferable when the pause is intentional because the workflow summary then avoids recurring credential warnings.
