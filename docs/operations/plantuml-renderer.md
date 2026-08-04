@@ -35,7 +35,6 @@ PlantUML can embed source metadata in generated PNG and SVG files. DiagramWeave 
 ```js
 import {
   createPlantUmlRenderer,
-  plantUmlRendererLimits,
 } from '@contextualwisdomlab/diagramweave-plantuml-renderer';
 
 const renderer = createPlantUmlRenderer({
@@ -52,7 +51,7 @@ const renderer = createPlantUmlRenderer({
 
 The package exports `plantUmlRendererLimits`, a deeply frozen contract containing each default and inclusive supported minimum and maximum. Deployment tooling and configuration UIs should read this object instead of copying numeric limits.
 
-`spawnImpl` is a test-only process seam. Production hosts must omit it so the package uses Node.js `spawn` with the fixed argument, environment, and stdio contract documented above.
+spawnImpl is a test-only process seam. Production hosts must omit `spawnImpl` so the package uses Node.js `spawn` with the fixed argument, environment, and stdio contract documented above.
 
 Default limits:
 
@@ -128,5 +127,14 @@ PlantUML's official FAQ describes multiple distribution variants and different l
 - It does not parse PlantUML stderr into user-facing line diagnostics yet.
 - It does not manage Graphviz discovery or font installation.
 - It does not provide durable caching, file export, CLI argument parsing, or Studio preview state.
+- PlantUML's language-level sandbox is not an operating-system CPU or memory quota. Multi-tenant or hostile-scale deployments must run the renderer in an outer process, container, or sandbox with independent CPU, memory, process-count, and filesystem controls.
 
-These belong to separate bounded components so the security boundary remains reviewable.
+## Host integration
+
+Studio, CLI, naruon, and other CWL hosts should depend on the package contract rather than spawning Java themselves. A service wrapper may expose the same artifact and error objects over a versioned local RPC or HTTP boundary, but it must preserve:
+
+- source-only stdin transfer;
+- `SANDBOX` and metadata suppression;
+- all byte and deadline limits;
+- source-free errors;
+- explicit user control over save, publish, or network transfer.
