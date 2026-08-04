@@ -84,6 +84,53 @@ jobs:
           node --check scripts/apply-renderer-review-fixes.mjs
       - name: Apply deterministic reviewed transformations
         run: node scripts/apply-renderer-review-fixes.mjs
+      - name: Remove obsolete helper and cover closing-tag suffix validation
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import { readFileSync, writeFileSync } from 'node:fs';
+
+          function replaceExactly(path, before, after, label) {
+            const text = readFileSync(path, 'utf8');
+            const occurrences = text.split(before).length - 1;
+            if (occurrences !== 1) {
+              throw new Error(`${label}: expected one target, found ${occurrences}`);
+            }
+            writeFileSync(path, text.replace(before, after));
+          }
+
+          replaceExactly(
+            'packages/plantuml-renderer/src/renderer.js',
+            `/**
+           * Return whether the character following an XML name ends that name.
+           *
+           * @param {string|undefined} character - Character after the candidate name.
+           * @returns {boolean} True for whitespace, slash, or closing angle bracket.
+           */
+          function isXmlNameBoundary(character) {
+            return (
+              character === '>' ||
+              character === '/' ||
+              (character !== undefined && isDocumentWhitespace(character))
+            );
+          }
+
+          `,
+            '',
+            'obsolete XML name-boundary helper',
+          );
+
+          replaceExactly(
+            'packages/plantuml-renderer/test/hardening.test.js',
+            `    '<svg></g></svg>',
+              '<svg><svg/>',`,
+            `    '<svg></g></svg>',
+              '<svg></svg extra>',
+              '<svg><svg/>',`,
+            'closing-tag suffix regression',
+          );
+          NODE
       - name: Remove one-shot repair inputs
         shell: bash
         run: |
@@ -93,10 +140,6 @@ jobs:
           rm -f .github/workflows/apply-renderer-review-fixes.yml
       - name: Install locked workspace
         run: npm ci --ignore-scripts --no-audit --no-fund
-      - name: Print transformed coverage targets
-        shell: bash
-        run: |
-          nl -ba packages/plantuml-renderer/src/renderer.js | sed -n '275,300p;520,540p'
       - name: Verify the exact repaired tree
         shell: bash
         run: |
