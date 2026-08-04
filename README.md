@@ -59,15 +59,39 @@ const proposal = await client.requestEditProposal({
 
 The adapter permits remote HTTPS and loopback-only HTTP, bounds context, sends no files or environment variables automatically, rejects provider error bodies, parses strict assistant JSON, and returns only Core-validated proposals. It never saves or applies the returned edit.
 
+### `@contextualwisdomlab/diagramweave-plantuml-renderer`
+
+A local, sandboxed renderer that receives PlantUML only through stdin and returns a bounded, immutable SVG or PNG artifact:
+
+```js
+import {
+  createPlantUmlRenderer,
+} from '@contextualwisdomlab/diagramweave-plantuml-renderer';
+
+const renderer = createPlantUmlRenderer({
+  javaPath: '/absolute/path/to/java',
+  jarPath: '/absolute/path/to/plantuml.jar',
+});
+
+const artifact = await renderer.render({
+  source,
+  format: 'svg',
+});
+
+const svg = Buffer.from(artifact.dataBase64, 'base64').toString('utf8');
+```
+
+The renderer requires host-supplied absolute Java and JAR paths. It invokes no shell, passes an empty child environment, enables PlantUML `SANDBOX`, disables source metadata, enforces source/output/diagnostic/deadline limits, validates the output structure, and never exposes raw stderr. DiagramWeave does not bundle or download PlantUML in this foundation, so distributors must choose a compatible PlantUML artifact and satisfy its license notices separately.
+
 ## Product direction
 
 The repository is the modular foundation for:
 
 - **DiagramWeave Studio:** manual source editor, preview, diagnostics, Context Inspector, diff review, recovery, and accessible approval flows;
-- **DiagramWeave Renderer:** isolated local PlantUML rendering with `SANDBOX` security and remote includes disabled by default;
+- **DiagramWeave Renderer:** implemented local PlantUML package with stdin-only rendering, `SANDBOX`, metadata suppression, bounded resources, and remote includes unavailable;
 - **DiagramWeave Language Server:** diagnostics and navigation reusable by Studio and external IDEs;
 - **DiagramWeave CLI:** deterministic validation, rendering, formatting, and CI policy checks;
-- **naruon and CWL integration:** embeddable Core and provider adapters without requiring the Studio application.
+- **naruon and CWL integration:** embeddable Core, renderer, and provider adapters without requiring the Studio application.
 
 The detailed product contract is in [`docs/product/diagramweave-prd.md`](docs/product/diagramweave-prd.md). Component boundaries and trust decisions are in [`docs/architecture.md`](docs/architecture.md) and [`docs/security-model.md`](docs/security-model.md).
 
@@ -98,6 +122,7 @@ npm run verify
 - [Architecture](docs/architecture.md)
 - [Security model](docs/security-model.md)
 - [Contextual Orchestrator operations](docs/operations/contextual-orchestrator.md)
+- [PlantUML renderer operations](docs/operations/plantuml-renderer.md)
 - [Security reporting](SECURITY.md)
 - [Change history](CHANGELOG.md)
 
