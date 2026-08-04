@@ -19,6 +19,7 @@ const requiredFiles = [
   'docs/product/diagramweave-prd.md',
   'docs/architecture.md',
   'docs/security-model.md',
+  'docs/research/plantuml-structured-diagnostics.md',
   'docs/operations/contextual-orchestrator.md',
   'docs/operations/hourly-development.md',
   'docs/operations/plantuml-renderer.md',
@@ -63,11 +64,22 @@ test('changelog starts at Unreleased and names the foundation', async () => {
   assert.match(changelog, /Contextual Orchestrator/i);
   assert.match(changelog, /sandboxed.*PlantUML renderer/is);
   assert.match(changelog, /dweave validate.*dweave render/is);
+  assert.match(changelog, /structured PlantUML diagnostics/i);
+  assert.match(changelog, /raw stderr.*raw labels/is);
 });
 
-
 test('product documentation preserves the source-first modular contract', async () => {
-  const [readme, architecture, securityModel, operations, rendererOperations, cliReadme, prd] = await Promise.all([
+  const [
+    readme,
+    architecture,
+    securityModel,
+    operations,
+    rendererOperations,
+    cliReadme,
+    prd,
+    diagnosticResearch,
+    rendererReadme,
+  ] = await Promise.all([
     readFile(new URL('../README.md', import.meta.url), 'utf8'),
     readFile(new URL('../docs/architecture.md', import.meta.url), 'utf8'),
     readFile(new URL('../docs/security-model.md', import.meta.url), 'utf8'),
@@ -75,6 +87,8 @@ test('product documentation preserves the source-first modular contract', async 
     readFile(new URL('../docs/operations/plantuml-renderer.md', import.meta.url), 'utf8'),
     readFile(new URL('../packages/cli/README.md', import.meta.url), 'utf8'),
     readFile(new URL('../docs/product/diagramweave-prd.md', import.meta.url), 'utf8'),
+    readFile(new URL('../docs/research/plantuml-structured-diagnostics.md', import.meta.url), 'utf8'),
+    readFile(new URL('../packages/plantuml-renderer/README.md', import.meta.url), 'utf8'),
   ]);
 
   assert.match(readme, /manual editing.*without.*LLM/is);
@@ -86,6 +100,8 @@ test('product documentation preserves the source-first modular contract', async 
   assert.match(architecture, /DiagramWeave Studio/);
   assert.match(architecture, /naruon/i);
   assert.match(architecture, /modular MSA/i);
+  assert.match(architecture, /parsePlantUmlStandardReport/);
+  assert.match(architecture, /LSP-compatible/i);
   assert.match(securityModel, /PlantUML.*SANDBOX/is);
   assert.match(securityModel, /no remote or local include mode/is);
   assert.match(securityModel, /untrusted data/i);
@@ -100,14 +116,24 @@ test('product documentation preserves the source-first modular contract', async 
   assert.match(rendererOperations, /renderer_output_too_large/);
   assert.match(rendererOperations, /SVG is active, untrusted content/i);
   assert.match(rendererOperations, /must not inject.*`innerHTML`/i);
+  assert.match(rendererOperations, /parsePlantUmlStandardReport/);
+  assert.match(rendererOperations, /raw stderr and raw labels are never exposed/i);
+  assert.match(rendererOperations, /plantuml\.syntax/);
+  assert.match(rendererReadme, /sanitizePlantUmlDiagnostics/);
+  assert.match(rendererReadme, /"line": 1/);
   assert.match(cliReadme, /dweave validate/);
   assert.match(cliReadme, /dweave render/);
   assert.match(cliReadme, /Symbolic links are rejected/i);
   assert.match(cliReadme, /atomic rename/i);
   assert.match(cliReadme, /naruon/i);
+  assert.match(cliReadme, /flows\/checkout\.puml:2 ERROR \[plantuml\.syntax\]/);
+  assert.match(cliReadme, /raw renderer stderr, raw PlantUML labels/is);
   assert.match(prd, /^# DiagramWeave 제품 요구사항 문서\(PRD\)/m);
+  assert.match(prd, /FR-023의 foundation 범위는 구현됐다/);
+  assert.match(diagnosticResearch, /Language Server Protocol specification, version 3\.18/);
+  assert.match(diagnosticResearch, /PlantUML\. \(2026\)/);
+  assert.match(diagnosticResearch, /OASIS Open\. \(2020\)/);
 });
-
 
 test('workspace publishes independently reusable package manifests', async () => {
   const packagePaths = [
