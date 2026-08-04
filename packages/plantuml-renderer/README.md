@@ -31,7 +31,7 @@ spawnImpl is a test-only process seam. It supports this package's deterministic 
 
 ## Structured diagnostics
 
-The renderer parses PlantUML's bounded `-stdrpt:1` output with `parsePlantUmlStandardReport`. A located syntax error becomes one deeply frozen Language Server Protocol-compatible diagnostic:
+The renderer parses PlantUML's bounded `-stdrpt:1` output with `parsePlantUmlStandardReport`. The public parser rejects byte arrays larger than `plantUmlRendererLimits.maxDiagnosticBytes.maximum` before UTF-8 decoding, so callers cannot bypass the renderer's authoritative 1 MiB diagnostic ceiling. A located syntax error becomes one deeply frozen Language Server Protocol-compatible diagnostic:
 
 ```json
 {
