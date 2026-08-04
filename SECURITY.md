@@ -13,4 +13,4 @@ Report vulnerabilities privately through GitHub Security Advisories for this rep
 - AI providers receive only explicitly selected context.
 - Provider tokens are supplied by the host and are never persisted by DiagramWeave packages.
 - Edit proposals are untrusted until local schema, revision, range, and policy validation succeeds.
-- Future PlantUML rendering must default to a network- and file-closed sandbox.
+- Local PlantUML rendering uses a fixed network- and file-closed `SANDBOX`, stdin-only source transfer, metadata suppression, bounded output, and a deadline.

@@ -1,0 +1,18 @@
+{
+  "name": "@contextualwisdomlab/diagramweave-plantuml-renderer",
+  "version": "0.0.0",
+  "description": "Sandboxed stdin-only PlantUML renderer for DiagramWeave.",
+  "license": "MIT",
+  "type": "module",
+  "exports": "./src/index.js",
+  "engines": {
+    "node": ">=22 <25"
+  },
+  "dependencies": {
+    "@contextualwisdomlab/diagramweave-core": "0.0.0"
+  },
+  "files": [
+    "src"
+  ],
+  "sideEffects": false
+}

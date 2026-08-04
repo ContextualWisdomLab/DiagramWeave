@@ -2,7 +2,7 @@
 
 ## Purpose
 
-DiagramWeave is a source-first editor platform for PlantUML and future text diagram languages. The architecture protects manual editing as the authoritative workflow while making LLM output reviewable, revision-bound, and replaceable. The first implementation slice deliberately contains no renderer, database, desktop shell, or hidden document store: it establishes the portable trust kernel that each later surface must reuse.
+DiagramWeave is a source-first editor platform for PlantUML and future text diagram languages. The architecture protects manual editing as the authoritative workflow while making LLM output reviewable, revision-bound, and replaceable. The implemented foundation contains a portable trust kernel, a Contextual Orchestrator adapter, and an isolated local PlantUML renderer. It still contains no database, desktop shell, or hidden document store; future surfaces must reuse these boundaries rather than reimplement them.
 
 ## Architectural principles
 
@@ -24,7 +24,7 @@ component "DiagramWeave Studio\n(future host)" as Studio
 component "DiagramWeave Core" as Core
 component "Contextual Orchestrator Adapter" as Adapter
 component "Contextual Orchestrator" as Orchestrator
-component "PlantUML Renderer\n(future sandbox)" as Renderer
+component "PlantUML Renderer\n(local sandbox)" as Renderer
 component "naruon / CWL hosts" as Hosts
 
 User --> Studio : manual edit / review
@@ -104,11 +104,38 @@ Status: future product surface.
 
 Studio will own file tabs, manual source editing, preview layout, diagnostics, Context Inspector, diff review, keyboard interaction, recovery, and user approval. It must consume Core rather than reimplement revision or scope checks. UI work requires Figma/Product Design state coverage before implementation because source, preview, diff, diagnostics, offline, timeout, conflict, and scope-expansion states interact visibly.
 
-### Renderer adapter
+### PlantUML renderer
 
-Status: future isolated module.
+Package: `@contextualwisdomlab/diagramweave-plantuml-renderer`
 
-The renderer will expose deterministic validation and artifact creation while keeping PlantUML in a separate process boundary. Local rendering will use PlantUML `SANDBOX` security by default, deny remote includes, constrain local includes to an explicit workspace root, and enforce time, memory, input, and output limits.
+Responsibilities:
+
+- require absolute host-supplied Java and PlantUML JAR paths;
+- pass source only through stdin with no temporary source file;
+- spawn without a shell and with an empty child environment;
+- force PlantUML `SANDBOX`, UTF-8, source-metadata suppression, standard reporting, and SVG/PNG pipe mode;
+- bound source, stdout, stderr, and wall-clock time;
+- validate one complete SVG or PNG stream;
+- return an immutable base64 artifact tied to the Core SHA-256 source revision;
+- return stable source-free errors.
+
+Non-responsibilities:
+
+- bundling or downloading Java, PlantUML, Graphviz, or fonts;
+- enabling local or remote includes;
+- persisting source or artifacts;
+- parsing diagnostics into editor locations;
+- providing a CLI or Studio preview state.
+
+Public entry point:
+
+```js
+import {
+  createPlantUmlRenderer,
+} from '@contextualwisdomlab/diagramweave-plantuml-renderer';
+```
+
+The renderer is independently reusable by Studio, CLI, naruon, or another CWL host. A future include-capable renderer must be a separate explicit policy mode; it must not weaken this package's `SANDBOX` contract.
 
 ### Language Server and CLI
 
@@ -146,6 +173,16 @@ Core errors have stable `code` fields:
 - `revision_conflict`
 - `scope_expansion_required`
 
+Renderer errors have stable `code` fields:
+
+- `invalid_renderer_options`
+- `invalid_render_request`
+- `renderer_unavailable`
+- `renderer_timeout`
+- `renderer_output_too_large`
+- `renderer_failed`
+- `renderer_output_invalid`
+
 Adapter errors have stable `code` fields:
 
 - `invalid_client_options`
@@ -164,8 +201,9 @@ DiagramWeave uses package boundaries first and service boundaries only where the
 
 - Core is an embeddable library with no network dependency.
 - The Contextual Orchestrator adapter is replaceable and can point to local, organizational, or managed deployments.
-- Renderer, collaboration, policy, and persistence can become local processes or services behind versioned contracts.
-- naruon can invoke Core and the adapter without embedding Studio.
+- The PlantUML renderer is an isolated local process adapter and can later be wrapped by a versioned service without changing its artifact contract.
+- Collaboration, policy, and persistence can become local processes or services behind versioned contracts.
+- naruon can invoke Core, the renderer, and the Contextual Orchestrator adapter without embedding Studio.
 - organization-central `.github` workflows govern PRs without copying policy logic into production packages.
 - each package retains independent tests, version metadata, and public documentation.
 
