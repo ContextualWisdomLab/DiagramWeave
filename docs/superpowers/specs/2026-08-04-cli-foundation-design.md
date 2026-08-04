@@ -6,7 +6,7 @@ Approved implementation design derived from the DiagramWeave PRD requirements FR
 
 ## Product outcome
 
-The first usable DiagramWeave surface will be a source-first command-line package named `@contextualwisdomlab/diagramweave-cli` with the executable `dweave`. It gives users and CI systems a deterministic manual workflow before DiagramWeave Studio exists:
+The first usable DiagramWeave surface is a source-first command-line package named `@contextualwisdomlab/diagramweave-cli` with the executable `dweave`. It gives users and CI systems a deterministic manual workflow before DiagramWeave Studio exists:
 
 ```text
 dweave validate <file-or-directory>
@@ -22,10 +22,11 @@ The CLI reuses the existing sandboxed PlantUML renderer. It does not call an LLM
 - Accept one `.puml` or `.plantuml` file or one directory.
 - Recursively discover supported files in a directory.
 - Sort files by normalized relative path so results are deterministic across filesystems.
+- Decode each file as strict UTF-8 before renderer invocation.
 - Render each source to bounded SVG in memory through `@contextualwisdomlab/diagramweave-plantuml-renderer` and discard the artifact after validation.
 - Return exit code `0` only when every selected diagram validates.
-- Return exit code `1` when one or more diagrams fail renderer validation.
-- Return exit code `2` for invalid invocation, unsafe paths, unreadable input, output collisions, or configuration errors.
+- Return exit code `1` when one or more diagrams fail renderer validation and no operational failure occurs.
+- Return exit code `2` for invalid invocation, unsafe paths, unreadable or invalid UTF-8 input, output collisions, publication failures, or configuration errors.
 - Support human-readable output and `--json` structured output without returning source text or raw renderer diagnostics.
 
 ### `dweave render`
@@ -37,6 +38,7 @@ The CLI reuses the existing sandboxed PlantUML renderer. It does not call an LLM
 - Default to SVG and accept `--format svg|png`.
 - Refuse existing output files by default.
 - Permit explicit `--overwrite`, implemented with an atomic temporary-file replacement.
+- Reject any destination that resolves to an input source path, including when `--overwrite` is enabled.
 - Detect all destination collisions before running PlantUML.
 - Create parent directories only after the full plan is validated.
 - Return the same exit-code and structured-result contracts as `validate`.
@@ -84,7 +86,7 @@ planRenderOutputs(inputs, inputKind, outputPath, format, overwrite, fileSystem)
 publishArtifact(destination, bytes, overwrite, fileSystem)
 ```
 
-This module rejects symbolic links, non-regular input files, unsupported extensions, empty directories, path escapes, duplicate source identities, and destination collisions. Directory traversal is iterative rather than recursive so deep workspaces cannot overflow the JavaScript stack.
+This module rejects symbolic links, non-regular input files, unsupported extensions, empty directories, path escapes, duplicate source identities, source/output identity, and destination collisions. Source/output identity is rejected independently of `overwrite`. Directory traversal is iterative rather than recursive so deep workspaces cannot overflow the JavaScript stack.
 
 ### `src/execute.js`
 
@@ -95,6 +97,8 @@ executeDiagramWeaveCli(command, runtime)
 ```
 
 The runtime supplies the filesystem adapter and renderer factory. Production uses Node.js built-ins and `createPlantUmlRenderer`; tests use deterministic adapters. The executor aggregates per-file results instead of stopping at the first invalid diagram.
+
+The executor does not calculate a second revision identifier. It copies `sourceRevisionHash` from the trusted renderer artifact, whose value is defined by Core `hashSource` as lowercase SHA-256 over the exact decoded UTF-8 source. A result uses `null` when no trusted renderer artifact exists. Invalid UTF-8 is rejected before `renderer.render` is called.
 
 ### `src/presentation.js`
 
@@ -144,7 +148,9 @@ Paths are normalized relative paths for directory inputs. A single-file result u
 
 - Reject symbolic links for input files, traversed directories, and existing output targets.
 - Accept only regular `.puml` and `.plantuml` files.
-- Use the renderer's existing UTF-8 source bound, timeout, output bound, `SANDBOX`, metadata suppression, and source-free error contract.
+- Reject a destination identical to any source path, even with `--overwrite`.
+- Decode source with a fatal UTF-8 decoder before invoking the renderer.
+- Use the renderer's existing source bound, timeout, output bound, `SANDBOX`, metadata suppression, and source-free error contract.
 - Never invoke a shell.
 - Never put source text in command-line arguments, logs, JSON output, or errors.
 - Preflight every destination before rendering so partial work is not caused by predictable collisions.
@@ -152,17 +158,52 @@ Paths are normalized relative paths for directory inputs. A single-file result u
 - For `--overwrite`, write a same-directory temporary file with exclusive creation, sync and close it, then atomically rename it over the destination. Remove the temporary file on failure.
 - Do not follow output symlinks.
 
-## Determinism
+## Determinism and revision identity
 
 - Normalize directory-relative paths to `/` in reports and sorting.
 - Discover files in lexical relative-path order.
-- Preserve exact source bytes for reading and hash the exact decoded UTF-8 source through the renderer artifact.
+- Preserve exact source bytes until strict UTF-8 decoding.
+- Pass the exact decoded source string to the renderer.
+- Copy the renderer artifact's `sourceRevisionHash`; do not recompute it in the CLI.
+- Use `sourceRevisionHash: null` for input-read, UTF-8, renderer, or artifact-contract failures where no trusted artifact exists.
+- Preserve the trusted renderer hash when rendering succeeded but publication failed.
 - Render one file at a time in the initial implementation. This avoids resource spikes and makes failure ordering stable.
-- Detect output collisions before renderer invocation.
+- Detect source/output identity and all output collisions before renderer invocation.
 
-## Error handling
+## Error handling and partial publication
 
-Usage and configuration failures return one invocation report with exit code `2`. Per-diagram renderer failures are collected and return exit code `1`. Successful validation or rendering returns `0`.
+The result mapping is deterministic:
+
+| Failure | Scope | Continue | Top-level status | Exit | Hash | Publication |
+|---|---|---:|---|---:|---|---|
+| discovery or output-plan failure | command | no | `invocation_failure` | `2` | no file result | none |
+| renderer construction failure | command | no | `invocation_failure` | `2` | no file result | none |
+| `input_read_failed` or invalid UTF-8 | file | yes | `invocation_failure` | `2` | `null` | none for failed file |
+| renderer rejection | file | yes | `diagram_failure`, unless another operational failure exists | `1` or `2` | `null` | none for failed file |
+| invalid renderer artifact contract | file | yes | `invocation_failure` | `2` | `null` | none for failed file |
+| `output_write_failed` after a valid artifact | file | yes | `invocation_failure` | `2` | renderer hash | earlier successful files remain published |
+
+A predictable planning failure publishes nothing. Once execution begins, successfully published earlier files are not rolled back when a later source, renderer, or publication operation fails; the report is the authoritative partial-publication receipt. `totals.selected` is the number of discovered files represented in `files`, `succeeded` counts `valid` or `rendered`, and `failed` counts `failed`.
+
+### Exact operational fixtures
+
+Renderer construction failure:
+
+```json
+{"schemaVersion":1,"command":"validate","status":"invocation_failure","exitCode":2,"format":null,"inputKind":null,"helpTopic":null,"errorCode":"renderer_unavailable","errorMessage":"Renderer unavailable.","totals":{"selected":0,"succeeded":0,"failed":0},"files":[]}
+```
+
+Invalid UTF-8 or input read failure after discovery:
+
+```json
+{"schemaVersion":1,"command":"validate","status":"invocation_failure","exitCode":2,"format":"svg","inputKind":"file","helpTopic":null,"errorCode":null,"errorMessage":null,"totals":{"selected":1,"succeeded":0,"failed":1},"files":[{"relativePath":"diagram.puml","status":"failed","sourceRevisionHash":null,"outputPath":null,"errorCode":"input_read_failed","errorMessage":"The diagram source could not be read as UTF-8."}]}
+```
+
+Publication failure after a trusted artifact:
+
+```json
+{"schemaVersion":1,"command":"render","status":"invocation_failure","exitCode":2,"format":"svg","inputKind":"file","helpTopic":null,"errorCode":null,"errorMessage":null,"totals":{"selected":1,"succeeded":0,"failed":1},"files":[{"relativePath":"diagram.puml","status":"failed","sourceRevisionHash":"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef","outputPath":"diagram.svg","errorCode":"output_write_failed","errorMessage":"The destination is read-only."}]}
+```
 
 Stable CLI error codes include:
 
@@ -187,8 +228,9 @@ Renderer error codes are preserved in per-file results when safe.
 ## Testing and quality gates
 
 - Argument-parser table tests for every command, option, environment fallback, duplicate, and incompatibility.
-- Temporary-directory tests for file and directory discovery, deep iterative traversal, ordering, symlink rejection, empty input, and output collisions.
-- Executor tests with a fake renderer for mixed success/failure aggregation, deterministic invocation order, format propagation, source non-disclosure, and write behavior.
+- Temporary-directory tests for file and directory discovery, deep iterative traversal, ordering, symlink rejection, empty input, output collisions, and same-source overwrite rejection.
+- Executor tests with a fake renderer for mixed success/failure aggregation, deterministic invocation order, format propagation, source non-disclosure, revision-hash propagation, null hash without an artifact, invalid UTF-8 rejection before rendering, and write behavior.
+- Exact JSON fixture tests for renderer construction, input-read/UTF-8, renderer, artifact-contract, and publication failures.
 - Atomic publication tests for exclusive creation, overwrite replacement, cleanup after failure, and no output before plan validation.
 - Presentation tests for exact JSON schema and human output.
 - Executable smoke tests for help, usage failure, and source-free unexpected errors.
