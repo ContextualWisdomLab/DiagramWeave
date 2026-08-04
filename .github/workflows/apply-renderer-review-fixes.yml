@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - agent/renderer-hardening
+  pull_request:
+    types:
+      - ready_for_review
 
 permissions:
   contents: read
@@ -14,24 +17,29 @@ concurrency:
 
 jobs:
   apply-and-verify:
-    if: github.repository == 'ContextualWisdomLab/DiagramWeave'
+    if: >-
+      github.repository == 'ContextualWisdomLab/DiagramWeave' &&
+      (github.event_name == 'push' ||
+       github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ubuntu-slim
     timeout-minutes: 15
     permissions:
       contents: write
+    env:
+      EXPECTED_HEAD: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
     steps:
       - name: Check out the exact triggering revision
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-          ref: ${{ github.sha }}
+          ref: ${{ env.EXPECTED_HEAD }}
       - name: Verify the immutable repair base
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
           remote_head="$(git ls-remote origin refs/heads/agent/renderer-hardening | cut -f1)"
-          test "$remote_head" = "$GITHUB_SHA"
+          test "$remote_head" = "$EXPECTED_HEAD"
       - name: Set up Node.js
         uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6.2.0
         with:
@@ -77,7 +85,7 @@ jobs:
         run: |
           set -euo pipefail
           remote_head="$(git ls-remote origin refs/heads/agent/renderer-hardening | cut -f1)"
-          test "$remote_head" = "$GITHUB_SHA"
+          test "$remote_head" = "$EXPECTED_HEAD"
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add --all
