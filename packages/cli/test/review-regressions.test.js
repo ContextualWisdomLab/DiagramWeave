@@ -72,6 +72,38 @@ test('copies the renderer revision hash without recomputing it', async () => {
   assert.equal(report.files[0].sourceRevisionHash, sourceRevisionHash);
 });
 
+test('rejects renderer artifacts whose revision hash is not lowercase SHA-256', async () => {
+  const report = await executeDiagramWeaveCli(command('validate'), runtime({
+    rendererFactory: () => Object.freeze({
+      render: async () => Object.freeze({
+        ...artifact(),
+        sourceRevisionHash: sourceRevisionHash.toUpperCase(),
+      }),
+    }),
+  }));
+
+  assert.deepEqual(report, {
+    schemaVersion: 1,
+    command: 'validate',
+    status: 'invocation_failure',
+    exitCode: 2,
+    format: 'svg',
+    inputKind: 'file',
+    helpTopic: null,
+    errorCode: null,
+    errorMessage: null,
+    totals: { selected: 1, succeeded: 0, failed: 1 },
+    files: [{
+      relativePath: 'diagram.puml',
+      status: 'failed',
+      sourceRevisionHash: null,
+      outputPath: null,
+      errorCode: 'internal_cli_error',
+      errorMessage: 'The renderer returned an invalid artifact contract.',
+    }],
+  });
+});
+
 test('rejects invalid UTF-8 before invoking the renderer and reports a null hash', async () => {
   let renderCalls = 0;
   const report = await executeDiagramWeaveCli(command('validate'), runtime({
