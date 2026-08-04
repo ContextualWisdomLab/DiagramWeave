@@ -45,6 +45,19 @@ jobs:
         with:
           node-version: 24
           package-manager-cache: false
+      - name: Normalize and validate the deterministic transformer
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          from pathlib import Path
+
+          path = Path('scripts/apply-renderer-review-fixes.mjs')
+          source = path.read_text(encoding='utf-8')
+          source = source.replace(r'\\`svg\\`', 'svg')
+          path.write_text(source, encoding='utf-8')
+          PY
+          node --check scripts/apply-renderer-review-fixes.mjs
       - name: Apply deterministic reviewed transformations
         run: node scripts/apply-renderer-review-fixes.mjs
       - name: Remove one-shot repair inputs
