@@ -138,14 +138,22 @@ function decodeArtifact(artifact, format) {
  * @param {unknown} error - Failure to sanitize.
  * @param {string} fallbackCode - Stable fallback code.
  * @param {string} fallbackMessage - Stable fallback message.
+ * @param {string|null} sourceRevisionHash - Trusted renderer hash when an artifact existed.
  * @returns {object} Mutable safe file result.
  */
-function failedFile(input, outputPath, error, fallbackCode, fallbackMessage) {
+function failedFile(
+  input,
+  outputPath,
+  error,
+  fallbackCode,
+  fallbackMessage,
+  sourceRevisionHash = null,
+) {
   const failure = safeFailure(error, fallbackCode, fallbackMessage);
   return {
     relativePath: input.relativePath,
     status: 'failed',
-    sourceRevisionHash: null,
+    sourceRevisionHash,
     outputPath,
     errorCode: failure.code,
     errorMessage: failure.message,
@@ -253,6 +261,7 @@ export async function executeDiagramWeaveCli(command, runtime) {
         error,
         'output_write_failed',
         'The rendered artifact could not be published.',
+        decoded === undefined ? null : decoded.sourceRevisionHash,
       ));
       operationalFailure = true;
       continue;
