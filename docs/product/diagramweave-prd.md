@@ -225,7 +225,7 @@ EditProposal
 5. AI 설명, source, diff를 시각·접근성 트리에서 구분한다.
 6. 주석·레이블·include 콘텐츠는 도구 명령이 아니라 untrusted data다.
 
-현재 Foundation의 Core는 revision, schema, range와 scope-expansion 계약을 구현한다. Contextual Orchestrator adapter는 HTTPS/loopback policy, context size, strict JSON, timeout과 Core validation을 구현한다. PlantUML renderer는 host-supplied Java/JAR, stdin-only pipe, fixed `SANDBOX`, metadata suppression, byte limits, deadline, SVG/PNG 구조 검증과 source-free error contract를 구현한다.
+현재 Foundation의 Core는 revision, schema, range와 scope-expansion 계약을 구현한다. Contextual Orchestrator adapter는 HTTPS/loopback policy, context size, strict JSON, timeout과 Core validation을 구현한다. PlantUML renderer는 host-supplied Java/JAR, stdin-only pipe, fixed `SANDBOX`, metadata suppression, byte limits, deadline, SVG/PNG 구조 검증과 source-free error contract를 구현한다. DiagramWeave CLI는 `dweave validate`·`dweave render`, 결정론적 폴더 탐색, 안전한 output preflight·atomic publish, source-free human/JSON 결과와 CI 종료 코드를 구현한다. 구조화된 PlantUML line diagnostic, formatting, policy check와 Studio 통합은 아직 구현하지 않는다.
 
 ## 13. 논리적 아키텍처
 
@@ -341,11 +341,11 @@ North Star는 **Weekly Valid Diagram Outcomes**다. 수동 또는 AI 편집 후 
 
 ### Foundation
 
-Core revision/proposal contract, Contextual Orchestrator adapter, stdin-only PlantUML `SANDBOX` renderer, 품질 게이트, 보안·아키텍처 문서, 시간별 PR·개발 governance를 제공한다.
+Core revision/proposal contract, Contextual Orchestrator adapter, stdin-only PlantUML `SANDBOX` renderer, 결정론적 `dweave validate`·`dweave render` CLI, 품질 게이트, 보안·아키텍처 문서, 시간별 PR·개발 governance를 제공한다.
 
 ### Manual Editor Alpha
 
-로컬 파일, source editor, preview, diagnostics, SVG·PNG export, keyboard flow, CLI validate/render를 제공한다.
+로컬 파일, source editor, preview, diagnostics, SVG·PNG export와 keyboard flow를 제공하고 구현된 CLI 계약을 Studio workflow와 통합한다.
 
 ### AI-Assisted Beta
 
@@ -387,12 +387,13 @@ Mermaid, D2, Graphviz, Structurizr DSL, plugin SDK와 naruon/CWL 공통 diagram 
 
 ## 22. Foundation 수용 기준
 
-- Core, Contextual Orchestrator adapter, PlantUML renderer가 독립 package로 동작한다.
+- Core, Contextual Orchestrator adapter, PlantUML renderer, CLI가 독립 package로 동작한다.
 - AI output이 revision, range, schema와 scope policy를 통과하기 전에는 적용되지 않는다.
 - remote endpoint는 HTTPS, local development는 loopback HTTP만 허용한다.
 - provider error body, source, token, renderer stderr를 log 또는 public error에 노출하지 않는다.
 - renderer가 shell 없이 absolute Java/JAR를 실행하고 source를 stdin으로만 전달한다.
 - renderer가 fixed `SANDBOX`, `-nometadata`, byte cap, deadline과 SVG/PNG validation을 강제한다.
+- CLI가 한 파일과 폴더의 `validate`·`render`, source-free JSON 결과, CI 종료 코드, symlink 거부와 atomic output publication을 제공한다.
 - Node 22·24 CI를 제공한다.
 - production line·branch·function coverage와 JSDoc 100%를 충족한다.
 - PRD, architecture, security, operations, CHANGELOG를 제공한다.

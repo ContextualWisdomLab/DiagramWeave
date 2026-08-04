@@ -84,6 +84,17 @@ const svg = Buffer.from(artifact.dataBase64, 'base64').toString('utf8');
 
 `plantUmlRendererLimits` exposes the frozen default and supported range contract for host configuration. The renderer requires host-supplied absolute Java and JAR paths. It invokes no shell, passes an empty child environment, enables PlantUML `SANDBOX`, disables source metadata, enforces fail-fast syntax checking plus source/output/diagnostic/deadline limits, validates the output structure, and never exposes raw stderr. DiagramWeave does not bundle or download PlantUML in this foundation, so distributors must choose a compatible PlantUML artifact and satisfy its license notices separately.
 
+### `@contextualwisdomlab/diagramweave-cli`
+
+A deterministic manual and CI surface for validating or rendering one PlantUML file or an entire directory without an LLM:
+
+```bash
+dweave validate ./diagrams --java /absolute/path/to/java --jar /absolute/path/to/plantuml.jar
+dweave render ./diagrams --output ./artifacts --java /absolute/path/to/java --jar /absolute/path/to/plantuml.jar
+```
+
+The CLI discovers `.puml` and `.plantuml` files in stable lexical order, rejects symbolic links and output collisions, writes artifacts exclusively or by explicit atomic replacement, and emits source-free human or JSON reports. It is independently reusable by naruon, CI, and other CWL hosts. See [`packages/cli/README.md`](packages/cli/README.md) for the complete command, exit-code, filesystem, and embedding contracts.
+
 ## Product direction
 
 The repository is the modular foundation for:
@@ -91,7 +102,7 @@ The repository is the modular foundation for:
 - **DiagramWeave Studio:** manual source editor, preview, diagnostics, Context Inspector, diff review, recovery, and accessible approval flows;
 - **DiagramWeave Renderer:** implemented local PlantUML package with stdin-only rendering, `SANDBOX`, metadata suppression, bounded resources, and local and remote includes unavailable;
 - **DiagramWeave Language Server:** diagnostics and navigation reusable by Studio and external IDEs;
-- **DiagramWeave CLI:** deterministic validation, rendering, formatting, and CI policy checks;
+- **DiagramWeave CLI:** implemented deterministic validation and rendering foundation, with formatting and policy checks remaining future work;
 - **naruon and CWL integration:** embeddable Core, renderer, and provider adapters without requiring the Studio application.
 
 The detailed product contract is in [`docs/product/diagramweave-prd.md`](docs/product/diagramweave-prd.md). Component boundaries and trust decisions are in [`docs/architecture.md`](docs/architecture.md) and [`docs/security-model.md`](docs/security-model.md).
@@ -115,7 +126,7 @@ npm ci
 npm run verify
 ```
 
-`npm run verify` enforces syntax, behavior, production line/branch/function coverage at 100%, and production JSDoc coverage. The foundation has no third-party runtime dependencies.
+`npm run verify` enforces syntax, behavior, production line/branch/function coverage at 100%, and production JSDoc coverage. Runtime code uses Node.js built-ins and independently reusable DiagramWeave workspace packages.
 
 ## Documentation
 
@@ -124,6 +135,7 @@ npm run verify
 - [Security model](docs/security-model.md)
 - [Contextual Orchestrator operations](docs/operations/contextual-orchestrator.md)
 - [PlantUML renderer operations](docs/operations/plantuml-renderer.md)
+- [DiagramWeave CLI](packages/cli/README.md)
 - [Security reporting](SECURITY.md)
 - [Change history](CHANGELOG.md)
 

@@ -1,0 +1,21 @@
+{
+  "name": "@contextualwisdomlab/diagramweave-cli",
+  "version": "0.0.0",
+  "description": "Deterministic source-first PlantUML validation and rendering CLI for DiagramWeave.",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "dweave": "./src/bin.js"
+  },
+  "exports": "./src/index.js",
+  "engines": {
+    "node": ">=22 <25"
+  },
+  "dependencies": {
+    "@contextualwisdomlab/diagramweave-plantuml-renderer": "0.0.0"
+  },
+  "files": [
+    "src"
+  ],
+  "sideEffects": false
+}
