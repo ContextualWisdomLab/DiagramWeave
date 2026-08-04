@@ -1,83 +1,4 @@
-const emptyDiagnostics = Object.freeze([]);
-const maximumLineIndex = 2_147_483_647;
-
-/**
- * Return whether a value can safely supply object fields.
- *
- * @param {unknown} value - Candidate record.
- * @returns {boolean} True for non-null objects.
- */
-function isRecord(value) {
-  return value !== null && typeof value === 'object';
-}
-
-/**
- * Clone one exact PlantUML diagnostic or reject it.
- *
- * @param {unknown} value - Candidate diagnostic.
- * @returns {Readonly<object>|null} Frozen safe clone or null.
- */
-function cloneDiagnostic(value) {
-  if (!isRecord(value) || !isRecord(value.range)) {
-    return null;
-  }
-  const { start, end } = value.range;
-  if (!isRecord(start) || !isRecord(end)) {
-    return null;
-  }
-  if (
-    !Number.isInteger(start.line) ||
-    start.line < 0 ||
-    start.line > maximumLineIndex ||
-    start.character !== 0 ||
-    end.line !== start.line ||
-    end.character !== 0 ||
-    value.severity !== 1 ||
-    value.code !== 'plantuml.syntax' ||
-    value.source !== 'plantuml' ||
-    value.message !== 'PlantUML reported a syntax error.' ||
-    !isRecord(value.data) ||
-    value.data.plantUmlLineNumber !== start.line + 1
-  ) {
-    return null;
-  }
-  const position = Object.freeze({ line: start.line, character: 0 });
-  return Object.freeze({
-    range: Object.freeze({ start: position, end: position }),
-    severity: 1,
-    code: 'plantuml.syntax',
-    source: 'plantuml',
-    message: 'PlantUML reported a syntax error.',
-    data: Object.freeze({ plantUmlLineNumber: start.line + 1 }),
-  });
-}
-
-/**
- * Clone a bounded diagnostic collection without retaining caller-owned data.
- *
- * @param {unknown} value - Candidate diagnostics collection.
- * @returns {readonly Readonly<object>[]} Frozen safe diagnostics.
- */
-function cloneDiagnostics(value) {
-  if (!Array.isArray(value) || value.length > 32) {
-    return emptyDiagnostics;
-  }
-  const diagnostics = [];
-  try {
-    for (const item of value) {
-      const diagnostic = cloneDiagnostic(item);
-      if (diagnostic === null) {
-        return emptyDiagnostics;
-      }
-      diagnostics.push(diagnostic);
-    }
-  } catch {
-    return emptyDiagnostics;
-  }
-  return diagnostics.length === 0
-    ? emptyDiagnostics
-    : Object.freeze(diagnostics);
-}
+import { sanitizePlantUmlDiagnostics } from './standard-report.js';
 
 /**
  * Stable PlantUML renderer error with safe structured metadata.
@@ -99,7 +20,7 @@ export class PlantUmlRendererError extends Error {
     super(message);
     this.name = 'PlantUmlRendererError';
     this.code = code;
-    this.diagnostics = cloneDiagnostics(details.diagnostics);
+    this.diagnostics = sanitizePlantUmlDiagnostics(details.diagnostics);
     if (details.field !== undefined) {
       this.field = details.field;
     }
