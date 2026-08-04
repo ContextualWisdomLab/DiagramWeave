@@ -13,8 +13,17 @@ test('renderer documentation exposes limits and keeps the process seam test-only
 
   assert.match(rootReadme, /plantUmlRendererLimits/);
   assert.match(packageReadme, /plantUmlRendererLimits/);
-  assert.match(packageReadme, /spawnImpl.*test-only|test-only.*spawnImpl/is);
-  assert.match(packageReadme, /production hosts.*omit.*spawnImpl/is);
+  assert.match(packageReadme, /spawnImpl is a test-only process seam\./i);
+  assert.match(packageReadme, /production hosts must omit `spawnImpl`/i);
   assert.match(operations, /plantUmlRendererLimits/);
-  assert.match(operations, /spawnImpl.*test-only|test-only.*spawnImpl/is);
+  assert.match(operations, /spawnImpl is a test-only process seam\./i);
+  assert.match(operations, /production hosts must omit `spawnImpl`/i);
+  assert.match(
+    operations,
+    /^\|\s*deadline\s*\|\s*15 seconds\s*\|\s*10 ms–120 seconds\s*\|$/im,
+  );
+  assert.match(
+    operations,
+    /^\|\s*source\s*\|\s*1 MiB UTF-8\s*\|\s*1 byte–16 MiB\s*\|$/im,
+  );
 });
