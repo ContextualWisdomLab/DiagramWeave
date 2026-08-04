@@ -225,13 +225,13 @@ EditProposal
 5. AI 설명, source, diff를 시각·접근성 트리에서 구분한다.
 6. 주석·레이블·include 콘텐츠는 도구 명령이 아니라 untrusted data다.
 
-현재 Foundation의 Core는 revision, schema, range와 scope-expansion 계약을 구현한다. Contextual Orchestrator adapter는 HTTPS/loopback policy, context size, strict JSON, timeout과 Core validation을 구현한다.
+현재 Foundation의 Core는 revision, schema, range와 scope-expansion 계약을 구현한다. Contextual Orchestrator adapter는 HTTPS/loopback policy, context size, strict JSON, timeout과 Core validation을 구현한다. PlantUML renderer는 host-supplied Java/JAR, stdin-only pipe, fixed `SANDBOX`, metadata suppression, byte limits, deadline, SVG/PNG 구조 검증과 source-free error contract를 구현한다.
 
 ## 13. 논리적 아키텍처
 
 - **DiagramWeave Studio:** 데스크톱 UI와 파일·diff·미리보기·승인
 - **DiagramWeave Core:** revision, proposal validation, preview, apply
-- **DiagramWeave Renderer:** 격리된 로컬/선택적 원격 renderer
+- **DiagramWeave Renderer:** 구현된 격리 로컬 renderer와 향후 명시적 opt-in 원격 renderer
 - **DiagramWeave AI:** provider-neutral orchestration과 proposal contract
 - **Contextual Orchestrator adapter:** 기본 LLM 경로
 - **DiagramWeave Language Server:** 편집 진단과 탐색
@@ -262,8 +262,8 @@ Foundation에는 데이터베이스가 없다.
 
 - 로컬 PlantUML renderer는 `SANDBOX` 기본값과 별도 프로세스 경계를 사용한다.
 - remote include는 기본 비활성화한다.
-- local include는 canonical workspace allowlist 안으로 제한한다.
-- renderer에 시간, 메모리, 입력·출력 크기 제한을 둔다.
+- Foundation local renderer에서는 local include도 허용하지 않는다. 향후 include 기능은 별도 policy mode에서 canonical workspace allowlist, symlink escape 검사와 사용자 승인을 요구한다.
+- renderer에 deadline과 입력·stdout·stderr 크기 제한을 둔다. Professional 1.0 이전에 운영체제 수준 CPU·메모리 격리를 추가한다.
 - source 주석과 모델 출력은 prompt와 tool instruction으로 신뢰하지 않는다.
 - AI package는 파일, 환경 변수, shell, provider key에 직접 접근하지 않는다.
 - 전송 범위는 사전 확인·축소·취소 가능하다.
@@ -341,7 +341,7 @@ North Star는 **Weekly Valid Diagram Outcomes**다. 수동 또는 AI 편집 후 
 
 ### Foundation
 
-Core revision/proposal contract, Contextual Orchestrator adapter, 품질 게이트, 보안·아키텍처 문서, 시간별 PR·개발 governance를 제공한다.
+Core revision/proposal contract, Contextual Orchestrator adapter, stdin-only PlantUML `SANDBOX` renderer, 품질 게이트, 보안·아키텍처 문서, 시간별 PR·개발 governance를 제공한다.
 
 ### Manual Editor Alpha
 
@@ -378,7 +378,7 @@ Mermaid, D2, Graphviz, Structurizr DSL, plugin SDK와 naruon/CWL 공통 diagram 
 |---|---|
 | PlantUML 전체 문법 분석 난이도 | tolerant tokenizer, landmark, renderer validation, adapter 확장 |
 | AI의 과도한 전체 재작성 | selection default, patch 크기, 최소 변경 평가, hunk 승인 |
-| renderer 파일·네트워크 접근 | SANDBOX, allowlist, 격리, 자원 제한 |
+| renderer 파일·네트워크 접근 | Foundation fixed SANDBOX와 no-include; 향후 별도 allowlist mode |
 | 외부 모델 민감정보 전송 | Context Inspector, redaction, local model, provider policy |
 | 특정 provider 종속 | provider-neutral interface와 benchmark |
 | 크로스플랫폼 패키징 복잡성 | 공통 Core, 플랫폼 smoke test, 서명 자동화 |
@@ -387,10 +387,12 @@ Mermaid, D2, Graphviz, Structurizr DSL, plugin SDK와 naruon/CWL 공통 diagram 
 
 ## 22. Foundation 수용 기준
 
-- Core와 Contextual Orchestrator adapter가 독립 package로 동작한다.
+- Core, Contextual Orchestrator adapter, PlantUML renderer가 독립 package로 동작한다.
 - AI output이 revision, range, schema와 scope policy를 통과하기 전에는 적용되지 않는다.
 - remote endpoint는 HTTPS, local development는 loopback HTTP만 허용한다.
-- provider error body, source, token을 log 또는 error에 노출하지 않는다.
+- provider error body, source, token, renderer stderr를 log 또는 public error에 노출하지 않는다.
+- renderer가 shell 없이 absolute Java/JAR를 실행하고 source를 stdin으로만 전달한다.
+- renderer가 fixed `SANDBOX`, `-nometadata`, byte cap, deadline과 SVG/PNG validation을 강제한다.
 - Node 22·24 CI를 제공한다.
 - production line·branch·function coverage와 JSDoc 100%를 충족한다.
 - PRD, architecture, security, operations, CHANGELOG를 제공한다.
@@ -412,7 +414,7 @@ Mermaid, D2, Graphviz, Structurizr DSL, plugin SDK와 naruon/CWL 공통 diagram 
 
 1. Studio UX flow와 화면 상태 명세
 2. Figma interaction frames와 접근성 상태
-3. renderer 보안 위협 모델과 process contract
+3. Studio preview와 renderer 진단·취소 interaction contract
 4. EditProposal JSON Schema
 5. Core·Renderer·AI·LSP API 계약
 6. 기술 스택 ADR
