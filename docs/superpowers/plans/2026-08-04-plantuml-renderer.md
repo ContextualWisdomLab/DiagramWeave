@@ -34,10 +34,10 @@
 - Create: `packages/plantuml-renderer/test/renderer.test.js`
 - Modify: `tests/repository-contract.test.js`
 
-- [ ] Write failing tests for package presence and public exports.
-- [ ] Write failing tests for option and request validation.
-- [ ] Write failing tests for exact Java arguments and spawn options.
-- [ ] Run focused tests and confirm the package is absent.
+- [x] Write failing tests for package presence and public exports.
+- [x] Write failing tests for option and request validation.
+- [x] Write failing tests for exact Java arguments and spawn options.
+- [x] Run focused tests and confirm the package is absent.
 
 ### Task 2: Implement isolated rendering
 
@@ -46,13 +46,13 @@
 - Create: `packages/plantuml-renderer/src/renderer.js`
 - Create: `packages/plantuml-renderer/src/index.js`
 
-- [ ] Implement stable renderer errors.
-- [ ] Implement absolute path, limit, format, and UTF-8 source validation.
-- [ ] Spawn Java with `shell: false`, empty environment, pipe stdio, SANDBOX, metadata disabled, standard report, and PNG/SVG output mode.
-- [ ] Bound stdout and stderr and terminate oversized work.
-- [ ] Enforce timeout and distinguish spawn, exit, output-size, and invalid-output failures.
-- [ ] Return an immutable base64 artifact with media type, byte length, and source revision hash.
-- [ ] Run focused tests and reach exact 100% production coverage.
+- [x] Implement stable renderer errors.
+- [x] Implement absolute path, limit, format, and UTF-8 source validation.
+- [x] Spawn Java with `shell: false`, empty environment, pipe stdio, SANDBOX, metadata disabled, standard report, and PNG/SVG output mode.
+- [x] Bound stdout and stderr and terminate oversized work.
+- [x] Enforce timeout and distinguish spawn, exit, output-size, and invalid-output failures.
+- [x] Return an immutable base64 artifact with media type, byte length, and source revision hash.
+- [x] Run focused tests and reach exact 100% production coverage.
 
 ### Task 3: Document security, operations, and modular reuse
 
@@ -64,17 +64,17 @@
 - Modify: `CHANGELOG.md`
 - Modify: `package-lock.json`
 
-- [ ] Document the host-supplied JAR and license gate.
-- [ ] Document SANDBOX, stdin-only processing, metadata disablement, limits, and error codes.
-- [ ] Document reuse from Studio, CLI, naruon, and CWL services.
-- [ ] Update repository contracts for required terminology.
+- [x] Document the host-supplied JAR and license gate.
+- [x] Document SANDBOX, stdin-only processing, metadata disablement, limits, and error codes.
+- [x] Document reuse from Studio, CLI, naruon, and CWL services.
+- [x] Update repository contracts for required terminology.
 
 ### Task 4: Verify and publish one pull request
 
-- [ ] Run `npm ci --ignore-scripts --no-audit --no-fund`.
-- [ ] Run focused renderer tests.
-- [ ] Run `npm run verify` on the local supported runtime.
-- [ ] Confirm no skipped/todo tests and no untracked files.
+- [x] Run `npm ci --ignore-scripts --no-audit --no-fund`.
+- [x] Run focused renderer tests.
+- [x] Run `npm run verify` on the local supported runtime.
+- [x] Confirm no skipped/todo tests and no untracked files.
 - [ ] Create one PR against `main`.
 - [ ] Inspect every exact-head check and review thread.
 - [ ] Address valid feedback and rerun exact-head checks.
