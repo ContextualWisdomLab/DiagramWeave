@@ -258,6 +258,37 @@ function isValidOutput(output, format) {
 }
 
 /**
+ * Inspect the bounded PlantUML standard report without exposing its contents.
+ *
+ * The `-stdrpt:1` protocol emits line-oriented `status=OK` or
+ * `status=ERROR` fields. An error field wins even when another status line is
+ * present. Empty or older-version diagnostic output remains `unknown` so
+ * successful rendering does not depend on stderr being nonempty. Invalid
+ * UTF-8 fails closed because the report cannot be interpreted safely.
+ *
+ * @param {Buffer} diagnostics - Bounded stderr bytes from PlantUML.
+ * @returns {'ok'|'error'|'unknown'|'invalid'} Interpreted standard-report state.
+ */
+function inspectStandardReport(diagnostics) {
+  let text;
+  try {
+    text = utf8Decoder.decode(diagnostics);
+  } catch {
+    return 'invalid';
+  }
+  let status = 'unknown';
+  for (const line of text.split(/\r?\n/u)) {
+    if (line === 'status=ERROR') {
+      return 'error';
+    }
+    if (line === 'status=OK') {
+      status = 'ok';
+    }
+  }
+  return status;
+}
+
+/**
  * Create an immutable JSON-serializable render artifact.
  *
  * Base64 avoids exposing a mutable Buffer through the public package boundary
@@ -338,6 +369,7 @@ function renderRequest(options, request) {
     let outputBytes = 0;
     let diagnosticBytes = 0;
     const outputChunks = [];
+    const diagnosticChunks = [];
     const timer = setTimeout(() => {
       fail(
         new PlantUmlRendererError(
@@ -416,7 +448,8 @@ function renderRequest(options, request) {
       if (settled) {
         return;
       }
-      diagnosticBytes += Buffer.byteLength(chunk);
+      const bytes = Buffer.from(chunk);
+      diagnosticBytes += bytes.byteLength;
       if (diagnosticBytes > options.maxDiagnosticBytes) {
         fail(
           new PlantUmlRendererError(
@@ -426,7 +459,9 @@ function renderRequest(options, request) {
           ),
           true,
         );
+        return;
       }
+      diagnosticChunks.push(bytes);
     });
 
     child.stdout.on('error', () => {
@@ -435,6 +470,7 @@ function renderRequest(options, request) {
           'renderer_unavailable',
           'The PlantUML renderer output stream failed.',
         ),
+        true,
       );
     });
 
@@ -444,6 +480,7 @@ function renderRequest(options, request) {
           'renderer_unavailable',
           'The PlantUML renderer diagnostic stream failed.',
         ),
+        true,
       );
     });
 
@@ -460,7 +497,15 @@ function renderRequest(options, request) {
       if (settled) {
         return;
       }
-      if (exitCode !== 0 || signal !== null) {
+      const diagnosticStatus = inspectStandardReport(
+        Buffer.concat(diagnosticChunks, diagnosticBytes),
+      );
+      if (
+        exitCode !== 0 ||
+        signal !== null ||
+        diagnosticStatus === 'error' ||
+        diagnosticStatus === 'invalid'
+      ) {
         const details = {};
         if (Number.isInteger(exitCode)) {
           details.exitCode = exitCode;
@@ -496,6 +541,7 @@ function renderRequest(options, request) {
           'renderer_unavailable',
           'The PlantUML renderer process could not receive source input.',
         ),
+        true,
       );
     });
 
@@ -507,6 +553,7 @@ function renderRequest(options, request) {
           'renderer_unavailable',
           'The PlantUML renderer process could not receive source input.',
         ),
+        true,
       );
     }
   });

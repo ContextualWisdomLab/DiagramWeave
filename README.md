@@ -88,7 +88,7 @@ The renderer requires host-supplied absolute Java and JAR paths. It invokes no s
 The repository is the modular foundation for:
 
 - **DiagramWeave Studio:** manual source editor, preview, diagnostics, Context Inspector, diff review, recovery, and accessible approval flows;
-- **DiagramWeave Renderer:** implemented local PlantUML package with stdin-only rendering, `SANDBOX`, metadata suppression, bounded resources, and remote includes unavailable;
+- **DiagramWeave Renderer:** implemented local PlantUML package with stdin-only rendering, `SANDBOX`, metadata suppression, bounded resources, and local and remote includes unavailable;
 - **DiagramWeave Language Server:** diagnostics and navigation reusable by Studio and external IDEs;
 - **DiagramWeave CLI:** deterministic validation, rendering, formatting, and CI policy checks;
 - **naruon and CWL integration:** embeddable Core, renderer, and provider adapters without requiring the Studio application.

@@ -84,7 +84,7 @@ SVG is active, untrusted content even when PlantUML produced it. A host must not
 
 ## Output validation
 
-The fixed `-failfast2` option performs a checking pass before generation so syntax errors do not become accepted error-image artifacts. The renderer accepts only:
+The fixed `-failfast2` option performs a checking pass before generation. The renderer also captures the bounded `-stdrpt:1` protocol and rejects an exact `status=ERROR` line even when a PlantUML version exits zero and emits image-shaped output. An exact `status=OK` line is accepted; empty or older-version diagnostics do not decide success by themselves, while invalid UTF-8 diagnostics fail closed. The renderer then accepts only:
 
 - one UTF-8 SVG document with one `<svg>` root and no trailing payload; or
 - one PNG stream with the PNG signature, terminal `IEND`, and no second PNG signature.
