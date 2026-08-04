@@ -19,6 +19,15 @@ const validSvg = Buffer.from(
   '<?xml version="1.0" encoding="UTF-8"?>\n' +
   '<svg xmlns="http://www.w3.org/2000/svg"></svg>',
 );
+const syntaxDiagnostic = Object.freeze({
+  schemaVersion: 1,
+  source: 'plantuml',
+  severity: 'error',
+  code: 'plantuml_syntax_error',
+  message: 'PlantUML reported a syntax error.',
+  lineNumber: 2,
+  columnNumber: null,
+});
 
 class FakeChild extends EventEmitter {
   constructor() {
@@ -76,7 +85,7 @@ test('accepts OK standard reports without matching embedded ERROR text', async (
   assert.equal((await renderer.render({ source, format: 'svg' })).format, 'svg');
 });
 
-test('rejects ERROR standard reports even when exit and artifact look successful', async () => {
+test('rejects ERROR reports with a frozen source-free line diagnostic', async () => {
   const renderer = createPlantUmlRenderer(rendererOptions(() => {
     const child = new FakeChild();
     queueMicrotask(() => {
@@ -94,13 +103,48 @@ test('rejects ERROR standard reports even when exit and artifact look successful
     (error) => {
       assertRendererError(error, 'renderer_failed');
       assert.equal(error.exitCode, 0);
+      assert.deepEqual(error.diagnostics, [syntaxDiagnostic]);
+      assert.equal(Object.isFrozen(error.diagnostics), true);
+      assert.equal(Object.isFrozen(error.diagnostics[0]), true);
       assert.doesNotMatch(error.message, /Syntax Error|status=ERROR|Alice/);
       return true;
     },
   );
 });
 
-test('fails closed when the bounded standard report is not UTF-8', async () => {
+test('maps unknown labels to a generic diagnostic without disclosure', async () => {
+  const renderer = createPlantUmlRenderer(rendererOptions(() => {
+    const child = new FakeChild();
+    queueMicrotask(() => {
+      child.stderr.end(Buffer.from(
+        'status=ERROR\nlineNumber=7\nlabel=CustomerSecretElement leaked\n',
+      ));
+      child.stdout.end(validSvg);
+      child.emit('close', 0, null);
+    });
+    return child;
+  }));
+
+  await assert.rejects(
+    renderer.render({ source, format: 'svg' }),
+    (error) => {
+      assertRendererError(error, 'renderer_failed');
+      assert.deepEqual(error.diagnostics, [{
+        schemaVersion: 1,
+        source: 'plantuml',
+        severity: 'error',
+        code: 'plantuml_error',
+        message: 'PlantUML reported a diagram error.',
+        lineNumber: 7,
+        columnNumber: null,
+      }]);
+      assert.doesNotMatch(JSON.stringify(error), /CustomerSecretElement|leaked|Alice/);
+      return true;
+    },
+  );
+});
+
+test('fails closed without diagnostics when the standard report is not UTF-8', async () => {
   const renderer = createPlantUmlRenderer(rendererOptions(() => {
     const child = new FakeChild();
     queueMicrotask(() => {
@@ -113,8 +157,32 @@ test('fails closed when the bounded standard report is not UTF-8', async () => {
 
   await assert.rejects(
     renderer.render({ source, format: 'svg' }),
-    (error) => assertRendererError(error, 'renderer_failed'),
+    (error) => {
+      assertRendererError(error, 'renderer_failed');
+      assert.deepEqual(error.diagnostics, []);
+      assert.equal(Object.isFrozen(error.diagnostics), true);
+      return true;
+    },
   );
+});
+
+test('PlantUmlRendererError clones and freezes supplied diagnostics', () => {
+  const originalDiagnostic = { ...syntaxDiagnostic };
+  const originalDiagnostics = [originalDiagnostic];
+  const error = new PlantUmlRendererError(
+    'renderer_failed',
+    'PlantUML rejected the source or failed to render it.',
+    { diagnostics: originalDiagnostics },
+  );
+
+  originalDiagnostic.lineNumber = 99;
+  originalDiagnostics.push({ ...syntaxDiagnostic, lineNumber: 100 });
+
+  assert.deepEqual(error.diagnostics, [syntaxDiagnostic]);
+  assert.notEqual(error.diagnostics, originalDiagnostics);
+  assert.notEqual(error.diagnostics[0], originalDiagnostic);
+  assert.equal(Object.isFrozen(error.diagnostics), true);
+  assert.equal(Object.isFrozen(error.diagnostics[0]), true);
 });
 
 test('terminates the child when stdin emits an error', async () => {
