@@ -5,7 +5,9 @@ Sandboxed, stdin-only local PlantUML rendering for DiagramWeave hosts.
 ```js
 import {
   createPlantUmlRenderer,
+  parsePlantUmlStandardReport,
   plantUmlRendererLimits,
+  sanitizePlantUmlDiagnostics,
 } from '@contextualwisdomlab/diagramweave-plantuml-renderer';
 
 console.log(plantUmlRendererLimits.timeoutMs.default); // 15000
@@ -27,4 +29,26 @@ The package does not bundle Java or PlantUML. It requires absolute host-supplied
 
 spawnImpl is a test-only process seam. It supports this package's deterministic process-boundary tests and is not a production extension point. Production hosts must omit `spawnImpl` so the package uses Node.js `spawn` with the fixed command contract.
 
-See the repository operations guide for limits, error codes, licensing, and deployment requirements.
+## Structured diagnostics
+
+The renderer parses PlantUML's bounded `-stdrpt:1` output with `parsePlantUmlStandardReport`. The public parser rejects byte arrays larger than `plantUmlRendererLimits.maxDiagnosticBytes.maximum` before UTF-8 decoding, so callers cannot bypass the renderer's authoritative 1 MiB diagnostic ceiling. A located syntax error becomes one deeply frozen Language Server Protocol-compatible diagnostic:
+
+```json
+{
+  "range": {
+    "start": { "line": 1, "character": 0 },
+    "end": { "line": 1, "character": 0 }
+  },
+  "severity": 1,
+  "code": "plantuml.syntax",
+  "source": "plantuml",
+  "message": "PlantUML reported a syntax error.",
+  "data": { "plantUmlLineNumber": 2 }
+}
+```
+
+PlantUML reports one-based line numbers; the `range` uses zero-based LSP positions. PlantUML does not supply a character range, so the diagnostic uses a zero-width range at character zero. An error without a valid line remains a renderer failure but carries no fabricated diagnostic.
+
+`sanitizePlantUmlDiagnostics` clones and validates diagnostics crossing package, worker, CLI, service, Studio, Language Server, or naruon boundaries. Raw stderr, raw labels, source excerpts, Java paths, JAR paths, credentials, and arbitrary provider messages are never exposed. Unknown and narrative report lines are ignored; malformed known fields and invalid UTF-8 fail closed.
+
+See the repository operations guide for limits, error codes, licensing, deployment requirements, and the full diagnostic privacy boundary.

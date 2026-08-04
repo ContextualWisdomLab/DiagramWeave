@@ -1,9 +1,12 @@
+import { sanitizePlantUmlDiagnostics } from './standard-report.js';
+
 /**
  * Stable PlantUML renderer error with safe structured metadata.
  *
  * Public messages intentionally omit source text, child stderr, executable
  * paths, and credentials. Callers should branch on `code` rather than message
- * text and may use `field`, `stream`, `exitCode`, and `signal` when present.
+ * text and may use `field`, `stream`, `exitCode`, `signal`, and source-free
+ * `diagnostics` when present.
  */
 export class PlantUmlRendererError extends Error {
   /**
@@ -11,12 +14,13 @@ export class PlantUmlRendererError extends Error {
    *
    * @param {string} code - Stable machine-readable error code.
    * @param {string} message - Source-free human-readable message.
-   * @param {{field?: string, stream?: string, exitCode?: number, signal?: string}} [details] - Safe structured details.
+   * @param {{field?: string, stream?: string, exitCode?: number, signal?: string, diagnostics?: unknown}} [details] - Safe structured details.
    */
   constructor(code, message, details = {}) {
     super(message);
     this.name = 'PlantUmlRendererError';
     this.code = code;
+    this.diagnostics = sanitizePlantUmlDiagnostics(details.diagnostics);
     if (details.field !== undefined) {
       this.field = details.field;
     }

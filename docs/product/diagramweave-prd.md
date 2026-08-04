@@ -1,6 +1,6 @@
 # DiagramWeave 제품 요구사항 문서(PRD)
 
-- **문서 버전:** 0.1
+- **문서 버전:** 0.2
 - **작성일:** 2026-08-04
 - **제품명:** DiagramWeave
 - **애플리케이션명:** DiagramWeave Studio
@@ -166,6 +166,8 @@ DiagramWeave Studio는 **데스크톱·로컬 우선**으로 출시한다. 웹 S
 | FR-024 | Must | remote include를 기본 차단한다. |
 | FR-025 | Should | AI 검토 화면에서 before/after 렌더를 비교한다. |
 
+FR-023의 foundation 범위는 구현됐다. PlantUML `-stdrpt:1`의 one-based line을 zero-based LSP 3.18 range로 변환하고, severity `1`, code `plantuml.syntax`, 고정 메시지를 사용한다. raw stderr, raw label, source excerpt, 실행 경로와 자격 증명은 노출하지 않는다. 전체 PlantUML parser와 문자 단위 범위는 Language Server 단계의 별도 기능이다.
+
 ### AI 생성·수정
 
 | ID | 우선순위 | 요구사항 |
@@ -188,6 +190,8 @@ DiagramWeave Studio는 **데스크톱·로컬 우선**으로 출시한다. 웹 S
 | FR-072 | Should | 독립 Language Server가 진단·완성·hover·심볼을 제공한다. |
 | FR-073 | Should | Core를 라이브러리와 로컬 서비스로 사용할 수 있다. |
 | FR-074 | Should | naruon용 명시적 tool contract를 제공한다. |
+
+FR-070과 FR-071의 foundation 범위는 구현됐다. CLI는 safe relative path, 상태, 오류 코드, revision hash와 구조화 진단만 보고하며 source, raw renderer diagnostic, raw label, Java/JAR 경로와 environment 값은 보고하지 않는다.
 
 ### 접근성
 
@@ -225,17 +229,18 @@ EditProposal
 5. AI 설명, source, diff를 시각·접근성 트리에서 구분한다.
 6. 주석·레이블·include 콘텐츠는 도구 명령이 아니라 untrusted data다.
 
-현재 Foundation의 Core는 revision, schema, range와 scope-expansion 계약을 구현한다. Contextual Orchestrator adapter는 HTTPS/loopback policy, context size, strict JSON, timeout과 Core validation을 구현한다. PlantUML renderer는 host-supplied Java/JAR, stdin-only pipe, fixed `SANDBOX`, metadata suppression, byte limits, deadline, SVG/PNG 구조 검증과 source-free error contract를 구현한다. DiagramWeave CLI는 `dweave validate`·`dweave render`, 결정론적 폴더 탐색, 안전한 output preflight·atomic publish, source-free human/JSON 결과와 CI 종료 코드를 구현한다. 구조화된 PlantUML line diagnostic, formatting, policy check와 Studio 통합은 아직 구현하지 않는다.
+현재 Foundation의 Core는 revision, schema, range와 scope-expansion 계약을 구현한다. Contextual Orchestrator adapter는 HTTPS/loopback policy, context size, strict JSON, timeout과 Core validation을 구현한다. PlantUML renderer는 host-supplied Java/JAR, stdin-only pipe, fixed `SANDBOX`, metadata suppression, byte limits, deadline, SVG/PNG 구조 검증, LSP-compatible line diagnostic과 source-free error contract를 구현한다. CLI는 deterministic discovery, validate/render, atomic publication, structured report와 진단 출력 계약을 구현한다.
 
 ## 13. 논리적 아키텍처
 
 - **DiagramWeave Studio:** 데스크톱 UI와 파일·diff·미리보기·승인
 - **DiagramWeave Core:** revision, proposal validation, preview, apply
-- **DiagramWeave Renderer:** 구현된 격리 로컬 renderer와 향후 명시적 opt-in 원격 renderer
+- **DiagramWeave Renderer:** 구현된 격리 로컬 renderer, bounded standard-report parser와 향후 명시적 opt-in 원격 renderer
+- **DiagramWeave Diagnostics:** 구현된 LSP-compatible source-free record와 sanitizer
 - **DiagramWeave AI:** provider-neutral orchestration과 proposal contract
 - **Contextual Orchestrator adapter:** 기본 LLM 경로
 - **DiagramWeave Language Server:** 편집 진단과 탐색
-- **DiagramWeave CLI:** CI 검증·렌더·정책
+- **DiagramWeave CLI:** 구현된 CI 검증·결정론적 렌더·원자적 export·진단 보고
 - **DiagramWeave Policy:** include, 네트워크, AI 전송, 조직 스타일 정책
 - **DiagramWeave Collaboration:** 선택적 팀 서비스
 
@@ -264,6 +269,8 @@ Foundation에는 데이터베이스가 없다.
 - remote include는 기본 비활성화한다.
 - Foundation local renderer에서는 local include도 허용하지 않는다. 향후 include 기능은 별도 policy mode에서 canonical workspace allowlist, symlink escape 검사와 사용자 승인을 요구한다.
 - renderer에 deadline과 입력·stdout·stderr 크기 제한을 둔다. Professional 1.0 이전에 운영체제 수준 CPU·메모리 격리를 추가한다.
+- structured diagnostic은 bounded integer, fixed code, fixed message와 LSP range만 허용한다.
+- raw renderer stderr, raw PlantUML label, source excerpt, Java/JAR 경로와 credential은 공개 error·diagnostic·CLI report에 포함하지 않는다.
 - source 주석과 모델 출력은 prompt와 tool instruction으로 신뢰하지 않는다.
 - AI package는 파일, 환경 변수, shell, provider key에 직접 접근하지 않는다.
 - 전송 범위는 사전 확인·축소·취소 가능하다.
@@ -286,6 +293,7 @@ Foundation에는 데이터베이스가 없다.
 - 비정상 종료 복구
 - stale patch fail-closed
 - renderer 실패와 Studio process 분리
+- malformed·hostile diagnostic input fail-closed
 
 ### 품질
 
@@ -341,11 +349,11 @@ North Star는 **Weekly Valid Diagram Outcomes**다. 수동 또는 AI 편집 후 
 
 ### Foundation
 
-Core revision/proposal contract, Contextual Orchestrator adapter, stdin-only PlantUML `SANDBOX` renderer, 결정론적 `dweave validate`·`dweave render` CLI, 품질 게이트, 보안·아키텍처 문서, 시간별 PR·개발 governance를 제공한다.
+Core revision/proposal contract, Contextual Orchestrator adapter, stdin-only PlantUML `SANDBOX` renderer, deterministic CLI validate/render, LSP-compatible source-free line diagnostics, 품질 게이트, 보안·아키텍처 문서, 시간별 PR·개발 governance를 제공한다.
 
 ### Manual Editor Alpha
 
-로컬 파일, source editor, preview, diagnostics, SVG·PNG export와 keyboard flow를 제공하고 구현된 CLI 계약을 Studio workflow와 통합한다.
+로컬 파일, source editor, preview, diagnostics panel, SVG·PNG export와 keyboard flow를 제공한다. CLI와 renderer diagnostic foundation은 재사용한다.
 
 ### AI-Assisted Beta
 
@@ -376,7 +384,7 @@ Mermaid, D2, Graphviz, Structurizr DSL, plugin SDK와 naruon/CWL 공통 diagram 
 
 | 위험 | 완화 |
 |---|---|
-| PlantUML 전체 문법 분석 난이도 | tolerant tokenizer, landmark, renderer validation, adapter 확장 |
+| PlantUML 전체 문법 분석 난이도 | bounded standard-report foundation, tolerant tokenizer, landmark, renderer validation, adapter 확장 |
 | AI의 과도한 전체 재작성 | selection default, patch 크기, 최소 변경 평가, hunk 승인 |
 | renderer 파일·네트워크 접근 | Foundation fixed SANDBOX와 no-include; 향후 별도 allowlist mode |
 | 외부 모델 민감정보 전송 | Context Inspector, redaction, local model, provider policy |
@@ -390,20 +398,23 @@ Mermaid, D2, Graphviz, Structurizr DSL, plugin SDK와 naruon/CWL 공통 diagram 
 - Core, Contextual Orchestrator adapter, PlantUML renderer, CLI가 독립 package로 동작한다.
 - AI output이 revision, range, schema와 scope policy를 통과하기 전에는 적용되지 않는다.
 - remote endpoint는 HTTPS, local development는 loopback HTTP만 허용한다.
-- provider error body, source, token, renderer stderr를 log 또는 public error에 노출하지 않는다.
+- provider error body, source, token, renderer stderr와 raw PlantUML label을 log 또는 public error에 노출하지 않는다.
 - renderer가 shell 없이 absolute Java/JAR를 실행하고 source를 stdin으로만 전달한다.
 - renderer가 fixed `SANDBOX`, `-nometadata`, byte cap, deadline과 SVG/PNG validation을 강제한다.
-- CLI가 한 파일과 폴더의 `validate`·`render`, source-free JSON 결과, CI 종료 코드, symlink 거부와 atomic output publication을 제공한다.
+- `parsePlantUmlStandardReport`가 official line-2 fixture를 LSP-compatible line index 1로 변환한다.
+- renderer error와 CLI report의 diagnostic array가 bounded, validated, deeply frozen 상태다.
+- `dweave validate`와 `dweave render`가 deterministic file/batch contract와 exit code 0/1/2를 제공한다.
 - Node 22·24 CI를 제공한다.
 - production line·branch·function coverage와 JSDoc 100%를 충족한다.
-- PRD, architecture, security, operations, CHANGELOG를 제공한다.
+- PRD, architecture, security, operations, research note, CHANGELOG를 제공한다.
 - central `.github` PR maintenance와 fail-closed hourly product development를 설치한다.
 - release는 아직 수행하지 않고 `0.0.0`과 `Unreleased`를 유지한다.
 
 ## 23. 준거 기준
 
-- PlantUML 공식 보안 프로필과 allowlist 문서
+- PlantUML 공식 command-line `-stdrpt:1`, 보안 프로필과 allowlist 문서
 - Language Server Protocol 3.18
+- SARIF 2.1.0의 diagnostic location 개념
 - WCAG 2.2 및 ISO/IEC 40500:2025
 - ISO/IEC 25010:2023 product quality model
 - NIST AI RMF 1.0과 NIST AI 600-1 Generative AI Profile

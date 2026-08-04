@@ -19,6 +19,17 @@ const validSvg = Buffer.from(
   '<?xml version="1.0" encoding="UTF-8"?>\n' +
   '<svg xmlns="http://www.w3.org/2000/svg"></svg>',
 );
+const syntaxDiagnostic = Object.freeze({
+  range: Object.freeze({
+    start: Object.freeze({ line: 1, character: 0 }),
+    end: Object.freeze({ line: 1, character: 0 }),
+  }),
+  severity: 1,
+  code: 'plantuml.syntax',
+  source: 'plantuml',
+  message: 'PlantUML reported a syntax error.',
+  data: Object.freeze({ plantUmlLineNumber: 2 }),
+});
 
 class FakeChild extends EventEmitter {
   constructor() {
@@ -76,12 +87,13 @@ test('accepts OK standard reports without matching embedded ERROR text', async (
   assert.equal((await renderer.render({ source, format: 'svg' })).format, 'svg');
 });
 
-test('rejects ERROR standard reports even when exit and artifact look successful', async () => {
+test('rejects ERROR reports with a frozen source-free line diagnostic', async () => {
   const renderer = createPlantUmlRenderer(rendererOptions(() => {
     const child = new FakeChild();
     queueMicrotask(() => {
       child.stderr.end(Buffer.from(
-        'protocolVersion=1\nstatus=ERROR\nlineNumber=2\nlabel=Syntax Error\n',
+        'protocolVersion=1\nstatus=ERROR\nlineNumber=2\n' +
+        'label=Syntax Error?\nError line 2 in file: file1.pu\n',
       ));
       child.stdout.end(validSvg);
       child.emit('close', 0, null);
@@ -94,17 +106,27 @@ test('rejects ERROR standard reports even when exit and artifact look successful
     (error) => {
       assertRendererError(error, 'renderer_failed');
       assert.equal(error.exitCode, 0);
-      assert.doesNotMatch(error.message, /Syntax Error|status=ERROR|Alice/);
+      assert.deepEqual(error.diagnostics, [syntaxDiagnostic]);
+      assert.equal(Object.isFrozen(error.diagnostics), true);
+      assert.equal(Object.isFrozen(error.diagnostics[0]), true);
+      assert.equal(Object.isFrozen(error.diagnostics[0].range), true);
+      assert.equal(Object.isFrozen(error.diagnostics[0].data), true);
+      assert.doesNotMatch(
+        JSON.stringify(error),
+        /Syntax Error|status=ERROR|file1\.pu|Alice/,
+      );
       return true;
     },
   );
 });
 
-test('fails closed when the bounded standard report is not UTF-8', async () => {
+test('does not expose an unknown PlantUML label', async () => {
   const renderer = createPlantUmlRenderer(rendererOptions(() => {
     const child = new FakeChild();
     queueMicrotask(() => {
-      child.stderr.end(Buffer.from([0xff, 0xfe, 0xfd]));
+      child.stderr.end(Buffer.from(
+        'status=ERROR\nlineNumber=7\nlabel=CustomerSecretElement leaked\n',
+      ));
       child.stdout.end(validSvg);
       child.emit('close', 0, null);
     });
@@ -113,8 +135,66 @@ test('fails closed when the bounded standard report is not UTF-8', async () => {
 
   await assert.rejects(
     renderer.render({ source, format: 'svg' }),
-    (error) => assertRendererError(error, 'renderer_failed'),
+    (error) => {
+      assertRendererError(error, 'renderer_failed');
+      assert.equal(error.diagnostics[0].range.start.line, 6);
+      assert.doesNotMatch(JSON.stringify(error), /CustomerSecretElement|leaked|Alice/);
+      return true;
+    },
   );
+});
+
+test('fails closed without diagnostics when the bounded standard report is invalid', async () => {
+  for (const report of [
+    Buffer.from([0xff, 0xfe, 0xfd]),
+    Buffer.from('protocolVersion=2\nstatus=ERROR\nlineNumber=2\n'),
+  ]) {
+    const renderer = createPlantUmlRenderer(rendererOptions(() => {
+      const child = new FakeChild();
+      queueMicrotask(() => {
+        child.stderr.end(report);
+        child.stdout.end(validSvg);
+        child.emit('close', 0, null);
+      });
+      return child;
+    }));
+
+    await assert.rejects(
+      renderer.render({ source, format: 'svg' }),
+      (error) => {
+        assertRendererError(error, 'renderer_failed');
+        assert.deepEqual(error.diagnostics, []);
+        assert.equal(Object.isFrozen(error.diagnostics), true);
+        return true;
+      },
+    );
+  }
+});
+
+test('PlantUmlRendererError clones supplied diagnostics', () => {
+  const original = [{
+    range: {
+      start: { line: 1, character: 0 },
+      end: { line: 1, character: 0 },
+    },
+    severity: 1,
+    code: 'plantuml.syntax',
+    source: 'plantuml',
+    message: 'PlantUML reported a syntax error.',
+    data: { plantUmlLineNumber: 2 },
+  }];
+  const error = new PlantUmlRendererError(
+    'renderer_failed',
+    'PlantUML rejected the source or failed to render it.',
+    { diagnostics: original },
+  );
+
+  original[0].range.start.line = 99;
+  original.push({});
+
+  assert.deepEqual(error.diagnostics, [syntaxDiagnostic]);
+  assert.notEqual(error.diagnostics, original);
+  assert.notEqual(error.diagnostics[0], original[0]);
 });
 
 test('terminates the child when stdin emits an error', async () => {

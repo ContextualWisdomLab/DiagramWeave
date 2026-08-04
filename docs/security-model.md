@@ -2,7 +2,7 @@
 
 ## Security objective
 
-DiagramWeave lets users benefit from model-assisted editing without surrendering control of source files, credentials, network access, or renderer permissions. Every boundary assumes that source text, diagram labels, comments, include directives, model output, and remote responses may be hostile.
+DiagramWeave lets users benefit from model-assisted editing without surrendering control of source files, credentials, network access, or renderer permissions. Every boundary assumes that source text, diagram labels, comments, include directives, model output, raw renderer diagnostics, and remote responses may be hostile.
 
 ## Assets
 
@@ -11,6 +11,7 @@ DiagramWeave lets users benefit from model-assisted editing without surrendering
 - Contextual Orchestrator bearer tokens and upstream provider credentials;
 - accepted source revisions and review history;
 - rendered artifacts;
+- source locations and diagnostic metadata;
 - organization policy, templates, and allowlists.
 
 ## Trust boundaries
@@ -77,6 +78,22 @@ The foundation does not yet impose an operating-system cgroup, job-object, or co
 
 Rendered SVG remains untrusted active content. Studio and embedding hosts must not inject it through `innerHTML`; they must use a constrained image boundary or independently reviewed SVG sanitization and Content Security Policy. PNG output is likewise untrusted binary input to the platform image decoder.
 
+### Structured diagnostic boundary
+
+PlantUML stderr is bounded but remains untrusted. The renderer never returns raw stderr, a raw PlantUML `label`, an unstructured suffix line, a source excerpt, an absolute workspace parent, a Java path, a JAR path, or an environment value.
+
+`parsePlantUmlStandardReport` recognizes only the documented protocol version, status, and line-number fields. It maps a valid one-based PlantUML line to a zero-based, zero-width Language Server Protocol range and publishes only:
+
+- severity `1`;
+- code `plantuml.syntax`;
+- source `plantuml`;
+- fixed message `PlantUML reported a syntax error.`;
+- bounded integer positions and `data.plantUmlLineNumber`.
+
+Malformed known fields, invalid UTF-8, unsupported protocol versions, and missing locations fail closed. An error without a valid line remains an error but carries no fabricated range.
+
+`sanitizePlantUmlDiagnostics` bounds the collection, validates the exact record, clones every nested object, and deeply freezes the result. `PlantUmlRendererError` invokes that sanitizer before exposure. The CLI invokes it again before publication, isolating hostile getters, Proxy objects, arbitrary thrown errors, and caller mutation.
+
 ## Threats and mitigations
 
 | Threat | Mitigation |
@@ -85,6 +102,8 @@ Rendered SVG remains untrusted active content. Studio and embedding hosts must n
 | Stale AI edit overwrites manual work | Exact SHA-256 base revision and fail-closed conflict |
 | AI edits more than requested | Requested/effective ranges, expansion reason, explicit approval |
 | Malformed or oversized output | Bounded fields and strict parse/validation |
+| Raw stderr or label reflects private source | Parser ignores raw labels and narrative text; only fixed diagnostic values cross the boundary |
+| Hostile diagnostic object mutates reports | Exact-schema sanitizer, bounded array, deep clone, deep freeze, getter isolation |
 | Credential leakage in errors | No package logging, no response-body reads on HTTP errors, token-free messages |
 | Plaintext remote interception | Remote HTTPS only; HTTP restricted to loopback |
 | SSRF through orchestrator endpoint | Adapter URL policy plus Contextual Orchestrator egress controls |
@@ -95,7 +114,7 @@ Rendered SVG remains untrusted active content. Studio and embedding hosts must n
 
 ## Logging and telemetry
 
-Foundation packages emit no logs or telemetry. A host adding observability excludes source, prompts, assistant content, bearer tokens, file paths, and rendered images by default. Safe measurements include operation name, duration, bounded size bucket, error code, provider identifier, and non-reversible revision hashes. Enterprise deployments must support full telemetry disablement.
+Foundation packages emit no logs or telemetry. A host adding observability excludes source, prompts, assistant content, bearer tokens, raw renderer diagnostics, file paths, and rendered images by default. Safe measurements include operation name, duration, bounded size bucket, error code, diagnostic code, provider identifier, and non-reversible revision hashes. Enterprise deployments must support full telemetry disablement.
 
 ## Secret handling
 
@@ -115,4 +134,4 @@ Foundation packages emit no logs or telemetry. A host adding observability exclu
 
 ## Vulnerability reporting
 
-Report suspected vulnerabilities according to `SECURITY.md`. Never disclose a live exploit, token, private diagram, or customer source in a public issue.
+Report suspected vulnerabilities according to `SECURITY.md`. Never disclose a live exploit, token, private diagram, customer source, or raw diagnostic in a public issue.

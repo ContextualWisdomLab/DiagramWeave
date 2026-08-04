@@ -1,5 +1,6 @@
 import { TextDecoder } from 'node:util';
 
+import { diagnosticsFromRendererError } from './diagnostics.js';
 import { cliExitCodes, CliError } from './errors.js';
 import {
   discoverDiagramInputs as defaultDiscoverDiagramInputs,
@@ -18,9 +19,14 @@ const unsafeMessageCharacters = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/
  * @returns {Readonly<object>} Deeply frozen report.
  */
 function freezeReport(report) {
-  const files = Object.freeze(report.files.map((file) => Object.freeze(file)));
+  const diagnostics = Object.freeze([...report.diagnostics]);
+  const files = Object.freeze(report.files.map((file) => Object.freeze({
+    ...file,
+    diagnostics: Object.freeze([...file.diagnostics]),
+  })));
   return Object.freeze({
     ...report,
+    diagnostics,
     totals: Object.freeze({ ...report.totals }),
     files,
   });
@@ -73,6 +79,7 @@ export function createInvocationReport(command, error) {
     helpTopic: null,
     errorCode: failure.code,
     errorMessage: failure.message,
+    diagnostics: [],
     totals: { selected: 0, succeeded: 0, failed: 0 },
     files: [],
   });
@@ -95,6 +102,7 @@ function createHelpReport(topic) {
     helpTopic: topic,
     errorCode: null,
     errorMessage: null,
+    diagnostics: [],
     totals: { selected: 0, succeeded: 0, failed: 0 },
     files: [],
   });
@@ -139,6 +147,7 @@ function decodeArtifact(artifact, format) {
  * @param {string} fallbackCode - Stable fallback code.
  * @param {string} fallbackMessage - Stable fallback message.
  * @param {string|null} sourceRevisionHash - Trusted renderer hash when an artifact existed.
+ * @param {readonly object[]} diagnostics - Source-free renderer diagnostics.
  * @returns {object} Mutable safe file result.
  */
 function failedFile(
@@ -148,6 +157,7 @@ function failedFile(
   fallbackCode,
   fallbackMessage,
   sourceRevisionHash = null,
+  diagnostics = [],
 ) {
   const failure = safeFailure(error, fallbackCode, fallbackMessage);
   return {
@@ -157,6 +167,7 @@ function failedFile(
     outputPath,
     errorCode: failure.code,
     errorMessage: failure.message,
+    diagnostics,
   };
 }
 
@@ -239,6 +250,8 @@ export async function executeDiagramWeaveCli(command, runtime) {
         error,
         'renderer_failed',
         'The diagram could not be rendered.',
+        null,
+        diagnosticsFromRendererError(error),
       ));
       continue;
     }
@@ -274,6 +287,7 @@ export async function executeDiagramWeaveCli(command, runtime) {
       outputPath: destination === null ? null : destination.outputPath,
       errorCode: null,
       errorMessage: null,
+      diagnostics: [],
     });
   }
 
@@ -299,6 +313,7 @@ export async function executeDiagramWeaveCli(command, runtime) {
     helpTopic: null,
     errorCode: null,
     errorMessage: null,
+    diagnostics: [],
     totals: {
       selected: files.length,
       succeeded,

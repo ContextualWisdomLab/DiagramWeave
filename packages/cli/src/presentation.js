@@ -72,6 +72,12 @@ export function formatCliReport(report, json) {
       lines.push(
         `FAIL ${file.relativePath}${destination} [${file.errorCode}] ${file.errorMessage}`,
       );
+      for (const diagnostic of file.diagnostics ?? []) {
+        lines.push(
+          `  ${file.relativePath}:${diagnostic.data.plantUmlLineNumber} ` +
+          `ERROR [${diagnostic.code}] ${diagnostic.message}`,
+        );
+      }
     } else {
       const label = file.status === 'valid' ? 'VALID' : 'RENDERED';
       const destination = file.outputPath === null ? '' : ` -> ${file.outputPath}`;
