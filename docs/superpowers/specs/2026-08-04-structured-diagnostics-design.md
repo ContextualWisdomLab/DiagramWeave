@@ -48,6 +48,7 @@ parsePlantUmlStandardReport(diagnostics: Uint8Array): Readonly<{
 
 The parser:
 
+- rejects input larger than `plantUmlRendererLimits.maxDiagnosticBytes.maximum` before decoding, including direct public calls outside `createPlantUmlRenderer`;
 - decodes once as fatal UTF-8;
 - recognizes exact line-oriented `protocolVersion`, `status`, and `lineNumber` fields;
 - accepts protocol version `1` and fails closed for an explicitly unsupported or malformed version;
@@ -151,9 +152,10 @@ The test corpus covers:
 - renderer error propagation and immutability;
 - CLI revalidation, hostile getter isolation, JSON propagation, and human formatting;
 - hostile, revoked, noninteger-length, negative-length, oversized, and custom-iterator diagnostic arrays;
+- oversized public report bytes and hostile typed-array byte-length access;
 - empty diagnostics for non-renderer failures.
 
-The current test suite contains 245 tests, no skipped or todo tests, and retains the exact 100% production line, branch, function, and JSDoc gates. GitHub exact-head verification remains authoritative for the final evidence.
+The current test suite contains 247 tests, no skipped or todo tests, and retains the exact 100% production line, branch, function, and JSDoc gates. GitHub exact-head verification remains authoritative for the final evidence.
 
 ## Documentation
 
