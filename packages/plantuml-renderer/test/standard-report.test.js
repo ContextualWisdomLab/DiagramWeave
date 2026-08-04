@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { parsePlantUmlStandardReport } from '../src/standard-report.js';
+import {
+  parsePlantUmlStandardReport,
+  sanitizePlantUmlDiagnostics,
+} from '../src/standard-report.js';
 
 const officialError = [
   'protocolVersion=1',
@@ -135,4 +138,26 @@ test('fails closed for unsupported or malformed known fields and invalid UTF-8',
     status: 'invalid',
     diagnostics: [],
   });
+});
+
+test('sanitizer fails closed for hostile array length and iteration access', () => {
+  const hostileLength = new Proxy([], {
+    get(target, property, receiver) {
+      if (property === 'length') {
+        throw new Error('private source');
+      }
+      return Reflect.get(target, property, receiver);
+    },
+  });
+  const hostileIterator = new Proxy([], {
+    get(target, property, receiver) {
+      if (property === Symbol.iterator) {
+        throw new Error('private source');
+      }
+      return Reflect.get(target, property, receiver);
+    },
+  });
+
+  assert.deepEqual(sanitizePlantUmlDiagnostics(hostileLength), []);
+  assert.deepEqual(sanitizePlantUmlDiagnostics(hostileIterator), []);
 });
