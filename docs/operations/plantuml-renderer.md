@@ -168,8 +168,13 @@ Studio, CLI, naruon, and other CWL hosts should depend on the package contract r
 
 ## References
 
-Microsoft. (2026). *Language Server Protocol specification, version 3.18*. https://microsoft.github.io/language-server-protocol/specifications/lsp/3.18/specification/
+Microsoft. (n.d.). *Language Server Protocol specification, version 3.18*.
+Retrieved August 4, 2026, from
+https://microsoft.github.io/language-server-protocol/specifications/lsp/3.18/specification/
 
-OASIS Open. (2020). *Static Analysis Results Interchange Format (SARIF) Version 2.1.0*. https://docs.oasis-open.org/sarif/sarif/v2.1.0/sarif-v2.1.0.html
+OASIS Open. (2023, August 28). *Static Analysis Results Interchange Format
+(SARIF) Version 2.1.0 Plus Errata 01*.
+https://docs.oasis-open.org/sarif/sarif/v2.1.0/sarif-v2.1.0.html
 
-PlantUML. (2026). *Command-line usage: Standard report (stdrpt)*. https://plantuml.com/command-line
+PlantUML. (n.d.). *Command-line usage: Standard report (stdrpt)*. Retrieved
+August 4, 2026, from https://plantuml.com/command-line
