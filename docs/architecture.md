@@ -2,7 +2,7 @@
 
 ## Purpose
 
-DiagramWeave is a source-first editor platform for PlantUML and future text diagram languages. The architecture protects manual editing as the authoritative workflow while making LLM output reviewable, revision-bound, and replaceable. The implemented foundation contains a portable trust kernel, a Contextual Orchestrator adapter, and an isolated local PlantUML renderer. It still contains no database, desktop shell, or hidden document store; future surfaces must reuse these boundaries rather than reimplement them.
+DiagramWeave is a source-first editor platform for PlantUML and future text diagram languages. The architecture protects manual editing as the authoritative workflow while making LLM output reviewable, revision-bound, and replaceable. The implemented foundation contains a portable trust kernel, a Contextual Orchestrator adapter, an isolated local PlantUML renderer, and a deterministic CLI. It still contains no database, desktop shell, or hidden document store; future surfaces must reuse these boundaries rather than reimplement them.
 
 ## Architectural principles
 
@@ -25,15 +25,19 @@ component "DiagramWeave Core" as Core
 component "Contextual Orchestrator Adapter" as Adapter
 component "Contextual Orchestrator" as Orchestrator
 component "PlantUML Renderer\n(local sandbox)" as Renderer
+component "DiagramWeave CLI" as CLI
 component "naruon / CWL hosts" as Hosts
 
 User --> Studio : manual edit / review
+User --> CLI : validate / render
 Studio --> Core : validate, preview, apply
 Studio --> Adapter : request proposal
 Adapter --> Orchestrator : POST /v1/chat/completions
 Studio --> Renderer : render accepted source
+CLI --> Renderer : bounded local render
 Hosts --> Core : embed trust kernel
 Hosts --> Adapter : optional LLM proposals
+Hosts --> CLI : programmatic batch contract
 @enduml
 ```
 
@@ -137,11 +141,30 @@ import {
 
 The renderer is independently reusable by Studio, CLI, naruon, or another CWL host. A future include-capable renderer must be a separate explicit policy mode; it must not weaken this package's `SANDBOX` contract.
 
-### Language Server and CLI
+### DiagramWeave CLI
 
-Status: future reusable modules.
+Package: `@contextualwisdomlab/diagramweave-cli`
 
-The language server will provide editor diagnostics and navigation without depending on Studio. The CLI will provide non-interactive `validate`, `render`, and policy checks for CI. Both must use the same language and policy adapters as Studio.
+Responsibilities:
+
+- provide `dweave validate` and `dweave render` for one file or a deterministic recursive batch;
+- reuse the sandboxed PlantUML renderer without an LLM or network dependency;
+- reject symbolic links, unsafe paths, predictable output collisions, and implicit overwrite;
+- return stable human and JSON reports with exit codes `0`, `1`, and `2`;
+- expose a process-independent API reusable by naruon, CI, and another CWL host.
+
+Non-responsibilities:
+
+- bundling or discovering Java and PlantUML;
+- providing structured source locations for PlantUML diagnostics;
+- concurrent folder rendering, formatting, policy packs, Studio state, or persistence;
+- exposing source, raw renderer diagnostics, executable paths, or environment values.
+
+### DiagramWeave Language Server
+
+Status: future reusable module.
+
+The language server will provide editor diagnostics and navigation without depending on Studio. It must use the same language and policy adapters as Studio and the CLI.
 
 ## Data flow
 
@@ -202,6 +225,7 @@ DiagramWeave uses package boundaries first and service boundaries only where the
 - Core is an embeddable library with no network dependency.
 - The Contextual Orchestrator adapter is replaceable and can point to local, organizational, or managed deployments.
 - The PlantUML renderer is an isolated local process adapter and can later be wrapped by a versioned service without changing its artifact contract.
+- The CLI is an independent batch host that composes the renderer with deterministic path and report contracts for CI and naruon.
 - Collaboration, policy, and persistence can become local processes or services behind versioned contracts.
 - naruon can invoke Core, the renderer, and the Contextual Orchestrator adapter without embedding Studio.
 - organization-central `.github` workflows govern PRs without copying policy logic into production packages.

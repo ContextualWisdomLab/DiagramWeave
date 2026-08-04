@@ -15,6 +15,7 @@ The project follows Semantic Versioning after the first release.
 
 ### Added
 
+- A deterministic `dweave validate` and `dweave render` CLI package for one PlantUML file or a recursive directory, with stable JSON and human reports, CI exit codes, symlink and collision rejection, exclusive creation, explicit atomic overwrite, and naruon/CWL embedding APIs.
 - Repository contracts and zero-dependency Node.js quality gates.
 - Revision-safe edit proposals as the first DiagramWeave Core capability.
 - A Contextual Orchestrator adapter boundary for validated LLM proposals.

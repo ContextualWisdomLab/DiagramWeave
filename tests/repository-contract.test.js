@@ -12,6 +12,8 @@ const requiredFiles = [
   'package-lock.json',
   'packages/plantuml-renderer/README.md',
   'packages/plantuml-renderer/LICENSE',
+  'packages/cli/README.md',
+  'packages/cli/LICENSE',
   '.github/workflows/ci.yml',
   '.gitignore',
   'docs/product/diagramweave-prd.md',
@@ -60,16 +62,18 @@ test('changelog starts at Unreleased and names the foundation', async () => {
   assert.match(changelog, /revision-safe edit proposals/i);
   assert.match(changelog, /Contextual Orchestrator/i);
   assert.match(changelog, /sandboxed.*PlantUML renderer/is);
+  assert.match(changelog, /dweave validate.*dweave render/is);
 });
 
 
 test('product documentation preserves the source-first modular contract', async () => {
-  const [readme, architecture, securityModel, operations, rendererOperations, prd] = await Promise.all([
+  const [readme, architecture, securityModel, operations, rendererOperations, cliReadme, prd] = await Promise.all([
     readFile(new URL('../README.md', import.meta.url), 'utf8'),
     readFile(new URL('../docs/architecture.md', import.meta.url), 'utf8'),
     readFile(new URL('../docs/security-model.md', import.meta.url), 'utf8'),
     readFile(new URL('../docs/operations/contextual-orchestrator.md', import.meta.url), 'utf8'),
     readFile(new URL('../docs/operations/plantuml-renderer.md', import.meta.url), 'utf8'),
+    readFile(new URL('../packages/cli/README.md', import.meta.url), 'utf8'),
     readFile(new URL('../docs/product/diagramweave-prd.md', import.meta.url), 'utf8'),
   ]);
 
@@ -77,6 +81,7 @@ test('product documentation preserves the source-first modular contract', async 
   assert.match(readme, /@contextualwisdomlab\/diagramweave-core/);
   assert.match(readme, /@contextualwisdomlab\/diagramweave-contextual-orchestrator/);
   assert.match(readme, /@contextualwisdomlab\/diagramweave-plantuml-renderer/);
+  assert.match(readme, /@contextualwisdomlab\/diagramweave-cli/);
   assert.match(architecture, /DiagramWeave Core/);
   assert.match(architecture, /DiagramWeave Studio/);
   assert.match(architecture, /naruon/i);
@@ -95,6 +100,11 @@ test('product documentation preserves the source-first modular contract', async 
   assert.match(rendererOperations, /renderer_output_too_large/);
   assert.match(rendererOperations, /SVG is active, untrusted content/i);
   assert.match(rendererOperations, /must not inject.*`innerHTML`/i);
+  assert.match(cliReadme, /dweave validate/);
+  assert.match(cliReadme, /dweave render/);
+  assert.match(cliReadme, /Symbolic links are rejected/i);
+  assert.match(cliReadme, /atomic rename/i);
+  assert.match(cliReadme, /naruon/i);
   assert.match(prd, /^# DiagramWeave 제품 요구사항 문서\(PRD\)/m);
 });
 
@@ -104,6 +114,7 @@ test('workspace publishes independently reusable package manifests', async () =>
     '../packages/core/package.json',
     '../packages/contextual-orchestrator/package.json',
     '../packages/plantuml-renderer/package.json',
+    '../packages/cli/package.json',
   ];
   const names = [];
   for (const path of packagePaths) {
@@ -115,11 +126,17 @@ test('workspace publishes independently reusable package manifests', async () =>
       assert.deepEqual(manifest.files, ['src']);
       assert.equal(manifest.sideEffects, false);
     }
+    if (manifest.name === '@contextualwisdomlab/diagramweave-cli') {
+      assert.deepEqual(manifest.bin, { dweave: './src/bin.js' });
+      assert.deepEqual(manifest.files, ['src']);
+      assert.equal(manifest.sideEffects, false);
+    }
   }
   assert.deepEqual(names, [
     '@contextualwisdomlab/diagramweave-core',
     '@contextualwisdomlab/diagramweave-contextual-orchestrator',
     '@contextualwisdomlab/diagramweave-plantuml-renderer',
+    '@contextualwisdomlab/diagramweave-cli',
   ]);
 });
 
