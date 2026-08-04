@@ -2,7 +2,7 @@
 
 ## Scope
 
-`@contextualwisdomlab/diagramweave-plantuml-renderer` turns one bounded PlantUML source string into an SVG or PNG artifact without writing source or output files. It is a reusable local boundary for DiagramWeave Studio, the future CLI and Language Server, naruon, and other CWL hosts.
+`@contextualwisdomlab/diagramweave-plantuml-renderer` turns one bounded PlantUML source string into an SVG or PNG artifact without writing source or output files. It is a reusable local boundary for DiagramWeave Studio, `dweave`, the future Language Server, naruon, and other CWL hosts.
 
 The package does **not** download or bundle Java, PlantUML, Graphviz, fonts, or a renderer service. The operator supplies absolute Java and PlantUML JAR paths and owns installation, patching, license review, attribution, and platform support.
 
@@ -35,6 +35,9 @@ PlantUML can embed source metadata in generated PNG and SVG files. DiagramWeave 
 ```js
 import {
   createPlantUmlRenderer,
+  parsePlantUmlStandardReport,
+  plantUmlRendererLimits,
+  sanitizePlantUmlDiagnostics,
 } from '@contextualwisdomlab/diagramweave-plantuml-renderer';
 
 const renderer = createPlantUmlRenderer({
@@ -88,12 +91,36 @@ SVG is active, untrusted content even when PlantUML produced it. A host must not
 
 ## Output validation
 
-The fixed `-failfast2` option performs a checking pass before generation. The renderer also captures the bounded `-stdrpt:1` protocol and rejects an exact `status=ERROR` line even when a PlantUML version exits zero and emits image-shaped output. An exact `status=OK` line is accepted; empty or older-version diagnostics do not decide success by themselves, while invalid UTF-8 diagnostics fail closed. The renderer then accepts only:
+The fixed `-failfast2` option performs a checking pass before generation. The renderer captures the bounded `-stdrpt:1` protocol and rejects `status=ERROR` even when a PlantUML version exits zero and emits image-shaped output. An exact `status=OK` line is accepted; empty or older-version diagnostics do not decide success by themselves, while invalid UTF-8 diagnostics fail closed. The renderer then accepts only:
 
 - one UTF-8 SVG document with one `<svg>` root and no trailing payload; or
 - one PNG stream with the PNG signature, terminal `IEND`, and no second PNG signature.
 
 A successful child exit with empty, malformed, truncated, concatenated, or wrong-format output fails closed as `renderer_output_invalid`.
+
+## Structured diagnostics
+
+`parsePlantUmlStandardReport` converts the bounded PlantUML standard report into an immutable result containing `protocolVersion`, `status`, and safe diagnostics. It recognizes protocol version `1`, lets `status=ERROR` win over an earlier `status=OK`, validates a positive 32-bit `lineNumber`, ignores unknown and narrative lines, and fails closed for malformed known fields or invalid UTF-8.
+
+A located syntax error uses a Language Server Protocol-compatible record:
+
+```json
+{
+  "range": {
+    "start": { "line": 1, "character": 0 },
+    "end": { "line": 1, "character": 0 }
+  },
+  "severity": 1,
+  "code": "plantuml.syntax",
+  "source": "plantuml",
+  "message": "PlantUML reported a syntax error.",
+  "data": { "plantUmlLineNumber": 2 }
+}
+```
+
+PlantUML reports a one-based line; the LSP range is zero-based. PlantUML supplies no character range, so DiagramWeave uses a zero-width range at character zero. An error report without a valid line remains a renderer failure but carries no fabricated diagnostic.
+
+`sanitizePlantUmlDiagnostics` validates, clones, bounds, and deeply freezes diagnostics before they cross package, worker, service, CLI, Studio, Language Server, or naruon boundaries. Raw stderr and raw labels are never exposed. Source excerpts, Java/JAR paths, absolute workspace parents, credentials, and arbitrary provider messages are also excluded. Fixed product messages and bounded integers are the only dynamic diagnostic surface.
 
 ## Error contract
 
@@ -104,10 +131,10 @@ A successful child exit with empty, malformed, truncated, concatenated, or wrong
 | `renderer_unavailable` | Spawn or stdin boundary failed | Verify Java and JAR installation |
 | `renderer_timeout` | Deadline elapsed | Continue editing; offer an explicit retry |
 | `renderer_output_too_large` | stdout or stderr exceeded its cap | Reduce diagram complexity or raise a reviewed limit |
-| `renderer_failed` | PlantUML exited nonzero or by signal | Show a generic render failure; obtain structured diagnostics separately |
+| `renderer_failed` | PlantUML exited nonzero, was signalled, or reported an error | Show the safe message and any structured line diagnostics |
 | `renderer_output_invalid` | Output does not match SVG/PNG contract | Verify PlantUML compatibility and installation |
 
-Errors may expose `field`, `stream`, `exitCode`, or `signal`. They never expose source, raw stderr, Java/JAR paths, or environment values.
+Errors may expose `field`, `stream`, `exitCode`, `signal`, and a frozen `diagnostics` array. They never expose source, raw stderr, raw labels, Java/JAR paths, or environment values.
 
 ## Licensing and distribution
 
@@ -124,17 +151,25 @@ PlantUML's official FAQ describes multiple distribution variants and different l
 
 - The package validates one artifact stream, not multiplexed `-pipe` output for multiple diagrams.
 - It intentionally has no local include mode under `SANDBOX`.
-- It does not parse PlantUML stderr into user-facing line diagnostics yet.
+- Structured diagnostics currently cover the bounded `-stdrpt:1` line signal, not a full PlantUML parser or character-accurate range.
 - It does not manage Graphviz discovery or font installation.
-- It does not provide durable caching, file export, CLI argument parsing, or Studio preview state.
+- It does not provide durable caching or Studio preview state; file publication and CLI argument parsing live in the independent CLI package.
 - PlantUML's language-level sandbox is not an operating-system CPU or memory quota. Multi-tenant or hostile-scale deployments must run the renderer in an outer process, container, or sandbox with independent CPU, memory, process-count, and filesystem controls.
 
 ## Host integration
 
-Studio, CLI, naruon, and other CWL hosts should depend on the package contract rather than spawning Java themselves. A service wrapper may expose the same artifact and error objects over a versioned local RPC or HTTP boundary, but it must preserve:
+Studio, CLI, naruon, and other CWL hosts should depend on the package contract rather than spawning Java themselves. A service wrapper may expose the same artifact, error, and diagnostic objects over a versioned local RPC or HTTP boundary, but it must preserve:
 
 - source-only stdin transfer;
 - `SANDBOX` and metadata suppression;
 - all byte and deadline limits;
-- source-free errors;
+- source-free errors and diagnostics;
 - explicit user control over save, publish, or network transfer.
+
+## References
+
+Microsoft. (2026). *Language Server Protocol specification, version 3.18*. https://microsoft.github.io/language-server-protocol/specifications/lsp/3.18/specification/
+
+OASIS Open. (2020). *Static Analysis Results Interchange Format (SARIF) Version 2.1.0*. https://docs.oasis-open.org/sarif/sarif/v2.1.0/sarif-v2.1.0.html
+
+PlantUML. (2026). *Command-line usage: Standard report (stdrpt)*. https://plantuml.com/command-line
