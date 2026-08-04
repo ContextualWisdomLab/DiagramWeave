@@ -25,6 +25,6 @@ The package does not bundle Java or PlantUML. It requires absolute host-supplied
 
 `plantUmlRendererLimits` is the frozen authoritative contract for every default, inclusive minimum, and inclusive maximum. Hosts can use it for configuration validation without copying numeric constants.
 
-`spawnImpl` is a deterministic test-only seam used by this package's process-boundary tests. It is not a production extension point; production hosts must omit `spawnImpl` so the package uses Node.js `spawn` with the fixed command contract.
+spawnImpl is a test-only process seam. It supports this package's deterministic process-boundary tests and is not a production extension point. Production hosts must omit `spawnImpl` so the package uses Node.js `spawn` with the fixed command contract.
 
 See the repository operations guide for limits, error codes, licensing, and deployment requirements.
