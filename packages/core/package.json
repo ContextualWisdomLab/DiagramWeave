@@ -1,0 +1,11 @@
+{
+  "name": "@contextualwisdomlab/diagramweave-core",
+  "version": "0.0.0",
+  "description": "Revision-safe edit proposal primitives for DiagramWeave.",
+  "license": "MIT",
+  "type": "module",
+  "exports": "./src/index.js",
+  "engines": {
+    "node": ">=22 <25"
+  }
+}
