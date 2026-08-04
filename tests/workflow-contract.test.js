@@ -15,7 +15,7 @@ test('hourly PR maintenance securely dispatches repair and pins merge governance
   );
 
   assert.match(workflow, /^name: Hourly PR Maintenance$/m);
-  assert.match(workflow, /cron: ["']13 \* \* \* \*["']/);
+  assert.match(workflow, /cron: ["']13 \* \* \* \*['"]/);
   assert.match(workflow, /group: hourly-pr-maintenance-\$\{\{ github\.repository \}\}/);
   assert.match(workflow, /cancel-in-progress: false/);
   assert.match(workflow, /CWL_AUTOMATION_TOKEN/);
@@ -47,7 +47,11 @@ test('hourly PR maintenance securely dispatches repair and pins merge governance
   assert.match(workflow, /enable_auto_merge: true/);
   assert.match(workflow, /update_branches: true/);
   assert.match(workflow, /pull-requests: write/);
-  assert.match(workflow, /contents: write/);
+  assert.match(workflow, /^permissions:\n  contents: read$/m);
+  assert.match(
+    workflow,
+    /review-merge:[\s\S]*?permissions:[\s\S]*?actions: write[\s\S]*?contents: write/,
+  );
 });
 
 test('hourly product development fails closed and creates one bounded agent task', async () => {
