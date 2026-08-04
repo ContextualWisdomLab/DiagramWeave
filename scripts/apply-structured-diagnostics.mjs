@@ -1,6 +1,7 @@
 import { readFile, rm, writeFile } from 'node:fs/promises';
 
 const rendererPath = 'packages/plantuml-renderer/src/renderer.js';
+const cliExecuteTestPath = 'packages/cli/test/execute.test.js';
 const legacyParserPath = 'packages/plantuml-renderer/src/diagnostics.js';
 const legacyTestPath = 'packages/plantuml-renderer/test/diagnostics.test.js';
 
@@ -80,6 +81,15 @@ const replacement = `      const standardReport = parsePlantUmlStandardReport(
 `;
 renderer = `${renderer.slice(0, closeStart)}${replacement}${renderer.slice(outputStart)}`;
 await writeFile(rendererPath, renderer);
+
+let cliExecuteTest = await readFile(cliExecuteTestPath, 'utf8');
+cliExecuteTest = replaceExactly(
+  cliExecuteTest,
+  "    errorCode: null,\n    errorMessage: null,\n    totals: { selected: 0, succeeded: 0, failed: 0 },\n",
+  "    errorCode: null,\n    errorMessage: null,\n    diagnostics: [],\n    totals: { selected: 0, succeeded: 0, failed: 0 },\n",
+  'CLI help diagnostic fixture',
+);
+await writeFile(cliExecuteTestPath, cliExecuteTest);
 
 await rm(legacyParserPath, { force: true });
 await rm(legacyTestPath, { force: true });
