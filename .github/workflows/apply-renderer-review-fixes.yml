@@ -93,6 +93,10 @@ jobs:
           rm -f .github/workflows/apply-renderer-review-fixes.yml
       - name: Install locked workspace
         run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Print transformed coverage targets
+        shell: bash
+        run: |
+          nl -ba packages/plantuml-renderer/src/renderer.js | sed -n '275,300p;520,540p'
       - name: Verify the exact repaired tree
         shell: bash
         run: |
