@@ -5,14 +5,7 @@ import { TextDecoder } from 'node:util';
 import { hashSource } from '@contextualwisdomlab/diagramweave-core';
 
 import { PlantUmlRendererError } from './errors.js';
-
-const defaultTimeoutMs = 15000;
-const defaultMaxSourceBytes = 1048576;
-const defaultMaxOutputBytes = 16777216;
-const defaultMaxDiagnosticBytes = 65536;
-const maximumSourceBytes = 16777216;
-const maximumOutputBytes = 67108864;
-const maximumDiagnosticBytes = 1048576;
+import { plantUmlRendererLimits } from './limits.js';
 const pngSignature = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 const pngEnd = Buffer.from([0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82]);
 const supportedFormats = new Set(['png', 'svg']);
@@ -112,30 +105,36 @@ function normalizeOptions(options) {
   const javaPath = validateAbsolutePath(options.javaPath, 'javaPath');
   const jarPath = validateAbsolutePath(options.jarPath, 'jarPath');
   const timeoutMs = validateLimit(
-    options.timeoutMs === undefined ? defaultTimeoutMs : options.timeoutMs,
+    options.timeoutMs === undefined
+      ? plantUmlRendererLimits.timeoutMs.default
+      : options.timeoutMs,
     'timeoutMs',
-    10,
-    120000,
+    plantUmlRendererLimits.timeoutMs.minimum,
+    plantUmlRendererLimits.timeoutMs.maximum,
   );
   const maxSourceBytes = validateLimit(
-    options.maxSourceBytes === undefined ? defaultMaxSourceBytes : options.maxSourceBytes,
+    options.maxSourceBytes === undefined
+      ? plantUmlRendererLimits.maxSourceBytes.default
+      : options.maxSourceBytes,
     'maxSourceBytes',
-    1,
-    maximumSourceBytes,
+    plantUmlRendererLimits.maxSourceBytes.minimum,
+    plantUmlRendererLimits.maxSourceBytes.maximum,
   );
   const maxOutputBytes = validateLimit(
-    options.maxOutputBytes === undefined ? defaultMaxOutputBytes : options.maxOutputBytes,
+    options.maxOutputBytes === undefined
+      ? plantUmlRendererLimits.maxOutputBytes.default
+      : options.maxOutputBytes,
     'maxOutputBytes',
-    1,
-    maximumOutputBytes,
+    plantUmlRendererLimits.maxOutputBytes.minimum,
+    plantUmlRendererLimits.maxOutputBytes.maximum,
   );
   const maxDiagnosticBytes = validateLimit(
     options.maxDiagnosticBytes === undefined
-      ? defaultMaxDiagnosticBytes
+      ? plantUmlRendererLimits.maxDiagnosticBytes.default
       : options.maxDiagnosticBytes,
     'maxDiagnosticBytes',
-    1,
-    maximumDiagnosticBytes,
+    plantUmlRendererLimits.maxDiagnosticBytes.minimum,
+    plantUmlRendererLimits.maxDiagnosticBytes.maximum,
   );
   const spawnImpl = options.spawnImpl === undefined ? spawn : options.spawnImpl;
   if (typeof spawnImpl !== 'function') {
@@ -226,10 +225,179 @@ function isValidPng(output) {
 }
 
 /**
+ * Return whether one character is whitespace accepted around XML documents.
+ *
+ * @param {string} character - One UTF-16 code unit.
+ * @returns {boolean} True when JavaScript trimming treats it as whitespace.
+ */
+function isDocumentWhitespace(character) {
+  return character.trim().length === 0;
+}
+
+/**
+ * Skip document whitespace in the requested direction.
+ *
+ * @param {string} text - Decoded candidate document.
+ * @param {number} index - Starting index.
+ * @param {number} boundary - Exclusive forward or inclusive backward boundary.
+ * @param {1|-1} direction - Scan direction.
+ * @returns {number} First non-whitespace index, or the boundary.
+ */
+function skipDocumentWhitespace(text, index, boundary, direction) {
+  let cursor = index;
+  while (
+    cursor !== boundary &&
+    isDocumentWhitespace(direction === 1 ? text[cursor] : text[cursor - 1])
+  ) {
+    cursor += direction;
+  }
+  return cursor;
+}
+
+/**
+ * Compare a short ASCII markup token without allocating a lowercase copy.
+ *
+ * @param {string} text - Decoded candidate document.
+ * @param {number} index - Candidate token start.
+ * @param {string} token - Lowercase ASCII token.
+ * @returns {boolean} True when the token matches case-insensitively.
+ */
+function matchesAsciiToken(text, index, token) {
+  if (index + token.length > text.length) {
+    return false;
+  }
+  for (let offset = 0; offset < token.length; offset += 1) {
+    if (text[index + offset].toLowerCase() !== token[offset]) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * Return whether the character following an XML name ends that name.
+ *
+ * @param {string|undefined} character - Character after the candidate name.
+ * @returns {boolean} True for whitespace, slash, or closing angle bracket.
+ */
+function isXmlNameBoundary(character) {
+  return (
+    character === '>' ||
+    character === '/' ||
+    (character !== undefined && isDocumentWhitespace(character))
+  );
+}
+
+/**
+ * Find an XML tag end while respecting quoted attribute values.
+ *
+ * @param {string} text - Decoded candidate document.
+ * @param {number} index - First character after the opening angle bracket.
+ * @param {number} boundary - Exclusive document boundary.
+ * @returns {number} Closing angle-bracket index, or -1 when incomplete.
+ */
+function findTagEnd(text, index, boundary) {
+  let quote = null;
+  for (let cursor = index; cursor < boundary; cursor += 1) {
+    const character = text[cursor];
+    if (quote !== null) {
+      if (character === quote) {
+        quote = null;
+      }
+    } else if (character === '"' || character === "'") {
+      quote = character;
+    } else if (character === '>') {
+      return cursor;
+    }
+  }
+  return -1;
+}
+
+/**
+ * Return whether one complete opening tag uses the XML empty-element marker.
+ *
+ * XML permits whitespace before `/>`, but not between the slash and closing
+ * angle bracket, so the character immediately before `>` is authoritative.
+ *
+ * @param {string} text - Decoded candidate document.
+ * @param {number} end - Closing angle-bracket index.
+ * @returns {boolean} True when the opening tag ends with `/>`.
+ */
+function isSelfClosingTag(text, end) {
+  return text[end - 1] === '/';
+}
+
+/**
+ * Scan to the next actual SVG tag, skipping comments, CDATA, instructions, and other tags.
+ *
+ * @param {string} text - Decoded candidate document.
+ * @param {number} index - Scan start.
+ * @param {number} boundary - Exclusive document boundary.
+ * @returns {{kind: 'open'|'close', start: number, end: number, selfClosing: boolean}|null|false} Tag, no tag, or malformed markup.
+ */
+function findNextSvgTag(text, index, boundary) {
+  let cursor = index;
+  while (cursor < boundary) {
+    const start = text.indexOf('<', cursor);
+    if (start === -1 || start >= boundary) {
+      return null;
+    }
+    if (text.startsWith('<!--', start)) {
+      const commentEnd = text.indexOf('-->', start + 4);
+      if (commentEnd === -1 || commentEnd + 3 > boundary) {
+        return false;
+      }
+      cursor = commentEnd + 3;
+      continue;
+    }
+    if (text.startsWith('<![CDATA[', start)) {
+      const cdataEnd = text.indexOf(']]>', start + 9);
+      if (cdataEnd === -1 || cdataEnd + 3 > boundary) {
+        return false;
+      }
+      cursor = cdataEnd + 3;
+      continue;
+    }
+    if (text.startsWith('<?', start)) {
+      const instructionEnd = text.indexOf('?>', start + 2);
+      if (instructionEnd === -1 || instructionEnd + 2 > boundary) {
+        return false;
+      }
+      cursor = instructionEnd + 2;
+      continue;
+    }
+
+    const tagEnd = findTagEnd(text, start + 1, boundary);
+    if (tagEnd === -1) {
+      return false;
+    }
+    const isClose = matchesAsciiToken(text, start, '</svg');
+    const isOpen = matchesAsciiToken(text, start, '<svg');
+    if (
+      (isClose && isXmlNameBoundary(text[start + 5])) ||
+      (isOpen && isXmlNameBoundary(text[start + 4]))
+    ) {
+      return {
+        kind: isClose ? 'close' : 'open',
+        start,
+        end: tagEnd,
+        selfClosing: !isClose && isSelfClosingTag(text, tagEnd),
+      };
+    }
+    cursor = tagEnd + 1;
+  }
+  return null;
+}
+
+/**
  * Return whether output is one complete UTF-8 SVG document.
  *
+ * The validator decodes once, scans only the leading/trailing whitespace and
+ * then performs one markup pass. Nested SVG elements are valid, but a second
+ * top-level SVG document or malformed markup is rejected.
+ *
  * @param {Buffer} output - Bounded renderer output.
- * @returns {boolean} True for one XML/SVG root with no trailing payload.
+ * @returns {boolean} True for exactly one complete SVG root.
  */
 function isValidSvg(output) {
   let text;
@@ -238,12 +406,46 @@ function isValidSvg(output) {
   } catch {
     return false;
   }
-  const trimmed = text.trim();
-  const rootCount = (trimmed.match(/<svg(?:\s|>)/gi) ?? []).length;
-  return (
-    rootCount === 1 &&
-    /^(?:<\?xml[\s\S]*?\?>\s*)?<svg(?:\s|>)[\s\S]*<\/svg>$/i.test(trimmed)
-  );
+
+  let start = skipDocumentWhitespace(text, 0, text.length, 1);
+  const end = skipDocumentWhitespace(text, text.length, start, -1);
+  if (start === end) {
+    return false;
+  }
+  if (matchesAsciiToken(text, start, '<?xml')) {
+    const declarationEnd = text.indexOf('?>', start + 5);
+    if (declarationEnd === -1 || declarationEnd + 2 > end) {
+      return false;
+    }
+    start = skipDocumentWhitespace(text, declarationEnd + 2, end, 1);
+  }
+
+  const root = findNextSvgTag(text, start, end);
+  if (root === false || root === null || root.start !== start || root.kind !== 'open') {
+    return false;
+  }
+  if (root.selfClosing) {
+    return root.end + 1 === end;
+  }
+
+  let depth = 1;
+  let cursor = root.end + 1;
+  while (cursor < end) {
+    const tag = findNextSvgTag(text, cursor, end);
+    if (tag === false || tag === null) {
+      return false;
+    }
+    cursor = tag.end + 1;
+    if (tag.kind === 'open' && !tag.selfClosing) {
+      depth += 1;
+    } else if (tag.kind === 'close') {
+      depth -= 1;
+      if (depth === 0) {
+        return cursor === end;
+      }
+    }
+  }
+  return false;
 }
 
 /**
@@ -565,9 +767,10 @@ function renderRequest(options, request) {
  * Hosts supply absolute Java and PlantUML JAR paths so this package does not
  * bundle or silently download an executable. The returned renderer is frozen,
  * performs no logging or persistence, and exposes one asynchronous `render`
- * operation.
+ * operation. `spawnImpl` exists only as a deterministic test seam; production
+ * hosts must omit it so Node.js `spawn` enforces the fixed process contract.
  *
- * @param {unknown} options - Absolute paths, byte limits, timeout, and optional spawn implementation.
+ * @param {unknown} options - Absolute paths, byte limits, timeout, and optional test seam.
  * @returns {Readonly<{render(request: unknown): Promise<Readonly<object>>}>} Frozen renderer client.
  * @throws {PlantUmlRendererError} When construction options are unsafe or invalid.
  */
