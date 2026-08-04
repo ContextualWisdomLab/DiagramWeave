@@ -60,17 +60,20 @@ Contextual Orchestrator remains responsible for its provider-host egress checks,
 
 ### PlantUML renderer boundary
 
-The future local renderer must run PlantUML with `SANDBOX` security as the default profile. In that profile local file and URL access are unavailable. DiagramWeave additionally requires:
+The local renderer package runs PlantUML with `SANDBOX` as a fixed profile. It requires absolute Java and JAR paths, invokes no shell, receives source only through stdin, passes an empty environment, and disables generated source metadata.
 
-- **remote include is disabled by default**;
-- local include is restricted to a canonical workspace allowlist;
-- path traversal, symlink escape, and device paths are rejected;
-- the renderer receives a minimal environment with no model or repository tokens;
-- wall-clock, CPU, memory, input, recursion, and output limits terminate abusive work;
-- renderer failure cannot crash Studio or corrupt source;
-- remote renderers require explicit opt-in because source leaves the device.
+The implemented boundary enforces:
 
-PlantUML allowlist modes are not equivalent to `SANDBOX`; enabling one is a deliberate administrator policy change.
+- no remote or local include mode;
+- no source or output temporary files;
+- UTF-8 source-size limits;
+- independent stdout and stderr limits;
+- a wall-clock deadline and forced termination;
+- SVG/PNG structure validation;
+- source-free public errors;
+- immutable artifacts tied to the SHA-256 source revision.
+
+The foundation does not yet impose an operating-system cgroup, job-object, or container memory/CPU quota. Hosts that process hostile or high-volume diagrams must add an outer process sandbox and resource controller. PlantUML allowlist modes are not equivalent to `SANDBOX`; an include-capable mode requires a separate explicit security design and administrator policy.
 
 ## Threats and mitigations
 
@@ -83,8 +86,8 @@ PlantUML allowlist modes are not equivalent to `SANDBOX`; enabling one is a deli
 | Credential leakage in errors | No package logging, no response-body reads on HTTP errors, token-free messages |
 | Plaintext remote interception | Remote HTTPS only; HTTP restricted to loopback |
 | SSRF through orchestrator endpoint | Adapter URL policy plus Contextual Orchestrator egress controls |
-| Renderer reads local files or URLs | PlantUML `SANDBOX`, remote include disabled, workspace allowlist |
-| Renderer denial of service | Process isolation and resource limits |
+| Renderer reads local files or URLs | Fixed PlantUML `SANDBOX`; no include mode in this package |
+| Renderer denial of service | Separate child, byte caps, deadline, kill; host-level CPU/memory sandbox for hostile scale |
 | Hidden automatic mutation | Core returns values only; approval and write action are separate |
 | Supply-chain replacement | Lockfile, immutable Action SHAs, review and exact-head checks |
 
