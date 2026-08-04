@@ -39,6 +39,7 @@ jobs:
         run: |
           set -euo pipefail
           base64 --decode .bootstrap/review-fixes.patch.b64 > /tmp/review-fixes.patch
+          sha256sum /tmp/review-fixes.patch
           printf '%s  %s\n' \
             '0ef241b96ff24878c1eb406a28e6b8ffb0236b827cf409de0b658fb9c39b0edb' \
             '/tmp/review-fixes.patch' | sha256sum --check --strict
