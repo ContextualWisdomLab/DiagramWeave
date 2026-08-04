@@ -75,7 +75,10 @@ test('uses the production filesystem, process environment, and default renderer 
     const executablePath = join(root, 'fake-java');
     const plantUmlPath = join(root, 'plantuml.jar');
     await writeFile(sourcePath, '@startuml\n@enduml\n');
-    await writeFile(executablePath, '#!/bin/sh\nprintf \'<svg/>\'\n');
+    await writeFile(
+      executablePath,
+      "#!/bin/sh\nwhile IFS= read -r _line; do :; done\nprintf '<svg/>'\n",
+    );
     await chmod(executablePath, 0o755);
     await writeFile(plantUmlPath, 'test fixture');
     process.env.DIAGRAMWEAVE_JAVA_PATH = executablePath;
