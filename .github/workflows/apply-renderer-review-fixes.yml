@@ -11,7 +11,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: apply-renderer-review-fixes-${{ github.event.pull_request.number || github.ref }}
+  group: apply-renderer-review-fixes-${{ github.repository }}-agent-renderer-hardening
   cancel-in-progress: true
 
 jobs:
@@ -22,6 +22,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      pull-requests: write
     steps:
       - name: Check out branch
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -73,3 +74,7 @@ jobs:
           git add --all
           git commit -m 'fix: accept safe SVG prologues and lock documentation contracts'
           git push origin HEAD:agent/renderer-hardening
+      - name: Return the verified pull request to review
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh pr ready 3 --repo "$GITHUB_REPOSITORY"
