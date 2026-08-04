@@ -49,11 +49,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          node --check scripts/apply-cli-foundation.mjs
-          node scripts/apply-cli-foundation.mjs
+          node --check scripts/apply-cli-foundation-chunks.mjs
+          node scripts/apply-cli-foundation-chunks.mjs
           chmod 0755 packages/cli/src/bin.js
           rm -f scripts/apply-cli-foundation.mjs
-          rm -f .github/workflows/apply-cli-foundation.yml
+          rm -f scripts/apply-cli-foundation-chunks.mjs
           rm -f .github/workflows/apply-cli-foundation-pr.yml
 
       - name: Update and install the locked workspace
@@ -158,8 +158,9 @@ jobs:
           remote_head="$(git ls-remote origin refs/heads/agent/cli-foundation | cut -f1)"
           test "$remote_head" = "$EXPECTED_HEAD"
           test ! -e scripts/apply-cli-foundation.mjs
-          test ! -e .github/workflows/apply-cli-foundation.yml
+          test ! -e scripts/apply-cli-foundation-chunks.mjs
           test ! -e .github/workflows/apply-cli-foundation-pr.yml
+          test ! -e .bootstrap
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add --all
