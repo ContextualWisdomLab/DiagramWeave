@@ -34,13 +34,19 @@ jobs:
         with:
           node-version: 24
           package-manager-cache: false
-      - name: Apply source-controlled review patch
+      - name: Apply reviewed renderer and regression changes
         shell: bash
         run: |
           set -euo pipefail
           base64 --decode .bootstrap/review-fixes.patch.b64 > /tmp/review-fixes.patch
-          git apply --check /tmp/review-fixes.patch
-          git apply /tmp/review-fixes.patch
+          git apply --check \
+            --include=packages/plantuml-renderer/src/renderer.js \
+            --include=packages/plantuml-renderer/test/hardening.test.js \
+            /tmp/review-fixes.patch
+          git apply \
+            --include=packages/plantuml-renderer/src/renderer.js \
+            --include=packages/plantuml-renderer/test/hardening.test.js \
+            /tmp/review-fixes.patch
           rm -rf .bootstrap
           rm -f .github/workflows/apply-renderer-review-fixes.yml
       - name: Install locked workspace
