@@ -131,8 +131,11 @@ test('product documentation preserves the source-first modular contract', async 
   assert.match(prd, /^# DiagramWeave 제품 요구사항 문서\(PRD\)/m);
   assert.match(prd, /FR-023의 foundation 범위는 구현됐다/);
   assert.match(diagnosticResearch, /Language Server Protocol specification, version 3\.18/);
-  assert.match(diagnosticResearch, /PlantUML\. \(2026\)/);
-  assert.match(diagnosticResearch, /OASIS Open\. \(2020\)/);
+  assert.match(diagnosticResearch, /Microsoft\. \(n\.d\.\)/);
+  assert.match(diagnosticResearch, /Retrieved August 4, 2026/);
+  assert.match(diagnosticResearch, /PlantUML\. \(n\.d\.\)/);
+  assert.match(diagnosticResearch, /OASIS Open\. \(2023, August 28\)/);
+  assert.match(diagnosticResearch, /Version 2\.1\.0 Plus Errata 01/);
 });
 
 test('workspace publishes independently reusable package manifests', async () => {
