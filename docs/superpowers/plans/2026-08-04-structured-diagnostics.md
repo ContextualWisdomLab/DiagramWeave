@@ -25,6 +25,7 @@
 - `packages/plantuml-renderer/src/renderer.js`: standard-report integration.
 - `packages/plantuml-renderer/src/index.js`: public parser and sanitizer exports.
 - `packages/plantuml-renderer/test/standard-report.test.js`: protocol, boundary, and privacy corpus.
+- `packages/plantuml-renderer/test/diagnostic-sanitizer-boundaries.test.js`: Proxy length, revoked Proxy, and bounded-array regressions.
 - `packages/plantuml-renderer/test/review-regressions.test.js`: renderer propagation and immutability.
 - `packages/cli/src/diagnostics.js`: renderer-boundary revalidation.
 - `packages/cli/src/execute.js`: diagnostics in every report and file record.
@@ -49,7 +50,8 @@
 - [x] Validate the exact LSP-compatible PlantUML record.
 - [x] Bound a collection to at most 32 diagnostics.
 - [x] Clone every accepted nested object.
-- [x] Fail the entire collection closed for malformed, oversized, or hostile input.
+- [x] Fail the entire collection closed for malformed, oversized, hostile, revoked-Proxy, noninteger-length, and negative-length input.
+- [x] Avoid caller-controlled iterators by using bounded indexed access.
 - [x] Reuse the sanitizer in `PlantUmlRendererError` and the CLI.
 
 ### Task 3: Renderer error propagation
@@ -86,10 +88,10 @@
 
 ### Task 7: Verification evidence
 
-The exact clean implementation tree completed:
+The current implementation tree contains 245 tests and is required to preserve:
 
 ```text
-242 tests passed
+245 tests
 0 failed
 0 cancelled
 0 skipped
@@ -101,11 +103,11 @@ production JSDoc modules: 15/15
 JavaScript syntax: 36 files
 ```
 
-Both package dry runs succeeded and contained only LICENSE, README, package metadata, and intended `src/*.js` files.
+The last clean-tree workflow passed both package dry runs. The latest GitHub exact-head CI, SAST, security scans, and CodeRabbit result remain authoritative after the final hardening and documentation commits.
 
 ### Task 8: PR review and merge gate
 
-- [ ] Mark the pull request ready after durable documentation and exact-head verification.
+- [x] Mark the pull request ready after durable documentation and clean-tree verification.
 - [ ] Review every current-head thread and implement valid findings test-first.
 - [ ] Require exact-head Node 22/24 CI, Semgrep, security scans, and CodeRabbit success.
 - [ ] Merge only after all threads are resolved and the latest head remains mergeable.
