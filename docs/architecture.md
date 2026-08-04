@@ -1,0 +1,183 @@
+# DiagramWeave Architecture
+
+## Purpose
+
+DiagramWeave is a source-first editor platform for PlantUML and future text diagram languages. The architecture protects manual editing as the authoritative workflow while making LLM output reviewable, revision-bound, and replaceable. The first implementation slice deliberately contains no renderer, database, desktop shell, or hidden document store: it establishes the portable trust kernel that each later surface must reuse.
+
+## Architectural principles
+
+1. **Source files are authoritative.** A host may cache editor state, but saved text remains the system of record.
+2. **Manual editing is independent.** DiagramWeave remains useful without an account, network connection, model provider, or Contextual Orchestrator instance.
+3. **AI proposes; the host decides.** Model output is an untrusted `EditProposal`, not a direct mutation.
+4. **Exact revisions fail closed.** A proposal applies only to the SHA-256 revision from which it was produced.
+5. **Scope expansion is visible.** An effective range outside the requested range requires a reason and explicit host approval.
+6. **Modules compose without becoming inseparable.** Each package has one purpose and can run inside DiagramWeave Studio, naruon, an IDE extension, a CLI, or another CWL service.
+7. **Provider and renderer boundaries are adapters.** Core never imports a network client, renderer process, UI framework, or persistence implementation.
+
+## System context
+
+```plantuml
+@startuml
+skinparam componentStyle rectangle
+actor User
+component "DiagramWeave Studio\n(future host)" as Studio
+component "DiagramWeave Core" as Core
+component "Contextual Orchestrator Adapter" as Adapter
+component "Contextual Orchestrator" as Orchestrator
+component "PlantUML Renderer\n(future sandbox)" as Renderer
+component "naruon / CWL hosts" as Hosts
+
+User --> Studio : manual edit / review
+Studio --> Core : validate, preview, apply
+Studio --> Adapter : request proposal
+Adapter --> Orchestrator : POST /v1/chat/completions
+Studio --> Renderer : render accepted source
+Hosts --> Core : embed trust kernel
+Hosts --> Adapter : optional LLM proposals
+@enduml
+```
+
+The diagram is documentation, not a runtime dependency. DiagramWeave Core can be used without Studio, Contextual Orchestrator, or PlantUML.
+
+## Module boundaries
+
+### DiagramWeave Core
+
+Package: `@contextualwisdomlab/diagramweave-core`
+
+Responsibilities:
+
+- calculate deterministic SHA-256 source revisions;
+- validate the `EditProposal` contract;
+- reject stale revisions;
+- validate requested and effective UTF-16 ranges;
+- detect scope expansion;
+- require explicit approval before previewing or applying expanded edits;
+- return immutable normalized values.
+
+Non-responsibilities:
+
+- rendering PlantUML;
+- calling an LLM;
+- reading or writing files;
+- saving history;
+- choosing whether a user should accept a proposal;
+- parsing a diagram into a full semantic AST.
+
+Public entry points:
+
+```js
+import {
+  applyEditProposal,
+  hashSource,
+  previewEditProposal,
+  validateEditProposal,
+} from '@contextualwisdomlab/diagramweave-core';
+```
+
+### Contextual Orchestrator adapter
+
+Package: `@contextualwisdomlab/diagramweave-contextual-orchestrator`
+
+Responsibilities:
+
+- validate the configured endpoint, model, token, timeout, and fetch boundary;
+- allow remote HTTPS and loopback-only HTTP;
+- bound source and instruction sizes;
+- construct the exact two-message model contract;
+- send a non-streaming OpenAI-compatible request;
+- reject error bodies without reading them;
+- distinguish timeout, transport, HTTP, response-shape, and assistant-JSON failures;
+- pass parsed output through DiagramWeave Core validation.
+
+Non-responsibilities:
+
+- persisting credentials;
+- reading process environment variables;
+- logging source, prompts, responses, or tokens;
+- applying a proposal;
+- rendering or saving the accepted source.
+
+### DiagramWeave Studio
+
+Status: future product surface.
+
+Studio will own file tabs, manual source editing, preview layout, diagnostics, Context Inspector, diff review, keyboard interaction, recovery, and user approval. It must consume Core rather than reimplement revision or scope checks. UI work requires Figma/Product Design state coverage before implementation because source, preview, diff, diagnostics, offline, timeout, conflict, and scope-expansion states interact visibly.
+
+### Renderer adapter
+
+Status: future isolated module.
+
+The renderer will expose deterministic validation and artifact creation while keeping PlantUML in a separate process boundary. Local rendering will use PlantUML `SANDBOX` security by default, deny remote includes, constrain local includes to an explicit workspace root, and enforce time, memory, input, and output limits.
+
+### Language Server and CLI
+
+Status: future reusable modules.
+
+The language server will provide editor diagnostics and navigation without depending on Studio. The CLI will provide non-interactive `validate`, `render`, and policy checks for CI. Both must use the same language and policy adapters as Studio.
+
+## Data flow
+
+### Proposal request
+
+1. The host obtains an explicit source string, document identifier, requested range, operation type, and instruction.
+2. The adapter validates sizes and range boundaries.
+3. The adapter hashes the exact source and serializes the request as untrusted JSON data.
+4. Contextual Orchestrator routes or conducts the model work behind its OpenAI-compatible interface.
+5. The adapter accepts only one raw JSON object or one complete JSON code fence.
+6. Core validates schema, identifiers, operation type, ranges, replacement, summary, assumptions, and source revision.
+7. The host receives an immutable proposal. The source remains unchanged.
+
+### Proposal preview and application
+
+1. The host calls `previewEditProposal(source, proposal)`.
+2. Core recomputes the current revision and rejects stale proposals.
+3. Core rejects an expanded range unless `allowScopeExpansion: true` is explicit.
+4. Core returns next source and before/after hashes without mutating input.
+5. The host displays source diff and, later, before/after rendered artifacts.
+6. Only a user-approved host action calls `applyEditProposal` or writes a file.
+
+## Error model
+
+Core errors have stable `code` fields:
+
+- `invalid_source`
+- `invalid_edit_proposal`
+- `revision_conflict`
+- `scope_expansion_required`
+
+Adapter errors have stable `code` fields:
+
+- `invalid_client_options`
+- `invalid_request`
+- `provider_timeout`
+- `provider_unavailable`
+- `provider_http_error`
+- `provider_response_invalid`
+- `assistant_json_invalid`
+
+Host products branch on `code`, not localized message text. They must not show provider response bodies or bearer tokens in diagnostics.
+
+## Modular MSA compatibility
+
+DiagramWeave uses package boundaries first and service boundaries only where they add isolation or independent scaling. This avoids forcing a distributed deployment onto local and offline users while preserving a **modular MSA** path:
+
+- Core is an embeddable library with no network dependency.
+- The Contextual Orchestrator adapter is replaceable and can point to local, organizational, or managed deployments.
+- Renderer, collaboration, policy, and persistence can become local processes or services behind versioned contracts.
+- naruon can invoke Core and the adapter without embedding Studio.
+- organization-central `.github` workflows govern PRs without copying policy logic into production packages.
+- each package retains independent tests, version metadata, and public documentation.
+
+## Persistence contract
+
+The foundation introduces no database. If persistence is added, source files remain authoritative and all database objects use descriptive two-word-or-longer `snake_case` names, such as `diagram_document`, `source_revision`, `edit_proposal`, and `render_artifact`. Schema changes require migration, rollback, and compatibility tests.
+
+## Compatibility and versioning
+
+- Node.js 22 and 24 are supported foundation runtimes.
+- Packages use ECMAScript modules.
+- Public error codes, proposal schema version, and package exports are compatibility contracts.
+- A breaking proposal schema requires a new `schemaVersion` and migration guidance.
+- Package releases follow Semantic Versioning after an integrated release candidate is ready.
+- `CHANGELOG.md` remains the user-facing history of contract changes.
