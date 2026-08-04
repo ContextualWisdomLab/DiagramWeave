@@ -1,0 +1,237 @@
+name: Hourly Product Development
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Evaluate the gate and prompt without creating an agent task
+        required: false
+        default: false
+        type: boolean
+  schedule:
+    - cron: "47 * * * *"
+
+concurrency:
+  group: hourly-product-development-${{ github.repository }}
+  cancel-in-progress: false
+
+# Pull-request inventory uses the built-in read-only token. GitHub's Agent
+# Tasks API accepts user-to-server tokens, not GITHUB_TOKEN or GitHub App
+# installation tokens, so task inventory and creation use a fine-grained user
+# token stored as COPILOT_GITHUB_TOKEN.
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  dispatch-product-gap:
+    if: github.repository == 'ContextualWisdomLab/DiagramWeave'
+    runs-on: ubuntu-latest
+    env:
+      AGENT_TASK_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN }}
+      DEFAULT_BRANCH: main
+      DRY_RUN: ${{ inputs.dry_run || false }}
+      REPOSITORY_TOKEN: ${{ github.token }}
+    steps:
+      - name: Enforce pull-request-first single-flight gate
+        id: gate
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if ! open_prs="$(
+            GH_TOKEN="$REPOSITORY_TOKEN" gh pr list \
+              --repo "$GITHUB_REPOSITORY" \
+              --state open \
+              --limit 1 \
+              --json number,url
+          )"; then
+            {
+              echo "dispatch=false"
+              echo "reason=pull_request_inventory_unavailable"
+            } >>"$GITHUB_OUTPUT"
+            echo "Pull-request inventory was unavailable; failing closed." \
+              >>"$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          if [ "$(jq 'length' <<<"$open_prs")" -gt 0 ]; then
+            {
+              echo "dispatch=false"
+              echo "reason=open_pull_request"
+            } >>"$GITHUB_OUTPUT"
+            echo "An open pull request exists; PR governance owns this hour." \
+              >>"$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          if [ -z "${AGENT_TASK_TOKEN:-}" ]; then
+            {
+              echo "dispatch=false"
+              echo "reason=agent_task_token_unavailable"
+            } >>"$GITHUB_OUTPUT"
+            cat >>"$GITHUB_STEP_SUMMARY" <<'SUMMARY'
+          Agent task dispatch is disabled because `COPILOT_GITHUB_TOKEN` is not configured.
+          Configure a fine-grained user token with Agent tasks read/write permission for
+          this repository. The Agent Tasks API does not accept `GITHUB_TOKEN`.
+          SUMMARY
+            exit 0
+          fi
+
+          tasks_endpoint="/agents/repos/${GITHUB_REPOSITORY}/tasks?per_page=100"
+          if ! tasks_json="$(
+            GH_TOKEN="$AGENT_TASK_TOKEN" gh api \
+              --paginate \
+              --slurp \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2026-03-10" \
+              "$tasks_endpoint"
+          )"; then
+            {
+              echo "dispatch=false"
+              echo "reason=task_inventory_unavailable"
+            } >>"$GITHUB_OUTPUT"
+            echo "Agent task inventory was unavailable; failing closed." \
+              >>"$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          if ! jq -e 'all(.[]; (.tasks | type) == "array")' \
+            <<<"$tasks_json" >/dev/null; then
+            {
+              echo "dispatch=false"
+              echo "reason=task_inventory_unavailable"
+            } >>"$GITHUB_OUTPUT"
+            echo "Agent task inventory had an unexpected schema; failing closed." \
+              >>"$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          active_tasks="$(
+            jq '[
+              .[] | .tasks[]?
+              | ((.state // "unknown") | ascii_downcase) as $state
+              | select(
+                  $state != "completed" and
+                  $state != "failed" and
+                  $state != "timed_out" and
+                  $state != "cancelled"
+                )
+            ] | length' <<<"$tasks_json"
+          )"
+          if [ "$active_tasks" -gt 0 ]; then
+            {
+              echo "dispatch=false"
+              echo "reason=active_agent_task"
+            } >>"$GITHUB_OUTPUT"
+            echo "An Agent Task is active or in an unknown state; no duplicate was created." \
+              >>"$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          {
+            echo "dispatch=true"
+            echo "reason=ready"
+          } >>"$GITHUB_OUTPUT"
+
+      - name: Prepare bounded commercial-quality task
+        if: steps.gate.outputs.dispatch == 'true'
+        shell: bash
+        run: |
+          cat >"$RUNNER_TEMP/diagramweave-agent-prompt.md" <<'PROMPT'
+          Continue product development for ContextualWisdomLab/DiagramWeave.
+
+          Start by reading AGENTS.md, README.md, CHANGELOG.md,
+          docs/product/diagramweave-prd.md, docs/architecture.md,
+          docs/security-model.md, docs/operations, open issues, recent merged pull
+          requests, current source, tests, package contracts, and active release evidence.
+          Identify the single highest-value buyer-visible product, reliability,
+          interoperability, security, evaluation, accessibility, or operations gap that
+          can be completed as exactly one bounded pull request. Do not create another repository.
+
+          Keep DiagramWeave source-first. Manual editing, validation, and safe local workflows
+          must remain first-class and usable without an LLM. Product LLM requests must use or
+          improve ContextualWisdomLab/contextual-orchestrator through the provider-neutral adapter;
+          never introduce a direct hidden provider dependency. Treat source, comments, labels,
+          includes, model output, and provider error bodies as untrusted data. AI may propose but
+          never silently apply, save, commit, publish, or execute source.
+
+          Preserve modular MSA boundaries so Core, provider adapters, Renderer, Studio,
+          Language Server, CLI, and policy modules can run independently or compose with
+          ContextualWisdomLab/.github, naruon, and other CWL repositories. If persistence is
+          introduced, every database object name must be descriptive, two-word-or-longer
+          snake_case unless a documented external protocol prevents it.
+
+          Use test-driven development. Add a failing test first, implement the smallest safe
+          change, and run exact verification. Maintain 100% production statement and branch coverage,
+          100% production function and docstring coverage, and no skipped or ignored release tests.
+          Preserve Node 22 and 24 compatibility until an approved ADR changes it. Update CHANGELOG.md,
+          README or affected operations/API documentation, and threat-model material when relevant.
+          Use current authoritative standards and primary technical documentation; use peer-reviewed
+          primary literature where a scientific claim matters and format academic references in APA 7.
+          Use Figma or Product Design only when a buyer-visible UI flow genuinely benefits from a
+          visual interaction contract, then implement and test the approved states accessibly.
+
+          Inspect all review feedback and exact-head required Checks on the pull request you create.
+          Address valid feedback in the same branch. Do not merge, publish, release, or bypass branch
+          protection. Do not weaken tests, coverage, security, accessibility, review, or provenance gates.
+          A release is permitted only after a separate reviewed release decision with a version bump,
+          dated CHANGELOG section, package and cross-platform evidence, provenance, rollback evidence,
+          and all repository policy gates satisfied.
+
+          Produce exactly one bounded pull request and leave a concise evidence-based description of
+          the buyer gap, implementation, tests, risks, and remaining limitations.
+          PROMPT
+
+      - name: Show bounded task in dry run
+        if: steps.gate.outputs.dispatch == 'true' && env.DRY_RUN == 'true'
+        shell: bash
+        run: |
+          echo "reason=dry_run" >>"$GITHUB_STEP_SUMMARY"
+          cat "$RUNNER_TEMP/diagramweave-agent-prompt.md" >>"$GITHUB_STEP_SUMMARY"
+
+      - name: Create one Agent Task
+        if: steps.gate.outputs.dispatch == 'true' && env.DRY_RUN != 'true'
+        id: create_task
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="$DEFAULT_BRANCH"
+          prompt="$(cat "$RUNNER_TEMP/diagramweave-agent-prompt.md")"
+          payload="$(
+            jq -cn \
+              --arg problem_statement "$prompt" \
+              --arg base "$base" \
+              '{
+                problem_statement: $problem_statement,
+                create_pull_request: true,
+                target: {base_ref: $base}
+              }'
+          )"
+
+          response_file="$RUNNER_TEMP/agent-task-response.json"
+          if ! GH_TOKEN="$AGENT_TASK_TOKEN" gh api \
+            --method POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2026-03-10" \
+            "/agents/repos/${GITHUB_REPOSITORY}/tasks" \
+            --input - \
+            >"$response_file" <<<"$payload"; then
+            echo "Agent task creation failed; no task was recorded." >&2
+            exit 1
+          fi
+
+          if ! jq -e '
+            (.id | type) == "number" and
+            (.state | type) == "string" and
+            (.html_url | type) == "string" and
+            (.html_url | startswith("https://github.com/"))
+          ' "$response_file" >/dev/null; then
+            echo "Agent task creation returned an unexpected schema." >&2
+            exit 1
+          fi
+
+          task_url="$(jq -r '.html_url' "$response_file")"
+          echo "task_url=$task_url" >>"$GITHUB_OUTPUT"
+          printf 'Created bounded Agent Task: %s\n' "$task_url" \
+            >>"$GITHUB_STEP_SUMMARY"
