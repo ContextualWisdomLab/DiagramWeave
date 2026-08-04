@@ -1,5 +1,7 @@
 import { TextDecoder } from 'node:util';
 
+import { plantUmlRendererLimits } from './limits.js';
+
 const utf8Decoder = new TextDecoder('utf-8', { fatal: true });
 const emptyDiagnostics = Object.freeze([]);
 const maximumLineNumber = 2_147_483_647;
@@ -139,6 +141,8 @@ function createReport(protocolVersion, status, diagnostics = emptyDiagnostics) {
  * `status` fields are accepted because an `ERROR` status must win over an
  * earlier `OK` status. Unknown keys and the human-readable suffix emitted by
  * PlantUML are ignored. Only protocol version 1 is currently recognized.
+ * Public callers cannot exceed the renderer's authoritative maximum diagnostic
+ * byte limit even when they bypass `createPlantUmlRenderer`.
  *
  * @param {unknown} diagnostics - Bounded stderr bytes from PlantUML.
  * @returns {Readonly<{
@@ -148,7 +152,16 @@ function createReport(protocolVersion, status, diagnostics = emptyDiagnostics) {
  * }>} Immutable source-free standard-report result.
  */
 export function parsePlantUmlStandardReport(diagnostics) {
-  if (!(diagnostics instanceof Uint8Array)) {
+  let byteLength;
+  try {
+    if (!(diagnostics instanceof Uint8Array)) {
+      return createReport(null, 'invalid');
+    }
+    byteLength = diagnostics.byteLength;
+  } catch {
+    return createReport(null, 'invalid');
+  }
+  if (byteLength > plantUmlRendererLimits.maxDiagnosticBytes.maximum) {
     return createReport(null, 'invalid');
   }
 
