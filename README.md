@@ -66,6 +66,7 @@ A local, sandboxed renderer that receives PlantUML only through stdin and return
 ```js
 import {
   createPlantUmlRenderer,
+  plantUmlRendererLimits,
 } from '@contextualwisdomlab/diagramweave-plantuml-renderer';
 
 const renderer = createPlantUmlRenderer({
@@ -81,7 +82,7 @@ const artifact = await renderer.render({
 const svg = Buffer.from(artifact.dataBase64, 'base64').toString('utf8');
 ```
 
-The renderer requires host-supplied absolute Java and JAR paths. It invokes no shell, passes an empty child environment, enables PlantUML `SANDBOX`, disables source metadata, enforces fail-fast syntax checking plus source/output/diagnostic/deadline limits, validates the output structure, and never exposes raw stderr. DiagramWeave does not bundle or download PlantUML in this foundation, so distributors must choose a compatible PlantUML artifact and satisfy its license notices separately.
+`plantUmlRendererLimits` exposes the frozen default and supported range contract for host configuration. The renderer requires host-supplied absolute Java and JAR paths. It invokes no shell, passes an empty child environment, enables PlantUML `SANDBOX`, disables source metadata, enforces fail-fast syntax checking plus source/output/diagnostic/deadline limits, validates the output structure, and never exposes raw stderr. DiagramWeave does not bundle or download PlantUML in this foundation, so distributors must choose a compatible PlantUML artifact and satisfy its license notices separately.
 
 ## Product direction
 
