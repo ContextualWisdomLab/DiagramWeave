@@ -35,6 +35,7 @@ PlantUML can embed source metadata in generated PNG and SVG files. DiagramWeave 
 ```js
 import {
   createPlantUmlRenderer,
+  plantUmlRendererLimits,
 } from '@contextualwisdomlab/diagramweave-plantuml-renderer';
 
 const renderer = createPlantUmlRenderer({
@@ -48,6 +49,10 @@ const renderer = createPlantUmlRenderer({
 ```
 
 `javaPath` and `jarPath` must be absolute. Surrounding whitespace, control characters, relative paths, unbounded limits, and non-callable process adapters fail during construction.
+
+The package exports `plantUmlRendererLimits`, a deeply frozen contract containing each default and inclusive supported minimum and maximum. Deployment tooling and configuration UIs should read this object instead of copying numeric limits.
+
+`spawnImpl` is a test-only process seam. Production hosts must omit it so the package uses Node.js `spawn` with the fixed argument, environment, and stdio contract documented above.
 
 Default limits:
 
