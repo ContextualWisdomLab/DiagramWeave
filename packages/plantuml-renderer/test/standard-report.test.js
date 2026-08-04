@@ -152,6 +152,22 @@ test('rejects public standard reports above the authoritative diagnostic maximum
   });
 });
 
+test('fails closed when typed-array byte-length access is hostile', () => {
+  const hostile = new Proxy(new Uint8Array(1), {
+    get(target, property, receiver) {
+      if (property === 'byteLength') {
+        throw new Error('private source');
+      }
+      return Reflect.get(target, property, receiver);
+    },
+  });
+  assert.deepEqual(parsePlantUmlStandardReport(hostile), {
+    protocolVersion: null,
+    status: 'invalid',
+    diagnostics: [],
+  });
+});
+
 test('sanitizer fails closed for hostile array length and iteration access', () => {
   const hostileLength = new Proxy([], {
     get(target, property, receiver) {
