@@ -275,17 +275,27 @@ function matchesAsciiToken(text, index, token) {
 }
 
 /**
- * Return whether the character following an XML name ends that name.
+ * Read one conservative XML element or document-type name.
  *
- * @param {string|undefined} character - Character after the candidate name.
- * @returns {boolean} True for whitespace, slash, or closing angle bracket.
+ * PlantUML SVG uses ASCII XML names. Restricting this boundary to the XML
+ * characters used by SVG avoids accepting malformed markup while preserving
+ * every renderer-produced element and namespace prefix.
+ *
+ * @param {string} text - Decoded candidate document.
+ * @param {number} index - Candidate name start.
+ * @param {number} boundary - Exclusive document boundary.
+ * @returns {{name: string, end: number}|null} Name and first following index.
  */
-function isXmlNameBoundary(character) {
-  return (
-    character === '>' ||
-    character === '/' ||
-    (character !== undefined && isDocumentWhitespace(character))
-  );
+function readXmlName(text, index, boundary) {
+  const first = text[index];
+  if (first === undefined || !/[A-Za-z_:]/u.test(first)) {
+    return null;
+  }
+  let cursor = index + 1;
+  while (cursor < boundary && /[A-Za-z0-9_.:-]/u.test(text[cursor])) {
+    cursor += 1;
+  }
+  return { name: text.slice(index, cursor), end: cursor };
 }
 
 /**
@@ -314,90 +324,301 @@ function findTagEnd(text, index, boundary) {
 }
 
 /**
- * Return whether one complete opening tag uses the XML empty-element marker.
- *
- * XML permits whitespace before `/>`, but not between the slash and closing
- * angle bracket, so the character immediately before `>` is authoritative.
+ * Find the end of a bounded processing instruction or CDATA section.
  *
  * @param {string} text - Decoded candidate document.
- * @param {number} end - Closing angle-bracket index.
- * @returns {boolean} True when the opening tag ends with `/>`.
+ * @param {number} index - First character after the opening delimiter.
+ * @param {string} delimiter - Closing delimiter.
+ * @param {number} boundary - Exclusive document boundary.
+ * @returns {number} First index after the delimiter, or -1 when incomplete.
  */
-function isSelfClosingTag(text, end) {
-  return text[end - 1] === '/';
+function findDelimitedMarkupEnd(text, index, delimiter, boundary) {
+  const end = text.indexOf(delimiter, index);
+  return end === -1 || end + delimiter.length > boundary
+    ? -1
+    : end + delimiter.length;
 }
 
 /**
- * Scan to the next actual SVG tag, skipping comments, CDATA, instructions, and other tags.
+ * Find a well-formed XML comment end.
+ *
+ * XML comments may not contain an embedded double hyphen. This check keeps
+ * malformed comments from hiding element boundaries from the stack scanner.
  *
  * @param {string} text - Decoded candidate document.
- * @param {number} index - Scan start.
+ * @param {number} start - Comment opening delimiter index.
  * @param {number} boundary - Exclusive document boundary.
- * @returns {{kind: 'open'|'close', start: number, end: number, selfClosing: boolean}|null|false} Tag, no tag, or malformed markup.
+ * @returns {number} First index after the comment, or -1 when malformed.
  */
-function findNextSvgTag(text, index, boundary) {
-  let cursor = index;
-  while (cursor < boundary) {
-    const start = text.indexOf('<', cursor);
-    if (start === -1 || start >= boundary) {
-      return null;
-    }
-    if (text.startsWith('<!--', start)) {
-      const commentEnd = text.indexOf('-->', start + 4);
-      if (commentEnd === -1 || commentEnd + 3 > boundary) {
-        return false;
-      }
-      cursor = commentEnd + 3;
-      continue;
-    }
-    if (text.startsWith('<![CDATA[', start)) {
-      const cdataEnd = text.indexOf(']]>', start + 9);
-      if (cdataEnd === -1 || cdataEnd + 3 > boundary) {
-        return false;
-      }
-      cursor = cdataEnd + 3;
-      continue;
-    }
-    if (text.startsWith('<?', start)) {
-      const instructionEnd = text.indexOf('?>', start + 2);
-      if (instructionEnd === -1 || instructionEnd + 2 > boundary) {
-        return false;
-      }
-      cursor = instructionEnd + 2;
-      continue;
-    }
+function findCommentEnd(text, start, boundary) {
+  const end = text.indexOf('-->', start + 4);
+  if (end === -1 || end + 3 > boundary) {
+    return -1;
+  }
+  const embeddedDoubleHyphen = text.indexOf('--', start + 4);
+  return embeddedDoubleHyphen !== -1 && embeddedDoubleHyphen < end
+    ? -1
+    : end + 3;
+}
 
-    const tagEnd = findTagEnd(text, start + 1, boundary);
-    if (tagEnd === -1) {
+/**
+ * Find the end of one XML document type declaration.
+ *
+ * The scanner respects quoted identifiers and an optional internal subset so
+ * nested greater-than characters do not terminate the declaration early.
+ *
+ * @param {string} text - Decoded candidate document.
+ * @param {number} index - First character after the declared root name.
+ * @param {number} boundary - Exclusive document boundary.
+ * @returns {number} First index after the declaration, or -1 when malformed.
+ */
+function findDoctypeEnd(text, index, boundary) {
+  let quote = null;
+  let subsetDepth = 0;
+  for (let cursor = index; cursor < boundary; cursor += 1) {
+    const character = text[cursor];
+    if (quote !== null) {
+      if (character === quote) {
+        quote = null;
+      }
+    } else if (character === '"' || character === "'") {
+      quote = character;
+    } else if (character === '[') {
+      subsetDepth += 1;
+    } else if (character === ']') {
+      if (subsetDepth === 0) {
+        return -1;
+      }
+      subsetDepth -= 1;
+    } else if (character === '>' && subsetDepth === 0) {
+      return cursor + 1;
+    }
+  }
+  return -1;
+}
+
+/**
+ * Return whether a processing instruction uses the reserved XML target.
+ *
+ * @param {string} text - Decoded candidate document.
+ * @param {number} index - Processing-instruction start.
+ * @param {number} boundary - Exclusive document boundary.
+ * @returns {boolean} True for a case-insensitive XML target boundary.
+ */
+function isXmlDeclarationTarget(text, index, boundary) {
+  const targetEnd = index + 5;
+  if (targetEnd >= boundary || !matchesAsciiToken(text, index, '<?xml')) {
+    return false;
+  }
+  const character = text[targetEnd];
+  return character === '?' || isDocumentWhitespace(character);
+}
+
+/**
+ * Skip the restricted XML prologue accepted before the SVG root.
+ *
+ * One XML declaration may appear first. Comments, non-XML processing
+ * instructions, and one DOCTYPE whose declared root is exactly svg may
+ * follow. Other declarations and malformed nodes fail closed.
+ *
+ * @param {string} text - Decoded candidate document.
+ * @param {number} index - First non-whitespace document index.
+ * @param {number} boundary - Exclusive document boundary.
+ * @returns {number|false} First actual element index, or false when malformed.
+ */
+function skipSvgPrologue(text, index, boundary) {
+  let cursor = index;
+  let sawNode = false;
+  let sawDoctype = false;
+  while (cursor < boundary) {
+    if (isXmlDeclarationTarget(text, cursor, boundary)) {
+      if (sawNode) {
+        return false;
+      }
+      const end = findDelimitedMarkupEnd(text, cursor + 5, '?>', boundary);
+      if (end === -1) {
+        return false;
+      }
+      sawNode = true;
+      cursor = skipDocumentWhitespace(text, end, boundary, 1);
+      continue;
+    }
+    if (text.startsWith('<!--', cursor)) {
+      const end = findCommentEnd(text, cursor, boundary);
+      if (end === -1) {
+        return false;
+      }
+      sawNode = true;
+      cursor = skipDocumentWhitespace(text, end, boundary, 1);
+      continue;
+    }
+    if (text.startsWith('<?', cursor)) {
+      const end = findDelimitedMarkupEnd(text, cursor + 2, '?>', boundary);
+      if (end === -1) {
+        return false;
+      }
+      sawNode = true;
+      cursor = skipDocumentWhitespace(text, end, boundary, 1);
+      continue;
+    }
+    if (
+      matchesAsciiToken(text, cursor, '<!doctype') &&
+      cursor + 9 < boundary &&
+      isDocumentWhitespace(text[cursor + 9])
+    ) {
+      if (sawDoctype) {
+        return false;
+      }
+      const nameStart = skipDocumentWhitespace(text, cursor + 9, boundary, 1);
+      const declaredRoot = readXmlName(text, nameStart, boundary);
+      if (declaredRoot === null || declaredRoot.name !== 'svg') {
+        return false;
+      }
+      const end = findDoctypeEnd(text, declaredRoot.end, boundary);
+      if (end === -1) {
+        return false;
+      }
+      sawNode = true;
+      sawDoctype = true;
+      cursor = skipDocumentWhitespace(text, end, boundary, 1);
+      continue;
+    }
+    if (text.startsWith('<!', cursor)) {
       return false;
     }
-    const isClose = matchesAsciiToken(text, start, '</svg');
-    const isOpen = matchesAsciiToken(text, start, '<svg');
-    if (
-      (isClose && isXmlNameBoundary(text[start + 5])) ||
-      (isOpen && isXmlNameBoundary(text[start + 4]))
-    ) {
-      return {
-        kind: isClose ? 'close' : 'open',
-        start,
-        end: tagEnd,
-        selfClosing: !isClose && isSelfClosingTag(text, tagEnd),
-      };
-    }
-    cursor = tagEnd + 1;
+    return cursor;
   }
-  return null;
+  return cursor;
 }
 
 /**
- * Return whether output is one complete UTF-8 SVG document.
+ * Parse one opening or closing XML element token.
  *
- * The validator decodes once, scans only the leading/trailing whitespace and
- * then performs one markup pass. Nested SVG elements are valid, but a second
- * top-level SVG document or malformed markup is rejected.
+ * @param {string} text - Decoded candidate document.
+ * @param {number} start - Opening angle-bracket index.
+ * @param {number} boundary - Exclusive document boundary.
+ * @returns {{kind: 'open'|'close', name: string, end: number, selfClosing: boolean}|false} Parsed token or false.
+ */
+function parseElementToken(text, start, boundary) {
+  const isClosing = text[start + 1] === '/';
+  const name = readXmlName(text, start + (isClosing ? 2 : 1), boundary);
+  if (name === null) {
+    return false;
+  }
+  const tagEnd = findTagEnd(text, name.end, boundary);
+  if (tagEnd === -1) {
+    return false;
+  }
+  if (isClosing) {
+    const suffixStart = skipDocumentWhitespace(text, name.end, tagEnd, 1);
+    if (suffixStart !== tagEnd) {
+      return false;
+    }
+    return { kind: 'close', name: name.name, end: tagEnd + 1, selfClosing: false };
+  }
+  return {
+    kind: 'open',
+    name: name.name,
+    end: tagEnd + 1,
+    selfClosing: text[tagEnd - 1] === '/',
+  };
+}
+
+/**
+ * Validate one complete SVG element tree with an exact element-name stack.
+ *
+ * @param {string} text - Decoded candidate document.
+ * @param {number} index - SVG root start.
+ * @param {number} boundary - Exclusive document boundary.
+ * @returns {boolean} True for one well-formed SVG element tree.
+ */
+function scanSvgElementTree(text, index, boundary) {
+  const elementStack = [];
+  let cursor = index;
+  let sawRoot = false;
+  while (cursor < boundary) {
+    if (text[cursor] !== '<') {
+      if (elementStack.length === 0) {
+        return false;
+      }
+      const nextTag = text.indexOf('<', cursor);
+      cursor = nextTag === -1 ? boundary : nextTag;
+      continue;
+    }
+    if (text.startsWith('<!--', cursor)) {
+      if (elementStack.length === 0) {
+        return false;
+      }
+      const end = findCommentEnd(text, cursor, boundary);
+      if (end === -1) {
+        return false;
+      }
+      cursor = end;
+      continue;
+    }
+    if (text.startsWith('<![CDATA[', cursor)) {
+      if (elementStack.length === 0) {
+        return false;
+      }
+      const end = findDelimitedMarkupEnd(text, cursor + 9, ']]>', boundary);
+      if (end === -1) {
+        return false;
+      }
+      cursor = end;
+      continue;
+    }
+    if (text.startsWith('<?', cursor)) {
+      if (elementStack.length === 0 || isXmlDeclarationTarget(text, cursor, boundary)) {
+        return false;
+      }
+      const end = findDelimitedMarkupEnd(text, cursor + 2, '?>', boundary);
+      if (end === -1) {
+        return false;
+      }
+      cursor = end;
+      continue;
+    }
+    if (text.startsWith('<!', cursor)) {
+      return false;
+    }
+
+    const element = parseElementToken(text, cursor, boundary);
+    if (element === false) {
+      return false;
+    }
+    cursor = element.end;
+    if (element.kind === 'open') {
+      if (elementStack.length === 0) {
+        if (sawRoot || element.name.toLowerCase() !== 'svg') {
+          return false;
+        }
+        sawRoot = true;
+      }
+      if (!element.selfClosing) {
+        elementStack.push(element.name);
+      }
+      continue;
+    }
+    if (
+      elementStack.length === 0 ||
+      elementStack[elementStack.length - 1] !== element.name
+    ) {
+      return false;
+    }
+    elementStack.pop();
+  }
+  return sawRoot && elementStack.length === 0;
+}
+
+/**
+ * Return whether output is one complete well-formed UTF-8 SVG document.
+ *
+ * The validator decodes once, accepts only a restricted XML prologue, anchors
+ * the first element to SVG, and tracks every opening element on an exact-name
+ * stack so mismatched or incomplete nesting fails closed.
  *
  * @param {Buffer} output - Bounded renderer output.
- * @returns {boolean} True for exactly one complete SVG root.
+ * @returns {boolean} True for exactly one complete SVG document.
  */
 function isValidSvg(output) {
   let text;
@@ -407,45 +628,15 @@ function isValidSvg(output) {
     return false;
   }
 
-  let start = skipDocumentWhitespace(text, 0, text.length, 1);
-  const end = skipDocumentWhitespace(text, text.length, start, -1);
-  if (start === end) {
+  const first = skipDocumentWhitespace(text, 0, text.length, 1);
+  const boundary = skipDocumentWhitespace(text, text.length, first, -1);
+  if (first === boundary) {
     return false;
   }
-  if (matchesAsciiToken(text, start, '<?xml')) {
-    const declarationEnd = text.indexOf('?>', start + 5);
-    if (declarationEnd === -1 || declarationEnd + 2 > end) {
-      return false;
-    }
-    start = skipDocumentWhitespace(text, declarationEnd + 2, end, 1);
-  }
-
-  const root = findNextSvgTag(text, start, end);
-  if (root === false || root === null || root.start !== start || root.kind !== 'open') {
-    return false;
-  }
-  if (root.selfClosing) {
-    return root.end + 1 === end;
-  }
-
-  let depth = 1;
-  let cursor = root.end + 1;
-  while (cursor < end) {
-    const tag = findNextSvgTag(text, cursor, end);
-    if (tag === false || tag === null) {
-      return false;
-    }
-    cursor = tag.end + 1;
-    if (tag.kind === 'open' && !tag.selfClosing) {
-      depth += 1;
-    } else if (tag.kind === 'close') {
-      depth -= 1;
-      if (depth === 0) {
-        return cursor === end;
-      }
-    }
-  }
-  return false;
+  const rootStart = skipSvgPrologue(text, first, boundary);
+  return rootStart !== false && rootStart !== boundary
+    ? scanSvgElementTree(text, rootStart, boundary)
+    : false;
 }
 
 /**
