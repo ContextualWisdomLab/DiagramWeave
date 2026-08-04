@@ -40,6 +40,9 @@ are never copied because they are untrusted and may contain source-derived text.
 ## Security and compatibility rules
 
 - Accept only UTF-8 bytes from the renderer's existing bounded stderr buffer.
+- Reject public parser input larger than the authoritative
+  `plantUmlRendererLimits.maxDiagnosticBytes.maximum` value before decoding, so
+  direct package callers retain the renderer's 1 MiB diagnostic ceiling.
 - Recognize PlantUML standard-report protocol version `1`; fail closed for an
   explicitly unsupported or malformed protocol version.
 - Let `status=ERROR` win over an earlier `status=OK` line.
