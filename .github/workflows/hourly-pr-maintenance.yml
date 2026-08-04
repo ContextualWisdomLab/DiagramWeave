@@ -1,0 +1,103 @@
+name: Hourly PR Maintenance
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Print planned actions without mutating pull requests
+        required: false
+        default: false
+        type: boolean
+  schedule:
+    - cron: "13 * * * *"
+
+concurrency:
+  group: hourly-pr-maintenance-${{ github.repository }}
+  cancel-in-progress: false
+
+# The local dispatch step needs only read access. The pinned reusable merge
+# scheduler receives the exact permissions it needs from this caller and then
+# narrows them again at its own job boundary.
+permissions:
+  contents: read
+
+jobs:
+  dispatch-review-fix:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      CENTRAL_DISPATCH_TOKEN: ${{ secrets.CWL_AUTOMATION_TOKEN }}
+      DRY_RUN: ${{ inputs.dry_run || false }}
+    steps:
+      - name: Dispatch bounded review-feedback repair
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ -z "$CENTRAL_DISPATCH_TOKEN" ]; then
+            echo "reason=central_dispatch_token_unavailable" >>"$GITHUB_STEP_SUMMARY"
+            echo "CWL_AUTOMATION_TOKEN is required to dispatch the central review-fix scheduler." >&2
+            exit 1
+          fi
+          echo "::add-mask::$CENTRAL_DISPATCH_TOKEN"
+
+          payload="$(jq -cn \
+            --arg event_type "pr-review-fix-scheduler" \
+            --arg target_repository "ContextualWisdomLab/DiagramWeave" \
+            --arg base_branch "main" \
+            --arg retry_hours "1" \
+            --arg max_dispatches "1" \
+            --arg max_prs "20" \
+            --argjson dry_run "$( [ "$DRY_RUN" = "true" ] && printf true || printf false )" \
+            '{
+              event_type: $event_type,
+              client_payload: {
+                target_repository: $target_repository,
+                base_branch: $base_branch,
+                retry_hours: $retry_hours,
+                max_dispatches: $max_dispatches,
+                max_prs: $max_prs,
+                dry_run: $dry_run
+              }
+            }')"
+
+          if [ "$DRY_RUN" = "true" ]; then
+            echo "reason=dry_run" >>"$GITHUB_STEP_SUMMARY"
+            jq . <<<"$payload" >>"$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          curl --fail-with-body --silent --show-error \
+            --request POST \
+            --header "Accept: application/vnd.github+json" \
+            --header "Authorization: Bearer ${CENTRAL_DISPATCH_TOKEN}" \
+            --header "X-GitHub-Api-Version: 2022-11-28" \
+            --data "$payload" \
+            "https://api.github.com/repos/ContextualWisdomLab/.github/dispatches"
+          echo "reason=central_review_fix_dispatched" >>"$GITHUB_STEP_SUMMARY"
+
+  review-merge:
+    needs: dispatch-review-fix
+    if: ${{ always() }}
+    permissions:
+      actions: write
+      checks: read
+      contents: write
+      id-token: write
+      pull-requests: write
+      statuses: read
+    uses: ContextualWisdomLab/.github/.github/workflows/pr-review-merge-scheduler.yml@3f65dbee6672b78802e7d71d49c390f3817bb03b
+    with:
+      base_branch: "main"
+      branch_update_limit: "1"
+      dry_run: ${{ inputs.dry_run || false }}
+      enable_auto_merge: true
+      max_prs: "20"
+      merge_mode: "direct_or_auto"
+      project_flow: "github-flow"
+      review_dispatch_limit: "1"
+      stale_opencode_minutes: "60"
+      trigger_reviews: true
+      update_branches: true
+    secrets: inherit

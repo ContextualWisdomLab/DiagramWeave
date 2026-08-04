@@ -1,0 +1,113 @@
+# DiagramWeave Security Model
+
+## Security objective
+
+DiagramWeave lets users benefit from model-assisted editing without surrendering control of source files, credentials, network access, or renderer permissions. Every boundary assumes that source text, diagram labels, comments, include directives, model output, and remote responses may be hostile.
+
+## Assets
+
+- diagram source and local workspace paths;
+- architecture, network, security, and business information contained in diagrams;
+- Contextual Orchestrator bearer tokens and upstream provider credentials;
+- accepted source revisions and review history;
+- rendered artifacts;
+- organization policy, templates, and allowlists.
+
+## Trust boundaries
+
+### Manual editing boundary
+
+Manual editing is local and works without an LLM. A host must never require model availability to open, edit, save, validate, or recover source text. Hidden editor state cannot silently replace the file as the source of truth.
+
+### Model context boundary
+
+Source content is **untrusted data**. Comments, labels, stereotypes, macros, and included text cannot change system instructions or authorize tools. The adapter:
+
+- accepts only an explicit source string supplied by the host;
+- limits source to 262,144 UTF-16 code units;
+- limits instructions to 8,192 characters;
+- sends no files, directories, environment variables, or credentials automatically;
+- emits a two-message contract that labels source content as untrusted;
+- requires strict assistant JSON before Core validation.
+
+A future Context Inspector must show users the exact files, ranges, character counts, and metadata leaving the device.
+
+### Proposal boundary
+
+Model output is never executable and never authoritative. Core validates:
+
+- fixed `schemaVersion`;
+- bounded identifiers and text;
+- lowercase SHA-256 base revision;
+- supported operation type;
+- requested and effective source ranges;
+- replacement size;
+- summary and assumptions;
+- scope-expansion reason.
+
+A stale proposal fails with `revision_conflict`. An expanded proposal fails with `scope_expansion_required` unless the host explicitly approves it. Applying a proposal returns a new string; it does not save, commit, push, execute, or render anything.
+
+### Contextual Orchestrator transport boundary
+
+The adapter permits:
+
+- HTTPS endpoints for remote deployments;
+- HTTP only for `localhost`, `127.0.0.1`, and `[::1]` development endpoints.
+
+It rejects URL credentials, query strings, fragments, unsupported protocols, control characters in bearer tokens, unbounded timeouts, and non-callable fetch implementations. It does not read provider error bodies, preventing secret or prompt reflection into user-visible errors. The package does not read environment variables or persist tokens.
+
+Contextual Orchestrator remains responsible for its provider-host egress checks, credential registry, authentication, routing, budget, and verifier policy. DiagramWeave does not bypass those controls by calling providers directly through this adapter.
+
+### PlantUML renderer boundary
+
+The future local renderer must run PlantUML with `SANDBOX` security as the default profile. In that profile local file and URL access are unavailable. DiagramWeave additionally requires:
+
+- **remote include is disabled by default**;
+- local include is restricted to a canonical workspace allowlist;
+- path traversal, symlink escape, and device paths are rejected;
+- the renderer receives a minimal environment with no model or repository tokens;
+- wall-clock, CPU, memory, input, recursion, and output limits terminate abusive work;
+- renderer failure cannot crash Studio or corrupt source;
+- remote renderers require explicit opt-in because source leaves the device.
+
+PlantUML allowlist modes are not equivalent to `SANDBOX`; enabling one is a deliberate administrator policy change.
+
+## Threats and mitigations
+
+| Threat | Mitigation |
+|---|---|
+| Prompt injection in comments or labels | System message treats all source as data; no tools; strict JSON and Core validation |
+| Stale AI edit overwrites manual work | Exact SHA-256 base revision and fail-closed conflict |
+| AI edits more than requested | Requested/effective ranges, expansion reason, explicit approval |
+| Malformed or oversized output | Bounded fields and strict parse/validation |
+| Credential leakage in errors | No package logging, no response-body reads on HTTP errors, token-free messages |
+| Plaintext remote interception | Remote HTTPS only; HTTP restricted to loopback |
+| SSRF through orchestrator endpoint | Adapter URL policy plus Contextual Orchestrator egress controls |
+| Renderer reads local files or URLs | PlantUML `SANDBOX`, remote include disabled, workspace allowlist |
+| Renderer denial of service | Process isolation and resource limits |
+| Hidden automatic mutation | Core returns values only; approval and write action are separate |
+| Supply-chain replacement | Lockfile, immutable Action SHAs, review and exact-head checks |
+
+## Logging and telemetry
+
+Foundation packages emit no logs or telemetry. A host adding observability excludes source, prompts, assistant content, bearer tokens, file paths, and rendered images by default. Safe measurements include operation name, duration, bounded size bucket, error code, provider identifier, and non-reversible revision hashes. Enterprise deployments must support full telemetry disablement.
+
+## Secret handling
+
+- The adapter accepts an operator-supplied token in memory.
+- It does not load `.env`, process environment variables, keychains, or files.
+- Studio or another host retrieves secrets from an OS keychain or managed secret store.
+- Tokens never belong in a base URL, query string, workflow input, command line, repository file, trace, or crash report.
+- Contextual Orchestrator provider credentials remain in its KV credential registry.
+
+## Supply-chain policy
+
+- GitHub Actions are pinned to immutable commit SHAs.
+- npm workspace metadata is lockfile-backed.
+- CI runs syntax, behavior, 100% line/branch/function coverage, and production JSDoc gates.
+- Autonomous tasks cannot merge, publish, release, or weaken branch protection.
+- Releases require dependency, secret, SAST, package-content, license, provenance, and rollback evidence.
+
+## Vulnerability reporting
+
+Report suspected vulnerabilities according to `SECURITY.md`. Never disclose a live exploit, token, private diagram, or customer source in a public issue.

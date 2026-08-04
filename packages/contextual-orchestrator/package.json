@@ -1,0 +1,14 @@
+{
+  "name": "@contextualwisdomlab/diagramweave-contextual-orchestrator",
+  "version": "0.0.0",
+  "description": "Secure Contextual Orchestrator adapter for DiagramWeave edit proposals.",
+  "license": "MIT",
+  "type": "module",
+  "exports": "./src/index.js",
+  "engines": {
+    "node": ">=22 <25"
+  },
+  "dependencies": {
+    "@contextualwisdomlab/diagramweave-core": "0.0.0"
+  }
+}
