@@ -20,7 +20,7 @@
 - Never invoke a shell or interpolate source into command-line arguments.
 - Spawn with an empty child environment and an absolute Java executable path.
 - Bound source bytes, output bytes, diagnostic bytes, and execution time.
-- Return no raw stderr in public errors.
+- Return no raw stderr in public errors. Treat SVG and PNG artifacts as untrusted host input.
 - Preserve 100% production statement, branch, function, and production JSDoc coverage.
 - Update README, architecture, security model, CHANGELOG, package lock, and repository contracts.
 - Do not release from this slice.
@@ -48,7 +48,7 @@
 
 - [x] Implement stable renderer errors.
 - [x] Implement absolute path, limit, format, and UTF-8 source validation.
-- [x] Spawn Java with `shell: false`, empty environment, pipe stdio, SANDBOX, metadata disabled, standard report, and PNG/SVG output mode.
+- [x] Spawn Java with `shell: false`, empty environment, pipe stdio, SANDBOX, metadata disabled, standard report, fail-fast syntax checking, and PNG/SVG output mode.
 - [x] Bound stdout and stderr and terminate oversized work.
 - [x] Enforce timeout and distinguish spawn, exit, output-size, and invalid-output failures.
 - [x] Return an immutable base64 artifact with media type, byte length, and source revision hash.
