@@ -6,6 +6,13 @@ The project follows Semantic Versioning after the first release.
 
 ## [Unreleased]
 
+### Changed
+
+- Hourly product development now runs an in-workflow OpenCode agent against
+  NVIDIA NIM (`NVIDIA_NIM_API_KEY` organization secret) and opens the bounded
+  pull request itself; the workflow no longer assumes `COPILOT_GITHUB_TOKEN`
+  or the Copilot Agent Tasks API.
+
 ### Added
 
 - Repository contracts and zero-dependency Node.js quality gates.
