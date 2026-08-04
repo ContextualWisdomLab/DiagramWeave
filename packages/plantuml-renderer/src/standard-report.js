@@ -3,6 +3,17 @@ import { TextDecoder } from 'node:util';
 const utf8Decoder = new TextDecoder('utf-8', { fatal: true });
 const emptyDiagnostics = Object.freeze([]);
 const maximumLineNumber = 2_147_483_647;
+const maximumLineIndex = maximumLineNumber - 1;
+
+/**
+ * Return whether a value can safely supply object fields.
+ *
+ * @param {unknown} value - Candidate record.
+ * @returns {boolean} True for non-null objects only.
+ */
+function isRecord(value) {
+  return value !== null && typeof value === 'object';
+}
 
 /**
  * Return one deeply frozen LSP-compatible PlantUML syntax diagnostic.
@@ -31,6 +42,71 @@ function createSyntaxDiagnostic(plantUmlLineNumber) {
     message: 'PlantUML reported a syntax error.',
     data: Object.freeze({ plantUmlLineNumber }),
   });
+}
+
+/**
+ * Clone one exact public PlantUML diagnostic or reject it.
+ *
+ * @param {unknown} value - Candidate diagnostic.
+ * @returns {Readonly<object>|null} Frozen safe clone or null.
+ */
+function cloneDiagnostic(value) {
+  if (!isRecord(value) || !isRecord(value.range)) {
+    return null;
+  }
+  const { start, end } = value.range;
+  if (!isRecord(start) || !isRecord(end)) {
+    return null;
+  }
+  if (
+    !Number.isInteger(start.line) ||
+    start.line < 0 ||
+    start.line > maximumLineIndex ||
+    start.character !== 0 ||
+    end.line !== start.line ||
+    end.character !== 0 ||
+    value.severity !== 1 ||
+    value.code !== 'plantuml.syntax' ||
+    value.source !== 'plantuml' ||
+    value.message !== 'PlantUML reported a syntax error.' ||
+    !isRecord(value.data) ||
+    value.data.plantUmlLineNumber !== start.line + 1
+  ) {
+    return null;
+  }
+  return createSyntaxDiagnostic(start.line + 1);
+}
+
+/**
+ * Sanitize a bounded collection of public PlantUML diagnostics.
+ *
+ * The entire collection fails closed when its shape is absent, oversized,
+ * hostile, or contains an unsupported record. Returned diagnostics never retain
+ * caller-owned objects and are safe to cross renderer, CLI, worker, or service
+ * boundaries.
+ *
+ * @param {unknown} value - Untrusted diagnostics collection.
+ * @returns {readonly Readonly<object>[]} Frozen source-free diagnostics.
+ */
+export function sanitizePlantUmlDiagnostics(value) {
+  if (!Array.isArray(value) || value.length > 32) {
+    return emptyDiagnostics;
+  }
+  const diagnostics = [];
+  try {
+    for (const item of value) {
+      const diagnostic = cloneDiagnostic(item);
+      if (diagnostic === null) {
+        return emptyDiagnostics;
+      }
+      diagnostics.push(diagnostic);
+    }
+  } catch {
+    return emptyDiagnostics;
+  }
+  return diagnostics.length === 0
+    ? emptyDiagnostics
+    : Object.freeze(diagnostics);
 }
 
 /**
