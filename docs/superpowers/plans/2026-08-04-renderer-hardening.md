@@ -30,6 +30,8 @@ Make the renderer's resource contract reusable by Studio, CLI, naruon, and other
 
 The one-shot repair job published the clean source only after the full repository verification and renderer package dry run succeeded. Its temporary patch, transformer, and workflow inputs were deleted from the resulting commit, leaving only production code, tests, and durable documentation in the pull request.
 
+The branch was then synchronized with the current `main` revision containing the NVIDIA NIM hourly-development workflow. The renderer change set remains limited to its ten production, test, and documentation files, with no duplicated governance implementation.
+
 ## Release decision
 
 Keep versions at `0.0.0` and the changelog under `Unreleased`. This is renderer hardening, not an integrated Studio/CLI release candidate.
