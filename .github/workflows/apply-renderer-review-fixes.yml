@@ -4,8 +4,6 @@ on:
   push:
     branches:
       - agent/renderer-hardening
-  pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
 
 permissions:
   contents: read
@@ -16,82 +14,41 @@ concurrency:
 
 jobs:
   apply-and-verify:
-    if: >-
-      github.repository == 'ContextualWisdomLab/DiagramWeave' &&
-      (github.event_name == 'push' || github.head_ref == 'agent/renderer-hardening')
+    if: github.repository == 'ContextualWisdomLab/DiagramWeave'
     runs-on: ubuntu-slim
     timeout-minutes: 15
     permissions:
       contents: write
     steps:
-      - name: Check out branch
+      - name: Check out the exact triggering revision
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-          ref: agent/renderer-hardening
+          ref: ${{ github.sha }}
+      - name: Verify the immutable repair base
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          remote_head="$(git ls-remote origin refs/heads/agent/renderer-hardening | cut -f1)"
+          test "$remote_head" = "$GITHUB_SHA"
       - name: Set up Node.js
         uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6.2.0
         with:
           node-version: 24
           package-manager-cache: false
-      - name: Apply reviewed renderer implementation
+      - name: Apply deterministic reviewed transformations
+        run: node scripts/apply-renderer-review-fixes.mjs
+      - name: Remove one-shot repair inputs
         shell: bash
         run: |
           set -euo pipefail
-          base64 --decode .bootstrap/review-fixes.patch.b64 > /tmp/review-fixes.patch
-          git apply --check \
-            --include=packages/plantuml-renderer/src/renderer.js \
-            /tmp/review-fixes.patch
-          git apply \
-            --include=packages/plantuml-renderer/src/renderer.js \
-            /tmp/review-fixes.patch
-          node --input-type=module <<'NODE'
-          import { readFileSync, writeFileSync } from 'node:fs';
-
-          function replaceExactly(path, before, after, label) {
-            const text = readFileSync(path, 'utf8');
-            const occurrences = text.split(before).length - 1;
-            if (occurrences !== 1) {
-              throw new Error(`${label}: expected one target, found ${occurrences}`);
-            }
-            writeFileSync(path, text.replace(before, after));
-          }
-
-          replaceExactly(
-            'packages/plantuml-renderer/src/renderer.js',
-            `      const end = findDoctypeEnd(text, cursor + 9, boundary);
-      if (end === -1) {
-        return false;
-      }`,
-            `      const nameStart = skipDocumentWhitespace(text, cursor + 9, boundary, 1);
-      if (
-        !matchesAsciiToken(text, nameStart, 'svg') ||
-        !isXmlNameBoundary(text[nameStart + 3])
-      ) {
-        return false;
-      }
-      const end = findDoctypeEnd(text, nameStart + 3, boundary);
-      if (end === -1) {
-        return false;
-      }`,
-            'SVG DOCTYPE root validation',
-          );
-
-          replaceExactly(
-            'packages/plantuml-renderer/test/hardening.test.js',
-            `    '<!DOCTYPE html><svg/>',
-    '<!DOCTYPE svg [<!ELEMENT svg ANY><svg/>',`,
-            `    '<!DOCTYPE html><svg/>',
-    '<!DOCTYPE svgx><svg/>',
-    '<!DOCTYPE svg [<!ELEMENT svg ANY><svg/>',`,
-            'SVG DOCTYPE name-boundary regression',
-          );
-          NODE
           rm -rf .bootstrap
+          rm -f scripts/apply-renderer-review-fixes.mjs
           rm -f .github/workflows/apply-renderer-review-fixes.yml
       - name: Install locked workspace
         run: npm ci --ignore-scripts --no-audit --no-fund
-      - name: Verify exact patched tree
+      - name: Verify the exact repaired tree
         shell: bash
         run: |
           set -euo pipefail
@@ -115,12 +72,14 @@ jobs:
             }
           }
           NODE
-      - name: Commit verified review fixes
+      - name: Commit and publish the verified clean tree
         shell: bash
         run: |
           set -euo pipefail
+          remote_head="$(git ls-remote origin refs/heads/agent/renderer-hardening | cut -f1)"
+          test "$remote_head" = "$GITHUB_SHA"
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add --all
-          git commit -m 'fix: accept safe SVG prologues and lock documentation contracts'
-          git push origin HEAD:agent/renderer-hardening
+          git commit -m 'fix: validate complete SVG XML structure'
+          git push origin HEAD:refs/heads/agent/renderer-hardening
