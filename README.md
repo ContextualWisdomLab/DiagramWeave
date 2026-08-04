@@ -66,7 +66,9 @@ A local, sandboxed renderer that receives PlantUML only through stdin and return
 ```js
 import {
   createPlantUmlRenderer,
+  parsePlantUmlStandardReport,
   plantUmlRendererLimits,
+  sanitizePlantUmlDiagnostics,
 } from '@contextualwisdomlab/diagramweave-plantuml-renderer';
 
 const renderer = createPlantUmlRenderer({
@@ -82,7 +84,11 @@ const artifact = await renderer.render({
 const svg = Buffer.from(artifact.dataBase64, 'base64').toString('utf8');
 ```
 
-`plantUmlRendererLimits` exposes the frozen default and supported range contract for host configuration. The renderer requires host-supplied absolute Java and JAR paths. It invokes no shell, passes an empty child environment, enables PlantUML `SANDBOX`, disables source metadata, enforces fail-fast syntax checking plus source/output/diagnostic/deadline limits, validates the output structure, and never exposes raw stderr. DiagramWeave does not bundle or download PlantUML in this foundation, so distributors must choose a compatible PlantUML artifact and satisfy its license notices separately.
+`plantUmlRendererLimits` exposes the frozen default and supported range contract for host configuration. The renderer requires host-supplied absolute Java and JAR paths. It invokes no shell, passes an empty child environment, enables PlantUML `SANDBOX`, disables source metadata, enforces fail-fast syntax checking plus source/output/diagnostic/deadline limits, validates the output structure, and never exposes raw stderr or raw PlantUML labels.
+
+`parsePlantUmlStandardReport` converts bounded `-stdrpt:1` output into deeply frozen, LSP-compatible line diagnostics. `sanitizePlantUmlDiagnostics` revalidates and clones those records before they cross package, worker, service, CLI, Studio, Language Server, or naruon boundaries. Only fixed product messages, bounded lines, a zero-width range, severity `1`, and code `plantuml.syntax` are exposed.
+
+DiagramWeave does not bundle or download PlantUML in this foundation, so distributors must choose a compatible PlantUML artifact and satisfy its license notices separately.
 
 ### `@contextualwisdomlab/diagramweave-cli`
 
@@ -93,17 +99,19 @@ dweave validate ./diagrams --java /absolute/path/to/java --jar /absolute/path/to
 dweave render ./diagrams --output ./artifacts --java /absolute/path/to/java --jar /absolute/path/to/plantuml.jar
 ```
 
-The CLI discovers `.puml` and `.plantuml` files in stable lexical order, rejects symbolic links and output collisions, writes artifacts exclusively or by explicit atomic replacement, and emits source-free human or JSON reports. It is independently reusable by naruon, CI, and other CWL hosts. See [`packages/cli/README.md`](packages/cli/README.md) for the complete command, exit-code, filesystem, and embedding contracts.
+The CLI discovers `.puml` and `.plantuml` files in stable lexical order, rejects symbolic links and output collisions, writes artifacts exclusively or by explicit atomic replacement, and emits source-free human or JSON reports. Located syntax failures include the safe relative path and PlantUML line while JSON retains the LSP-compatible zero-based range. The CLI validates and clones renderer diagnostics instead of trusting an arbitrary thrown object.
+
+The package is independently reusable by naruon, CI, and other CWL hosts. See [`packages/cli/README.md`](packages/cli/README.md) for the complete command, diagnostic, exit-code, filesystem, and embedding contracts.
 
 ## Product direction
 
 The repository is the modular foundation for:
 
 - **DiagramWeave Studio:** manual source editor, preview, diagnostics, Context Inspector, diff review, recovery, and accessible approval flows;
-- **DiagramWeave Renderer:** implemented local PlantUML package with stdin-only rendering, `SANDBOX`, metadata suppression, bounded resources, and local and remote includes unavailable;
-- **DiagramWeave Language Server:** diagnostics and navigation reusable by Studio and external IDEs;
-- **DiagramWeave CLI:** implemented deterministic validation and rendering foundation, with formatting and policy checks remaining future work;
-- **naruon and CWL integration:** embeddable Core, renderer, and provider adapters without requiring the Studio application.
+- **DiagramWeave Renderer:** implemented local PlantUML package with stdin-only rendering, `SANDBOX`, metadata suppression, bounded resources, safe line diagnostics, and local and remote includes unavailable;
+- **DiagramWeave Language Server:** diagnostics and navigation reusable by Studio and external IDEs, building on the implemented LSP-compatible renderer record;
+- **DiagramWeave CLI:** implemented deterministic validation, rendering, atomic publication, and structured diagnostic foundation, with formatting and policy checks remaining future work;
+- **naruon and CWL integration:** embeddable Core, renderer, diagnostics, CLI, and provider adapters without requiring the Studio application.
 
 The detailed product contract is in [`docs/product/diagramweave-prd.md`](docs/product/diagramweave-prd.md). Component boundaries and trust decisions are in [`docs/architecture.md`](docs/architecture.md) and [`docs/security-model.md`](docs/security-model.md).
 
@@ -115,7 +123,8 @@ The detailed product contract is in [`docs/product/diagramweave-prd.md`](docs/pr
 4. The proposal references the exact SHA-256 source revision.
 5. Schema, range, replacement, and scope expansion are validated locally.
 6. Expanded edits require an explicit reason and host approval.
-7. The user remains responsible for accepting, rejecting, saving, and committing changes.
+7. Raw child output remains inside the renderer boundary; hosts receive only bounded, fixed-message diagnostics.
+8. The user remains responsible for accepting, rejecting, saving, and committing changes.
 
 ## Development
 
@@ -133,6 +142,7 @@ npm run verify
 - [Product requirements](docs/product/diagramweave-prd.md)
 - [Architecture](docs/architecture.md)
 - [Security model](docs/security-model.md)
+- [Structured diagnostics research](docs/research/plantuml-structured-diagnostics.md)
 - [Contextual Orchestrator operations](docs/operations/contextual-orchestrator.md)
 - [PlantUML renderer operations](docs/operations/plantuml-renderer.md)
 - [DiagramWeave CLI](packages/cli/README.md)
