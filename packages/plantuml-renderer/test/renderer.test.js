@@ -97,6 +97,7 @@ test('renderer emits a sandboxed stdin-only SVG command and immutable artifact',
     'UTF-8',
     '-nometadata',
     '-stdrpt:1',
+    '-failfast2',
     '-tsvg',
     '-pipe',
   ]);
@@ -253,6 +254,26 @@ test('renderer converts child error events into a safe availability error', asyn
       return true;
     },
   );
+});
+
+test('renderer converts stdout and stderr stream failures into safe availability errors', async () => {
+  for (const streamName of ['stdout', 'stderr']) {
+    const spawnImpl = () => {
+      const child = new FakeChild();
+      queueMicrotask(() => child[streamName].emit('error', new Error(`leaked ${source}`)));
+      return child;
+    };
+    const renderer = createPlantUmlRenderer(rendererOptions({ spawnImpl }));
+
+    await assert.rejects(
+      renderer.render({ source, format: 'svg' }),
+      (error) => {
+        assertRendererError(error, 'renderer_unavailable');
+        assert.doesNotMatch(error.message, /Alice|leaked/);
+        return true;
+      },
+    );
+  }
 });
 
 test('renderer times out, kills the child, and never exposes source', async () => {
