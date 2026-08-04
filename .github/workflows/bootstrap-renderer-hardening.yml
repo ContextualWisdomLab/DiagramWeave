@@ -4,23 +4,28 @@ on:
   push:
     branches:
       - agent/renderer-hardening
+  pull_request:
+    types: [opened, synchronize, reopened]
 
 permissions:
   contents: write
 
 concurrency:
-  group: bootstrap-renderer-hardening-${{ github.ref }}
+  group: bootstrap-renderer-hardening-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
   assemble-and-verify:
-    if: github.repository == 'ContextualWisdomLab/DiagramWeave'
+    if: >-
+      github.repository == 'ContextualWisdomLab/DiagramWeave' &&
+      (github.event_name == 'push' || github.head_ref == 'agent/renderer-hardening')
     runs-on: ubuntu-latest
     steps:
       - name: Check out branch
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+          ref: agent/renderer-hardening
       - name: Set up Node.js
         uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6.2.0
         with:
@@ -43,7 +48,7 @@ jobs:
           set -euo pipefail
           npm run verify
           npm pack --workspace packages/plantuml-renderer --dry-run --json > /tmp/renderer-pack.json
-          jq -e 'length == 1 and .[0].files | all(.path | startswith("package/"))' /tmp/renderer-pack.json >/dev/null
+          jq -e 'length == 1 and (. [0].files | all(.path | startswith("package/")))' /tmp/renderer-pack.json >/dev/null
       - name: Commit verified clean tree
         shell: bash
         run: |
