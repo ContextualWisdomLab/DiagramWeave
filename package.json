@@ -1,0 +1,21 @@
+{
+  "name": "@contextualwisdomlab/diagramweave",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Source-first, revision-safe AI editing foundation for PlantUML and future text diagram languages.",
+  "license": "MIT",
+  "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=22 <25"
+  },
+  "scripts": {
+    "test": "node --test",
+    "coverage": "node --test --experimental-test-coverage --test-coverage-include=packages/**/src/*.js --test-coverage-lines=100 --test-coverage-branches=100 --test-coverage-functions=100",
+    "docstrings": "node scripts/check-docstrings.mjs",
+    "syntax": "node scripts/check-syntax.mjs",
+    "verify": "npm run syntax && npm run test && npm run coverage && npm run docstrings"
+  }
+}
