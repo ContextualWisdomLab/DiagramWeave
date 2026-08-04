@@ -75,6 +75,8 @@ The implemented boundary enforces:
 
 The foundation does not yet impose an operating-system cgroup, job-object, or container memory/CPU quota. Hosts that process hostile or high-volume diagrams must add an outer process sandbox and resource controller. PlantUML allowlist modes are not equivalent to `SANDBOX`; an include-capable mode requires a separate explicit security design and administrator policy.
 
+Rendered SVG remains untrusted active content. Studio and embedding hosts must not inject it through `innerHTML`; they must use a constrained image boundary or independently reviewed SVG sanitization and Content Security Policy. PNG output is likewise untrusted binary input to the platform image decoder.
+
 ## Threats and mitigations
 
 | Threat | Mitigation |
