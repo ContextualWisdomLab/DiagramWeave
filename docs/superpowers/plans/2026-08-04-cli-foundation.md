@@ -1,6 +1,6 @@
 # DiagramWeave CLI Foundation Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development or superpowers:executing-plans task-by-task. Every task must create a revision-bound patch or proposal against an exact target commit, review and validate that proposal without repository write credentials, and apply or commit it only after review completion. Steps use checkbox (`- [x]`) syntax for the completed implementation record.
 
 **Goal:** Deliver `dweave validate` and `dweave render` as a deterministic, source-free, independently reusable CLI package for one PlantUML file or a recursively discovered directory.
 
@@ -8,13 +8,14 @@
 
 **Tech Stack:** Node.js 22–24 ESM, built-in `node:fs/promises`, `node:path`, `node:crypto`, `node:test`, existing `@contextualwisdomlab/diagramweave-plantuml-renderer`.
 
-## Global Constraints
+## Global constraints
 
 - Preserve source-first and manual-first behavior; the CLI performs no LLM call.
 - Accept only `.puml` and `.plantuml` source files.
 - Reject symbolic links and path escapes.
-- Require explicit absolute Java and PlantUML JAR paths from arguments or the documented environment variables.
-- Never expose source, raw renderer diagnostics, Java/JAR paths, or unrelated absolute parent directories.
+- Reject any output identical to an input source, even with `--overwrite`.
+- Require explicit absolute Java and PlantUML JAR paths from arguments or documented environment variables.
+- Never expose source, raw renderer diagnostics, Java/JAR paths, credentials, or unrelated absolute parent directories.
 - Use exit codes `0` success, `1` diagram failure, and `2` invocation or operational failure.
 - Keep runtime dependencies limited to existing DiagramWeave workspace packages and Node.js built-ins.
 - Maintain Node.js `>=22 <25` compatibility.
@@ -23,97 +24,47 @@
 - Keep package versions at `0.0.0` and `CHANGELOG.md` under `Unreleased`.
 - Introduce no database.
 
+## Revision-bound review gate
+
+The following gate applies before every task mutation:
+
+- [x] Capture the exact target commit SHA and fail if the branch moves.
+- [x] Produce a reviewable source patch or proposal bound to that SHA.
+- [x] Review security boundaries, public contracts, tests, documentation, and package contents before application.
+- [x] Run the task's focused validation without repository write credentials.
+- [x] Apply and commit only the reviewed proposal.
+- [x] Re-run exact-head repository checks after every mutation.
+
+Temporary materialization inputs were removed from the published implementation commit. The final PR contains ordinary source, tests, package metadata, and durable documentation only.
+
 ---
 
-### Task 1: Immutable CLI Argument Contract
+### Task 1: Immutable CLI argument contract
 
 **Files:**
-- Create: `packages/cli/package.json`
-- Create: `packages/cli/LICENSE`
-- Create: `packages/cli/src/errors.js`
-- Create: `packages/cli/src/arguments.js`
-- Create: `packages/cli/test/arguments.test.js`
+- `packages/cli/package.json`
+- `packages/cli/LICENSE`
+- `packages/cli/src/errors.js`
+- `packages/cli/src/arguments.js`
+- `packages/cli/test/arguments.test.js`
 
 **Interfaces:**
-- Consumes: `process.argv.slice(2)`-shaped string arrays and plain environment records.
-- Produces: `CliError`, `cliExitCodes`, and `parseCliArguments(argv, environment)` returning a deeply frozen command object.
+- Consumes `process.argv.slice(2)`-shaped string arrays and plain environment records.
+- Produces `CliError`, `cliExitCodes`, and `parseCliArguments(argv, environment)` returning a deeply frozen command.
 
-- [x] **Step 1: Write the failing parser tests**
+- [x] Write failing parser tests for exact valid forms, environment fallback, command-line precedence, SVG default, PNG, JSON, overwrite, help, unknown commands, missing or repeated values, incompatible options, controls, and relative renderer paths.
+- [x] Verify the tests fail because the modules do not exist.
+- [x] Implement stable source-free errors and a strict parser without global process reads.
+- [x] Verify focused tests pass.
+- [x] Review the revision-bound patch and commit `feat(cli): define deterministic command arguments`.
 
-Cover exact valid forms for `validate` and `render`; Java/JAR environment fallback; command-line precedence; SVG default; PNG selection; JSON and overwrite flags; unknown command; missing input; extra positional argument; missing/repeated option values; relative renderer paths; unsupported format; render without output; validate with render-only options; non-array argv; non-plain environment; control characters; and help.
-
-```js
-const command = parseCliArguments([
-  'render',
-  'architecture.puml',
-  '--output',
-  'architecture.svg',
-  '--java',
-  '/opt/java/bin/java',
-  '--jar',
-  '/opt/plantuml/plantuml.jar',
-], {});
-assert.deepEqual(command, {
-  kind: 'render',
-  inputPath: 'architecture.puml',
-  outputPath: 'architecture.svg',
-  javaPath: '/opt/java/bin/java',
-  jarPath: '/opt/plantuml/plantuml.jar',
-  format: 'svg',
-  overwrite: false,
-  json: false,
-  help: false,
-});
-```
-
-- [x] **Step 2: Run the focused tests and confirm they fail**
-
-Run: `node --test packages/cli/test/arguments.test.js`
-
-Expected: failure because the package modules do not exist.
-
-- [x] **Step 3: Implement stable errors and the parser**
-
-Implement:
-
-```js
-export const cliExitCodes = Object.freeze({
-  success: 0,
-  diagramFailure: 1,
-  invocationFailure: 2,
-});
-
-export class CliError extends Error {
-  constructor(code, message, details = {}) { /* safe enumerable fields */ }
-}
-
-export function parseCliArguments(argv, environment) { /* strict parser */ }
-```
-
-The parser must deep-freeze its return value, reject duplicate singleton options, reject control characters, require absolute Java/JAR paths, and never read global process state.
-
-- [x] **Step 4: Run focused tests**
-
-Run: `node --test packages/cli/test/arguments.test.js`
-
-Expected: all parser tests pass.
-
-- [x] **Step 5: Commit**
-
-```bash
-git add packages/cli/package.json packages/cli/LICENSE packages/cli/src/errors.js packages/cli/src/arguments.js packages/cli/test/arguments.test.js
-git commit -m "feat(cli): define deterministic command arguments"
-```
-
-### Task 2: Safe Input Discovery and Output Planning
+### Task 2: Safe input discovery and output planning
 
 **Files:**
-- Create: `packages/cli/src/files.js`
-- Create: `packages/cli/test/files.test.js`
+- `packages/cli/src/files.js`
+- `packages/cli/test/files.test.js`
 
 **Interfaces:**
-- Consumes: parsed `inputPath`, `outputPath`, `format`, and `overwrite`; a filesystem adapter with `lstat`, `readdir`, `mkdir`, `open`, `rename`, and `unlink`.
-- Produces:
 
 ```js
 discoverDiagramInputs(inputPath, fileSystem)
@@ -121,59 +72,27 @@ planRenderOutputs(inputs, inputKind, outputPath, format, overwrite, fileSystem)
 publishArtifact(destination, bytes, overwrite, fileSystem)
 ```
 
-- [x] **Step 1: Write failing discovery tests**
+- [x] Write discovery tests for one file, recursive directory input, portable lexical ordering, supported extensions, unsupported direct input, empty directories, missing input, symlinks, non-regular files, duplicate identities, discovery races, and deep iterative traversal.
+- [x] Write output tests for single and directory mapping, extension replacement, path escape, case-insensitive collisions, existing files, output symlinks, source/output identity, and attempts to overwrite the source path with `overwrite: true`.
+- [x] Write publication tests for exclusive creation, atomic replacement, sync, cleanup after write/rename failure, and late output races.
+- [x] Verify focused tests fail before implementation.
+- [x] Implement iterative discovery and complete preflight before directory creation or renderer invocation.
+- [x] Reject source/output identity independently of the overwrite flag.
+- [x] Implement `open(path, 'wx')` for new files and same-directory temporary write, sync, close, and rename for explicit overwrite.
+- [x] Verify focused tests pass.
+- [x] Review the revision-bound patch and commit `feat(cli): discover and publish diagrams safely`.
 
-Use temporary directories to cover one file; nested directory discovery; lexical relative-path ordering; `.puml` and `.plantuml`; unsupported files ignored in directories but rejected as direct inputs; empty directory; missing input; symlinked file and directory rejection; non-regular file rejection; and a directory depth greater than the JavaScript recursion comfort zone to establish iterative traversal.
-
-- [x] **Step 2: Write failing output-plan and publication tests**
-
-Cover single-file destination; directory-relative destination mapping; extension replacement; `foo.puml`/`foo.plantuml` collision; path escape prevention; existing output refusal; output symlink rejection; parent creation after successful preflight; exclusive file creation; atomic overwrite replacement; and temporary-file cleanup after write or rename failure.
-
-- [x] **Step 3: Run focused tests and confirm failure**
-
-Run: `node --test packages/cli/test/files.test.js`
-
-Expected: failure because `src/files.js` does not exist.
-
-- [x] **Step 4: Implement iterative discovery and atomic publication**
-
-Return frozen input records:
-
-```js
-{
-  absolutePath,
-  relativePath,
-  sourceExtension,
-}
-```
-
-Normalize `relativePath` with `/`. Preflight every destination before creating directories or invoking a renderer. New outputs use `open(path, 'wx')`. Overwrites use a same-directory random temporary name created with `wx`, `sync()`, `close()`, and `rename()`; cleanup is attempted in `finally`.
-
-- [x] **Step 5: Run focused tests**
-
-Run: `node --test packages/cli/test/files.test.js`
-
-Expected: all filesystem tests pass.
-
-- [x] **Step 6: Commit**
-
-```bash
-git add packages/cli/src/files.js packages/cli/test/files.test.js
-git commit -m "feat(cli): discover and publish diagrams safely"
-```
-
-### Task 3: Command Execution and Stable Reports
+### Task 3: Command execution, revision identity, and stable reports
 
 **Files:**
-- Create: `packages/cli/src/execute.js`
-- Create: `packages/cli/src/presentation.js`
-- Create: `packages/cli/src/index.js`
-- Create: `packages/cli/test/execute.test.js`
-- Create: `packages/cli/test/presentation.test.js`
+- `packages/cli/src/execute.js`
+- `packages/cli/src/presentation.js`
+- `packages/cli/src/index.js`
+- `packages/cli/test/execute.test.js`
+- `packages/cli/test/presentation.test.js`
+- `packages/cli/test/review-regressions.test.js`
 
 **Interfaces:**
-- Consumes: immutable parsed commands, safe file plans, `createPlantUmlRenderer`, and UTF-8 file reading.
-- Produces:
 
 ```js
 executeDiagramWeaveCli(command, runtime)
@@ -181,169 +100,83 @@ formatCliReport(report, json)
 runDiagramWeaveCli(argv, options)
 ```
 
-- [x] **Step 1: Write failing execution tests**
+- [x] Write execution tests for deterministic order, validate without publication, SVG/PNG propagation, mixed renderer failure, renderer construction failure, source read failure, invalid UTF-8, publication failure, malformed renderer artifacts, exact totals, partial publication, and frozen reports.
+- [x] Write presentation tests for exact newline-terminated JSON and concise source-free human output.
+- [x] Verify focused tests fail before implementation.
+- [x] Decode source with `TextDecoder('utf-8', { fatal: true })` before renderer invocation.
+- [x] Reuse the renderer's `sourceRevisionHash`; do not calculate a second CLI hash.
+- [x] Use `sourceRevisionHash: null` when no trusted artifact exists.
+- [x] Preserve a trusted renderer hash when rendering succeeded but publication failed.
+- [x] Convert expected command failures into stable reports and unexpected failures into `internal_cli_error` without dynamic exception text.
+- [x] Verify exact JSON fixtures for renderer construction, invalid UTF-8/input read, renderer failure, malformed artifact, and output publication failure.
+- [x] Verify focused tests pass.
+- [x] Review the revision-bound patch and commit `feat(cli): validate and render deterministic batches`.
 
-Inject a fake renderer and cover deterministic file order; validate discarding artifacts; render decoding base64 artifacts; SVG and PNG propagation; mixed success/failure aggregation; renderer-construction failures; source read failures; output publication failures; no output writes when planning fails; source-free result objects; relative path reporting; exact totals; and frozen nested reports.
+## Operational result mapping
 
-- [x] **Step 2: Write failing presentation tests**
+| Failure | Scope | Continue | Status | Exit | `sourceRevisionHash` | Publication |
+|---|---|---:|---|---:|---|---|
+| discovery or output planning | command | no | `invocation_failure` | `2` | no file result | none |
+| renderer construction | command | no | `invocation_failure` | `2` | no file result | none |
+| `input_read_failed` or invalid UTF-8 | file | yes | `invocation_failure` | `2` | `null` | none for failed file |
+| renderer rejection | file | yes | `diagram_failure`, unless an operational failure exists | `1` or `2` | `null` | none for failed file |
+| malformed artifact contract | file | yes | `invocation_failure` | `2` | `null` | none for failed file |
+| `output_write_failed` after valid artifact | file | yes | `invocation_failure` | `2` | renderer hash | earlier successes remain published |
 
-Assert an exact JSON object and newline-terminated JSON serialization. Assert concise human lines for success, per-file failure, and invocation failure. Reject accidental serialization of `source`, `dataBase64`, `javaPath`, `jarPath`, `stderr`, or environment keys.
+A preflight failure publishes nothing. After execution starts, successful earlier publications are not rolled back; the report is the partial-publication receipt.
 
-- [x] **Step 3: Run focused tests and confirm failure**
+### Exact regression fixtures
 
-Run: `node --test packages/cli/test/execute.test.js packages/cli/test/presentation.test.js`
-
-Expected: failure because execution and presentation modules do not exist.
-
-- [x] **Step 4: Implement the executor**
-
-The executor constructs one renderer, processes inputs sequentially, preserves safe renderer error codes, and returns:
-
-```js
-{
-  schemaVersion: 1,
-  command,
-  status,
-  exitCode,
-  format,
-  inputKind,
-  totals: { selected, succeeded, failed },
-  files,
-}
-```
-
-Do not throw expected CLI failures from `runDiagramWeaveCli`; convert them into invocation reports. Unexpected failures become `internal_cli_error` with no dynamic exception text.
-
-- [x] **Step 5: Implement presentation and public API**
-
-`formatCliReport(report, true)` returns canonical single-line JSON plus `\n`. Human output includes safe paths, statuses, error codes, and totals only.
-
-- [x] **Step 6: Run focused tests**
-
-Run: `node --test packages/cli/test/execute.test.js packages/cli/test/presentation.test.js`
-
-Expected: all tests pass.
-
-- [x] **Step 7: Commit**
-
-```bash
-git add packages/cli/src/execute.js packages/cli/src/presentation.js packages/cli/src/index.js packages/cli/test/execute.test.js packages/cli/test/presentation.test.js
-git commit -m "feat(cli): validate and render deterministic batches"
-```
-
-### Task 4: Executable, Packaging, Documentation, and Repository Gates
-
-**Files:**
-- Create: `packages/cli/src/bin.js`
-- Create: `packages/cli/README.md`
-- Create: `packages/cli/test/bin.test.js`
-- Modify: `packages/cli/package.json`
-- Modify: `package-lock.json`
-- Modify: `README.md`
-- Modify: `docs/architecture.md`
-- Modify: `docs/product/diagramweave-prd.md`
-- Modify: `CHANGELOG.md`
-- Modify: `tests/repository-contract.test.js`
-
-**Interfaces:**
-- Consumes: `runDiagramWeaveCli` and `formatCliReport`.
-- Produces: npm executable `dweave` and independently installable package metadata.
-
-- [x] **Step 1: Write failing executable and repository-contract tests**
-
-Test `--help`, unknown command, missing renderer configuration, `--json` invocation failure, stdout/stderr separation, and exact exit codes by spawning Node with `src/bin.js`. Add repository tests requiring the CLI package, `bin` entry, `files` allowlist, README examples, architecture boundary, PRD implementation status, and CHANGELOG entry.
-
-- [x] **Step 2: Run focused tests and confirm failure**
-
-Run: `node --test packages/cli/test/bin.test.js tests/repository-contract.test.js`
-
-Expected: failure because the executable and documentation do not exist.
-
-- [x] **Step 3: Implement the executable and package metadata**
-
-`src/bin.js` begins with `#!/usr/bin/env node`, calls the public API, writes normal reports to stdout, writes invocation/internal failures to stderr unless `--json` was requested, and sets `process.exitCode` from the report.
-
-Add to `package.json`:
+Renderer construction failure:
 
 ```json
-{
-  "bin": { "dweave": "./src/bin.js" },
-  "exports": ".\/src\/index.js",
-  "files": ["src"],
-  "dependencies": {
-    "@contextualwisdomlab/diagramweave-plantuml-renderer": "0.0.0"
-  }
-}
+{"schemaVersion":1,"command":"validate","status":"invocation_failure","exitCode":2,"format":null,"inputKind":null,"helpTopic":null,"errorCode":"renderer_unavailable","errorMessage":"Renderer unavailable.","totals":{"selected":0,"succeeded":0,"failed":0},"files":[]}
 ```
 
-- [x] **Step 4: Update the lockfile and documentation**
+Invalid UTF-8:
 
-Run: `npm install --package-lock-only --ignore-scripts --no-audit --no-fund`
-
-Document exact commands, exit codes, environment variables, directory output mapping, overwrite semantics, source non-disclosure, and naruon/CI embedding. Mark FR-070 and FR-071 as implemented foundations without claiming Studio completion.
-
-- [x] **Step 5: Run package and full repository verification**
-
-Run:
-
-```bash
-npm ci --ignore-scripts --no-audit --no-fund
-npm run verify
-npm pack --workspace packages/cli --dry-run --json
+```json
+{"schemaVersion":1,"command":"validate","status":"invocation_failure","exitCode":2,"format":"svg","inputKind":"file","helpTopic":null,"errorCode":null,"errorMessage":null,"totals":{"selected":1,"succeeded":0,"failed":1},"files":[{"relativePath":"diagram.puml","status":"failed","sourceRevisionHash":null,"outputPath":null,"errorCode":"input_read_failed","errorMessage":"The diagram source could not be read as UTF-8."}]}
 ```
 
-Expected:
+Publication failure after a valid renderer artifact:
 
-- all tests pass;
-- production line, branch, and function coverage are 100%;
-- production JSDoc coverage is 100%;
-- zero skipped/todo tests;
-- package contains only `LICENSE`, `README.md`, `package.json`, and `src/*.js`.
-
-- [x] **Step 6: Commit**
-
-```bash
-git add packages/cli package-lock.json README.md docs/architecture.md docs/product/diagramweave-prd.md CHANGELOG.md tests/repository-contract.test.js
-git commit -m "feat(cli): publish the dweave command foundation"
+```json
+{"schemaVersion":1,"command":"render","status":"invocation_failure","exitCode":2,"format":"svg","inputKind":"file","helpTopic":null,"errorCode":null,"errorMessage":null,"totals":{"selected":1,"succeeded":0,"failed":1},"files":[{"relativePath":"diagram.puml","status":"failed","sourceRevisionHash":"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef","outputPath":"diagram.svg","errorCode":"output_write_failed","errorMessage":"The destination is read-only."}]}
 ```
 
-### Task 5: PR Evidence and Release Decision
+### Task 4: Executable, packaging, documentation, and repository gates
 
 **Files:**
-- Modify: `docs/superpowers/plans/2026-08-04-cli-foundation.md`
+- `packages/cli/src/bin.js`
+- `packages/cli/README.md`
+- `packages/cli/test/bin.test.js`
+- `packages/cli/package.json`
+- `package-lock.json`
+- `README.md`
+- `docs/architecture.md`
+- `docs/product/diagramweave-prd.md`
+- `CHANGELOG.md`
+- `tests/repository-contract.test.js`
 
-**Interfaces:**
-- Consumes: final verification output.
-- Produces: one bounded pull request against `main` with exact evidence and residual limits.
+- [x] Write executable and repository-contract tests for help, invalid invocation, missing renderer configuration, JSON failures, stdout/stderr separation, exact exit codes, package bin/exports/files, documentation, architecture, PRD status, and changelog.
+- [x] Verify focused tests fail before the executable and documentation exist.
+- [x] Implement `src/bin.js` with no direct business logic and set `process.exitCode` from the report.
+- [x] Add the `dweave` executable, public export, package files allowlist, and renderer dependency.
+- [x] Update the package lock and all durable documentation.
+- [x] Verify `npm ci`, full tests, 100% coverage, 100% production JSDoc, zero skipped/todo tests, and package dry run.
+- [x] Review the revision-bound patch and commit `feat(cli): publish the dweave command foundation`.
 
-- [x] **Step 1: Record final evidence in this plan**
+### Task 5: PR evidence and release decision
 
-Add exact test count, coverage totals, JSDoc module count, syntax file count, package dry-run result, and remaining limitations: no structured PlantUML line diagnostics, no Studio, no Language Server, no folder concurrency, and no bundled Java/PlantUML.
+**Files:**
+- `docs/superpowers/plans/2026-08-04-cli-foundation.md`
 
-- [x] **Step 2: Re-run the exact final verification**
-
-Run:
-
-```bash
-npm ci --ignore-scripts --no-audit --no-fund
-npm run verify
-npm pack --workspace packages/cli --dry-run --json
-```
-
-Expected: same successful result as Task 4 with a clean working tree except the evidence update.
-
-- [x] **Step 3: Commit the evidence**
-
-```bash
-git add docs/superpowers/plans/2026-08-04-cli-foundation.md
-git commit -m "docs: record CLI foundation verification"
-```
-
-- [x] **Step 4: Open one pull request**
-
-Title: `feat: add deterministic DiagramWeave CLI`
-
-The body must include buyer-visible gap, exact commands, security boundaries, verification evidence, release status, and residual limitations. Keep versions at `0.0.0`; do not create a release.
+- [x] Record exact test, coverage, JSDoc, syntax, and package evidence.
+- [x] Re-run the exact final verification against the evidence-bearing tree.
+- [x] Remove temporary materialization scripts, payloads, and workflows from the published tree.
+- [x] Open one bounded pull request against `main`.
+- [x] Keep versions at `0.0.0`; do not release before integrated product and real-runtime release gates exist.
 
 ## Final verification evidence
 
@@ -363,4 +196,4 @@ npm pack --workspace packages/cli --dry-run --json
 packaged files: 10
 ```
 
-Residual product limits remain explicit: no structured PlantUML line diagnostics, no Studio, no Language Server, no concurrent folder renderer, no formatting or policy command, and no bundled Java or PlantUML runtime. Versions remain `0.0.0` and the changelog remains under `Unreleased`.
+The review-regression additions require the same exact-head gates to pass again before merge. Residual product limits remain explicit: no structured PlantUML line diagnostics, no Studio, no Language Server, no concurrent folder renderer, no formatting or policy command, and no bundled Java or PlantUML runtime. Versions remain `0.0.0` and the changelog remains under `Unreleased`.
