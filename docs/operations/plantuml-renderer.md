@@ -100,7 +100,7 @@ A successful child exit with empty, malformed, truncated, concatenated, or wrong
 
 ## Structured diagnostics
 
-`parsePlantUmlStandardReport` converts the bounded PlantUML standard report into an immutable result containing `protocolVersion`, `status`, and safe diagnostics. It recognizes protocol version `1`, lets `status=ERROR` win over an earlier `status=OK`, validates a positive 32-bit `lineNumber`, ignores unknown and narrative lines, and fails closed for malformed known fields or invalid UTF-8.
+`parsePlantUmlStandardReport` converts the bounded PlantUML standard report into an immutable result containing `protocolVersion`, `status`, and safe diagnostics. It recognizes protocol version `1`, lets `status=ERROR` win over an earlier `status=OK`, validates a positive 32-bit `lineNumber`, ignores unknown and narrative lines, and fails closed for malformed known fields or invalid UTF-8. A direct public call also rejects any byte array above `plantUmlRendererLimits.maxDiagnosticBytes.maximum` before decoding, preserving the authoritative 1 MiB ceiling outside the renderer process path.
 
 A located syntax error uses a Language Server Protocol-compatible record:
 
