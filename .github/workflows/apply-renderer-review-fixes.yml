@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - agent/renderer-hardening
+  pull_request:
+    types: [opened, synchronize, reopened]
 
 permissions:
   contents: read
@@ -14,7 +16,9 @@ concurrency:
 
 jobs:
   apply-and-verify:
-    if: github.repository == 'ContextualWisdomLab/DiagramWeave'
+    if: >-
+      github.repository == 'ContextualWisdomLab/DiagramWeave' &&
+      (github.event_name == 'push' || github.head_ref == 'agent/renderer-hardening')
     runs-on: ubuntu-latest
     permissions:
       contents: write
