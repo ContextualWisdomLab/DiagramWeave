@@ -97,6 +97,7 @@ test('rejects invalid UTF-8 before invoking the renderer and reports a null hash
     helpTopic: null,
     errorCode: null,
     errorMessage: null,
+    diagnostics: [],
     totals: { selected: 1, succeeded: 0, failed: 1 },
     files: [{
       relativePath: 'diagram.puml',
@@ -105,6 +106,7 @@ test('rejects invalid UTF-8 before invoking the renderer and reports a null hash
       outputPath: null,
       errorCode: 'input_read_failed',
       errorMessage: 'The diagram source could not be read as UTF-8.',
+      diagnostics: [],
     }],
   });
 });
@@ -126,6 +128,7 @@ test('preserves a trusted renderer hash when atomic publication fails', async ()
     helpTopic: null,
     errorCode: null,
     errorMessage: null,
+    diagnostics: [],
     totals: { selected: 1, succeeded: 0, failed: 1 },
     files: [{
       relativePath: 'diagram.puml',
@@ -134,6 +137,7 @@ test('preserves a trusted renderer hash when atomic publication fails', async ()
       outputPath: 'diagram.svg',
       errorCode: 'output_write_failed',
       errorMessage: 'The destination is read-only.',
+      diagnostics: [],
     }],
   });
 });
@@ -155,6 +159,7 @@ test('maps renderer construction failure to one source-free invocation fixture',
     helpTopic: null,
     errorCode: 'renderer_unavailable',
     errorMessage: 'Renderer unavailable.',
+    diagnostics: [],
     totals: { selected: 0, succeeded: 0, failed: 0 },
     files: [],
   });
