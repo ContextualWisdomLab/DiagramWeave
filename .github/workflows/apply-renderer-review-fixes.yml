@@ -45,16 +45,50 @@ jobs:
           git apply \
             --include=packages/plantuml-renderer/src/renderer.js \
             /tmp/review-fixes.patch
+          node --input-type=module <<'NODE'
+          import { readFileSync, writeFileSync } from 'node:fs';
+
+          function replaceExactly(path, before, after, label) {
+            const text = readFileSync(path, 'utf8');
+            const occurrences = text.split(before).length - 1;
+            if (occurrences !== 1) {
+              throw new Error(`${label}: expected one target, found ${occurrences}`);
+            }
+            writeFileSync(path, text.replace(before, after));
+          }
+
+          replaceExactly(
+            'packages/plantuml-renderer/src/renderer.js',
+            `      const end = findDoctypeEnd(text, cursor + 9, boundary);
+      if (end === -1) {
+        return false;
+      }`,
+            `      const nameStart = skipDocumentWhitespace(text, cursor + 9, boundary, 1);
+      if (
+        !matchesAsciiToken(text, nameStart, 'svg') ||
+        !isXmlNameBoundary(text[nameStart + 3])
+      ) {
+        return false;
+      }
+      const end = findDoctypeEnd(text, nameStart + 3, boundary);
+      if (end === -1) {
+        return false;
+      }`,
+            'SVG DOCTYPE root validation',
+          );
+
+          replaceExactly(
+            'packages/plantuml-renderer/test/hardening.test.js',
+            `    '<!DOCTYPE html><svg/>',
+    '<!DOCTYPE svg [<!ELEMENT svg ANY><svg/>',`,
+            `    '<!DOCTYPE html><svg/>',
+    '<!DOCTYPE svgx><svg/>',
+    '<!DOCTYPE svg [<!ELEMENT svg ANY><svg/>',`,
+            'SVG DOCTYPE name-boundary regression',
+          );
+          NODE
           rm -rf .bootstrap
           rm -f .github/workflows/apply-renderer-review-fixes.yml
-      - name: Print patched prologue validator
-        shell: bash
-        run: |
-          awk '
-            /function skipSvgPrologue/ { printing = 1 }
-            printing { print }
-            printing && /function isSelfClosingTag/ { exit }
-          ' packages/plantuml-renderer/src/renderer.js
       - name: Install locked workspace
         run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Verify exact patched tree
