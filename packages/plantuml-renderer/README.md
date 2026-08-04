@@ -18,6 +18,6 @@ const artifact = await renderer.render({
 });
 ```
 
-The package does not bundle Java or PlantUML. It requires absolute host-supplied paths, invokes no shell, uses an empty environment, passes source only through stdin, forces PlantUML `SANDBOX`, disables generated source metadata, caps source/stdout/stderr, enforces a deadline, validates one SVG or PNG stream, and returns an immutable base64 artifact.
+The package does not bundle Java or PlantUML. It requires absolute host-supplied paths, invokes no shell, uses an empty environment, passes source only through stdin, forces PlantUML `SANDBOX`, disables generated source metadata, performs fail-fast syntax checking, caps source/stdout/stderr, enforces a deadline, validates one SVG or PNG stream, and returns an immutable base64 artifact.
 
 See the repository operations guide for limits, error codes, licensing, and deployment requirements.
