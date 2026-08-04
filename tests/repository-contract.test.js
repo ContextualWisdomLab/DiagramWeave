@@ -84,6 +84,8 @@ test('product documentation preserves the source-first modular contract', async 
   assert.match(securityModel, /PlantUML.*SANDBOX/is);
   assert.match(securityModel, /no remote or local include mode/is);
   assert.match(securityModel, /untrusted data/i);
+  assert.match(securityModel, /Rendered SVG remains untrusted active content/i);
+  assert.match(securityModel, /must not inject it through `innerHTML`/i);
   assert.match(operations, /\/v1\/chat\/completions/);
   assert.match(operations, /HTTPS.*loopback HTTP/is);
   assert.match(operations, /provider_timeout/);
@@ -91,6 +93,8 @@ test('product documentation preserves the source-first modular contract', async 
   assert.match(rendererOperations, /-nometadata/);
   assert.match(rendererOperations, /host-supplied|operator supplies/is);
   assert.match(rendererOperations, /renderer_output_too_large/);
+  assert.match(rendererOperations, /SVG is active, untrusted content/i);
+  assert.match(rendererOperations, /must not inject.*`innerHTML`/i);
   assert.match(prd, /^# DiagramWeave 제품 요구사항 문서\(PRD\)/m);
 });
 
