@@ -3,6 +3,10 @@ import { TextDecoder } from 'node:util';
 import { plantUmlRendererLimits } from './limits.js';
 
 const utf8Decoder = new TextDecoder('utf-8', { fatal: true });
+const typedArrayByteLength = Object.getOwnPropertyDescriptor(
+  Object.getPrototypeOf(Uint8Array.prototype),
+  'byteLength',
+).get;
 const emptyDiagnostics = Object.freeze([]);
 const maximumLineNumber = 2_147_483_647;
 const maximumLineIndex = maximumLineNumber - 1;
@@ -142,7 +146,8 @@ function createReport(protocolVersion, status, diagnostics = emptyDiagnostics) {
  * earlier `OK` status. Unknown keys and the human-readable suffix emitted by
  * PlantUML are ignored. Only protocol version 1 is currently recognized.
  * Public callers cannot exceed the renderer's authoritative maximum diagnostic
- * byte limit even when they bypass `createPlantUmlRenderer`.
+ * byte limit even when they bypass `createPlantUmlRenderer`. The intrinsic
+ * typed-array getter is used so a subclass cannot spoof a smaller byte length.
  *
  * @param {unknown} diagnostics - Bounded stderr bytes from PlantUML.
  * @returns {Readonly<{
@@ -157,7 +162,7 @@ export function parsePlantUmlStandardReport(diagnostics) {
     if (!(diagnostics instanceof Uint8Array)) {
       return createReport(null, 'invalid');
     }
-    byteLength = diagnostics.byteLength;
+    byteLength = typedArrayByteLength.call(diagnostics);
   } catch {
     return createReport(null, 'invalid');
   }
