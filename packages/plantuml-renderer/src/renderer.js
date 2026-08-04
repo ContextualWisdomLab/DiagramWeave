@@ -204,6 +204,7 @@ function buildArguments(options, format) {
     'UTF-8',
     '-nometadata',
     '-stdrpt:1',
+    '-failfast2',
     `-t${format}`,
     '-pipe',
   ]);
@@ -426,6 +427,24 @@ function renderRequest(options, request) {
           true,
         );
       }
+    });
+
+    child.stdout.on('error', () => {
+      fail(
+        new PlantUmlRendererError(
+          'renderer_unavailable',
+          'The PlantUML renderer output stream failed.',
+        ),
+      );
+    });
+
+    child.stderr.on('error', () => {
+      fail(
+        new PlantUmlRendererError(
+          'renderer_unavailable',
+          'The PlantUML renderer diagnostic stream failed.',
+        ),
+      );
     });
 
     child.once('error', () => {
