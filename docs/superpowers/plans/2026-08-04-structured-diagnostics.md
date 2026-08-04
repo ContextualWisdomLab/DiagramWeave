@@ -100,7 +100,7 @@ production line coverage: 100%
 production branch coverage: 100%
 production function coverage: 100%
 production JSDoc modules: 15/15
-JavaScript syntax: 36 files
+JavaScript syntax: 37 files
 ```
 
 The last clean-tree workflow passed both package dry runs. The latest GitHub exact-head CI, SAST, security scans, and CodeRabbit result remain authoritative after the final hardening and documentation commits.
