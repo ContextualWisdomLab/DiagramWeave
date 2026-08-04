@@ -52,10 +52,34 @@ jobs:
           python3 <<'PY'
           from pathlib import Path
 
-          path = Path('scripts/apply-renderer-review-fixes.mjs')
-          source = path.read_text(encoding='utf-8')
-          source = source.replace(r'\\`svg\\`', 'svg')
-          path.write_text(source, encoding='utf-8')
+          script_path = Path('scripts/apply-renderer-review-fixes.mjs')
+          script = script_path.read_text(encoding='utf-8')
+          script = script.replace(r'\\`svg\\`', 'svg')
+
+          obsolete = '''hardeningTest = replaceExactly(
+            hardeningTest,
+            `    '<svg><?instruction</svg>',\\n    '<html></html>',`,
+            `    '<svg><?instruction</svg>',\\n    '<svg><?xml version="1.0"?></svg>',\\n    '<svg><!-- invalid--comment --></svg>',\\n    '<svg><!ENTITY x "y"></svg>',\\n    '<html></html>',\\n    '<1svg/>',`,
+            'malformed XML token regressions',
+          );
+          '''
+          if script.count(obsolete) != 1:
+            raise RuntimeError('Expected one obsolete malformed-token transformer block.')
+          script = script.replace(obsolete, '', 1)
+          script_path.write_text(script, encoding='utf-8')
+
+          test_path = Path('packages/plantuml-renderer/test/hardening.test.js')
+          tests = test_path.read_text(encoding='utf-8')
+          anchor = "    '<svg><?instruction</svg>',\n    '<svg><g></g>',"
+          replacement = """    '<svg><?instruction</svg>',
+              '<svg><?xml version=\"1.0\"?></svg>',
+              '<svg><!-- invalid--comment --></svg>',
+              '<svg><!ENTITY x \"y\"></svg>',
+              '<1svg/>',
+              '<svg><g></g>',"""
+          if tests.count(anchor) != 1:
+            raise RuntimeError('Expected one malformed-token test insertion anchor.')
+          test_path.write_text(tests.replace(anchor, replacement, 1), encoding='utf-8')
           PY
           node --check scripts/apply-renderer-review-fixes.mjs
       - name: Apply deterministic reviewed transformations
