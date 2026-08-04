@@ -47,6 +47,14 @@ jobs:
             /tmp/review-fixes.patch
           rm -rf .bootstrap
           rm -f .github/workflows/apply-renderer-review-fixes.yml
+      - name: Print patched prologue validator
+        shell: bash
+        run: |
+          awk '
+            /function skipSvgPrologue/ { printing = 1 }
+            printing { print }
+            printing && /function isSelfClosingTag/ { exit }
+          ' packages/plantuml-renderer/src/renderer.js
       - name: Install locked workspace
         run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Verify exact patched tree
