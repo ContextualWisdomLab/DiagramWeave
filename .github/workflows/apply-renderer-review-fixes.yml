@@ -19,10 +19,10 @@ jobs:
     if: >-
       github.repository == 'ContextualWisdomLab/DiagramWeave' &&
       (github.event_name == 'push' || github.head_ref == 'agent/renderer-hardening')
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-slim
+    timeout-minutes: 15
     permissions:
       contents: write
-      pull-requests: write
     steps:
       - name: Check out branch
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -55,17 +55,24 @@ jobs:
           set -euo pipefail
           npm run verify
           npm pack --workspace packages/plantuml-renderer --dry-run --json > /tmp/renderer-pack.json
-          jq -e '
-            length == 1 and
-            ([.[0].files[].path] | index("package.json") != null) and
-            all(
-              .[0].files[].path;
-              . == "LICENSE" or
-              . == "README.md" or
-              . == "package.json" or
-              test("^src/[A-Za-z0-9._-]+\\.js$")
-            )
-          ' /tmp/renderer-pack.json >/dev/null
+          node --input-type=module <<'NODE'
+          import { readFileSync } from 'node:fs';
+
+          const reports = JSON.parse(readFileSync('/tmp/renderer-pack.json', 'utf8'));
+          if (!Array.isArray(reports) || reports.length !== 1) {
+            throw new Error('Expected exactly one package dry-run report.');
+          }
+          const files = reports[0]?.files;
+          if (!Array.isArray(files) || !files.some(({ path }) => path === 'package.json')) {
+            throw new Error('Package dry run must contain package.json.');
+          }
+          const allowed = /^(?:LICENSE|README\.md|package\.json|src\/[A-Za-z0-9._-]+\.js)$/u;
+          for (const file of files) {
+            if (typeof file?.path !== 'string' || !allowed.test(file.path)) {
+              throw new Error(`Unexpected packaged file: ${String(file?.path)}`);
+            }
+          }
+          NODE
       - name: Commit verified review fixes
         shell: bash
         run: |
@@ -75,7 +82,3 @@ jobs:
           git add --all
           git commit -m 'fix: accept safe SVG prologues and lock documentation contracts'
           git push origin HEAD:agent/renderer-hardening
-      - name: Return the verified pull request to review
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh pr ready 3 --repo "$GITHUB_REPOSITORY"
