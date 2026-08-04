@@ -66,7 +66,7 @@ https://microsoft.github.io/language-server-protocol/specifications/lsp/3.18/spe
 
 OASIS Open. (2023, August 28). *Static Analysis Results Interchange Format
 (SARIF) Version 2.1.0 Plus Errata 01*.
-https://docs.oasis-open.org/sarif/sarif/v2.1.0/sarif-v2.1.0.html
+https://docs.oasis-open.org/sarif/sarif/v2.1.0/errata01/os/sarif-v2.1.0-errata01-os-complete.html
 
 PlantUML. (n.d.). *Command-line usage: Standard report (stdrpt)*. Retrieved
 August 4, 2026, from https://plantuml.com/command-line
