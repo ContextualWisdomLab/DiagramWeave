@@ -99,10 +99,19 @@ test('advertises deterministic completion and serves the latest open snapshot', 
   );
 });
 
-test('does not advertise completion to a client that omits the capability', async () => {
+test('does not advertise completion to clients that omit or hide the capability', async () => {
   const session = setup();
   const result = await session.request('initialize', {});
   assert.equal(result.capabilities.completionProvider, undefined);
+
+  const hostileParams = Object.defineProperty({}, 'capabilities', {
+    get() {
+      throw new Error('capability secret');
+    },
+  });
+  const hostileSession = setup();
+  const hostileResult = await hostileSession.request('initialize', hostileParams);
+  assert.equal(hostileResult.capabilities.completionProvider, undefined);
 });
 
 test('rejects malformed completion params hostile positions and remote URIs', async () => {
