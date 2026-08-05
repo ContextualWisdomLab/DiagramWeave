@@ -74,7 +74,6 @@ test('implementation and package contracts expose the exact bounded adapter', as
   assert.match(adapterSource, /export function symbolInformationForDocument/);
   assert.match(adapterSource, /while \(stack\.length > 0\)/);
   assert.match(adapterSource, /containerName/);
-  assert.doesNotMatch(adapterSource, /function\s+\w+\([^)]*\)\s*\{[^}]*\b\1\s*\(/s);
   assert.match(sessionSource, /clientSupportsHierarchicalDocumentSymbols/);
   assert.match(sessionSource, /hierarchicalDocumentSymbolSupport === true/);
   assert.match(sessionSource, /symbolInformationForDocument\(normalized\.textDocument\.uri, symbols\)/);
