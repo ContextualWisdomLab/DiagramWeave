@@ -85,7 +85,8 @@ Each item contains:
 The module does not add `deprecated`, tags, detail, selection range, source
 excerpt, raw PlantUML text, or inferred semantic ownership. Root and sibling
 order remains source order. A reverse stack performs traversal without
-recursive product code, including for the maximum bounded hierarchy.
+recursive traversal or product recursion, including for the maximum bounded
+hierarchy.
 
 ## Immutability and limits
 
