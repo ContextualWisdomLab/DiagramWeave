@@ -37,14 +37,18 @@ const symbolKinds = Object.freeze({
 });
 
 /**
- * Replace PlantUML comments with spaces while preserving line offsets and labels.
+ * Replace PlantUML comments with spaces while preserving UTF-16 line offsets.
+ *
+ * `String.prototype.split('')` deliberately operates on UTF-16 code units, the
+ * same coordinate system advertised by the Language Server. Code-point spread
+ * would collapse surrogate pairs and shift every selection after an emoji.
  *
  * @param {string} line - One source line without its newline delimiter.
  * @param {{inBlockComment: boolean}} state - Mutable cross-line block-comment state.
  * @returns {string} Same-length source line with comments masked.
  */
 function maskComments(line, state) {
-  const characters = [...line];
+  const characters = line.split('');
   let inQuote = false;
   for (let index = 0; index < characters.length; index += 1) {
     const character = characters[index];
@@ -221,11 +225,11 @@ function range(line, startCharacter, endCharacter) {
  * Create a deterministic flat LSP DocumentSymbol outline for explicit PlantUML declarations.
  *
  * The conservative scanner recognizes documented explicit declaration keywords
- * across common class, sequence, component, use-case, and state diagrams. It
- * deliberately ignores implicit participants, relations, directives, members,
- * macros, and malformed labels rather than inventing semantic structure. Line
- * and selection positions are JavaScript UTF-16 indices, matching the session's
- * advertised LSP position encoding.
+ * across common class, sequence, component, use-case, state, and deployment
+ * diagrams. It deliberately ignores implicit participants, relations,
+ * directives, members, macros, and malformed labels rather than inventing
+ * semantic structure. Line and selection positions are JavaScript UTF-16
+ * indices, matching the session's advertised LSP position encoding.
  *
  * @param {unknown} source - Complete PlantUML source snapshot.
  * @returns {readonly Readonly<object>[]} Deeply frozen declaration-order symbols.
@@ -234,6 +238,11 @@ function range(line, startCharacter, endCharacter) {
 export function documentSymbolsForSource(source) {
   if (typeof source !== 'string') {
     throw new LanguageServerError('document_text_invalid', 'Document text must be a string.', {
+      field: 'text',
+    });
+  }
+  if (Buffer.byteLength(source, 'utf8') > languageServerLimits.maxDocumentBytes) {
+    throw new LanguageServerError('document_too_large', 'The document exceeds the session limit.', {
       field: 'text',
     });
   }
