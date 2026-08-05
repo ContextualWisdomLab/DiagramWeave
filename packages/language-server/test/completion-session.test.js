@@ -118,10 +118,15 @@ test('advertises deterministic completion and serves the latest open snapshot', 
   );
 });
 
-test('does not advertise completion to clients that omit or hide the capability', async () => {
+test('does not advertise or serve completion for clients that omit or hide the capability', async () => {
   const session = setup();
   const result = await session.request('initialize', {});
   assert.equal(result.capabilities.completionProvider, undefined);
+  await session.notify('initialized', {});
+  await assert.rejects(
+    session.request('textDocument/completion', completionParams(0, 0)),
+    (error) => assertError(error, 'method_not_found'),
+  );
 
   const hostileParams = Object.defineProperty({}, 'capabilities', {
     get() {
