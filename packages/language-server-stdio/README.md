@@ -2,7 +2,8 @@
 
 A bounded JSON-RPC 2.0 stdio transport for the transport-neutral DiagramWeave
 Language Server session. It makes the reusable session launchable from IDEs and
-Studio while keeping document state and diagnostics in the existing
+Studio while keeping document state, diagnostics, document symbols, and
+declaration completion in the existing
 `@contextualwisdomlab/diagramweave-language-server` package.
 
 ## Launch
@@ -39,6 +40,27 @@ queue overflow, or `exit` without successful shutdown returns code `1`.
   oversized, and controlled IDs are rejected.
 - Methods are nonempty bounded strings without control characters.
 - Params are object, array, or null.
+
+## Language features
+
+The process uses the public transport-neutral session and therefore exposes the
+same accepted-source state for:
+
+- `textDocument/publishDiagnostics`;
+- `textDocument/documentSymbol`;
+- capability-gated `textDocument/completion`.
+
+A completion-capable client must send a plain
+`capabilities.textDocument.completion` object during initialize. The server
+then advertises `completionProvider: { resolveProvider: false }`. Declaration
+completion is deterministic, local, bounded, and returns exact UTF-16 text
+edits. No completion request invokes an LLM, renderer, filesystem, include,
+macro, workspace scan, or network service.
+
+Malformed completion parameters and `document_position_invalid` map to JSON-RPC
+`-32602` with the fixed `Invalid params.` message. The response may include only
+the stable DiagramWeave error code; it never echoes source, URI, position,
+caller exception, or hostile getter content.
 
 ## Resource limits
 
@@ -84,8 +106,13 @@ DiagramWeave code. Notification failures receive no JSON-RPC response and emit
 only a fixed `window/logMessage` notification. Output writes are serialized;
 a write failure closes the connection without retrying or reordering messages.
 
+The stdio layer does not duplicate completion or document snapshots. It cannot
+weaken the Language Server's local-URI, source-size, lifecycle, capability,
+immutability, or stale-mutation contracts.
+
 ## Release status
 
 Version `0.0.0` is unreleased. TCP/WebSocket transports, cancellation,
-parallel request execution, Studio packaging, editor completion, navigation,
-workspace indexing, and signed binaries remain separate bounded slices.
+parallel request execution, Studio packaging, completion resolve, semantic
+navigation, workspace indexing, and signed binaries remain separate bounded
+slices.
