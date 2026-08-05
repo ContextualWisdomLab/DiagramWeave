@@ -4,7 +4,7 @@ import { LanguageServerError } from './errors.js';
 import { languageServerLimits } from './limits.js';
 
 const declarationPattern = /^(\s*)(?:(abstract)\s+)?(package|namespace|class|interface|enum|annotation|entity|object|participant|actor|boundary|control|database|collections|queue|component|node|cloud|frame|folder|artifact|file|stack|storage|card|agent|rectangle|usecase|state)\b(.*)$/diu;
-const standaloneClosingBracePattern = /^(\s*)}\s*$/u;
+const standaloneClosingBracePattern = /^(\s*)[}]\s*$/u;
 const symbolKinds = Object.freeze({
   package: 4,
   namespace: 3,
