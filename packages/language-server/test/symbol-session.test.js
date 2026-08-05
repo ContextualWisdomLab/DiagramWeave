@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
+import { LanguageServerError } from '../src/errors.js';
 import {
-  LanguageServerError,
-  createLanguageServerSession,
-} from '../src/index.js';
+  createDocumentSymbolLanguageServerSession,
+} from '../src/symbol-session.js';
 
 const javaPath = process.platform === 'win32' ? 'C:\\Java\\java.exe' : '/opt/java/bin/java';
 const jarPath = process.platform === 'win32' ? 'C:\\PlantUML\\plantuml.jar' : '/opt/plantuml/plantuml.jar';
@@ -28,7 +28,7 @@ function deferred() {
 
 function setup(renderer = Object.freeze({ async render() { return Object.freeze({}); } })) {
   const notifications = [];
-  const session = createLanguageServerSession({
+  const session = createDocumentSymbolLanguageServerSession({
     javaPath,
     jarPath,
     rendererFactory: () => renderer,
