@@ -32,6 +32,10 @@ source and mutation ordering metadata. It delegates diagnostics, document
 symbols, renderer lifecycle, and base protocol behavior to the established
 layers.
 
+Declaration completion performs no LLM call, renderer call, file read, URI
+dereference, include or macro evaluation, workspace scan, shell execution, or
+network request.
+
 Alternatives rejected:
 
 1. **Put completion in the diagnostic session.** This would make the lowest
