@@ -65,7 +65,7 @@ test('serves document symbols through the real bounded stdio transport', async (
         kind: 4,
         range: {
           start: { line: 1, character: 0 },
-          end: { line: 1, character: 18 },
+          end: { line: 1, character: 16 },
         },
         selectionRange: {
           start: { line: 1, character: 9 },
