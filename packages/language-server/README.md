@@ -1,22 +1,24 @@
 # `@contextualwisdomlab/diagramweave-language-server`
 
 A transport-neutral Language Server Protocol 3.18 session for PlantUML
-diagnostics, hierarchical document outlines, and deterministic declaration
-completion. It is independently reusable by DiagramWeave Studio, IDE adapters,
-naruon, and other CWL hosts without importing a desktop shell or JSON-RPC
-transport.
+diagnostics, capability-negotiated document outlines, and deterministic
+declaration completion. It is independently reusable by DiagramWeave Studio,
+IDE adapters, naruon, and other CWL hosts without importing a desktop shell or
+JSON-RPC transport.
 
 ## Foundation scope
 
 The package implements protocol-level lifecycle, full-document diagnostic
-synchronization, conservative explicit-declaration hierarchy, and local keyword
-completion:
+synchronization, conservative explicit-declaration hierarchy, legacy outline
+compatibility, and local keyword completion:
 
 - `initialize`, `initialized`, `shutdown`, and `exit`;
 - `textDocument/didOpen`, `textDocument/didChange`, and
   `textDocument/didClose`;
 - `textDocument/publishDiagnostics` and source-free `window/logMessage`;
 - `textDocument/documentSymbol` with `documentSymbolProvider: true`;
+- `DocumentSymbol[]` or `SymbolInformation[]` selected from the client's
+  `hierarchicalDocumentSymbolSupport` capability;
 - capability-gated `textDocument/completion` with
   `completionProvider: { resolveProvider: false }`;
 - UTF-16 positions and LSP full-document synchronization;
@@ -56,6 +58,9 @@ const session = createLanguageServerSession({
 const initializeResult = await session.request('initialize', {
   capabilities: {
     textDocument: {
+      documentSymbol: {
+        hierarchicalDocumentSymbolSupport: true,
+      },
       completion: {},
     },
   },
@@ -89,7 +94,7 @@ should omit it and use the shared DiagramWeave renderer.
 
 ## Document-symbol contract
 
-The outline returns source-order `DocumentSymbol[]` roots for explicit
+The scanner creates source-order `DocumentSymbol[]` roots for explicit
 high-signal declarations in common class, sequence, component, deployment,
 use-case, and state diagrams. Supported declarations include package,
 namespace, class, abstract class, interface, enum, annotation, entity, object,
@@ -104,16 +109,35 @@ participants, relationships, members, directives, macros, malformed labels,
 and renderer-dependent syntax rather than inventing semantic structure.
 
 A declaration receives optional frozen `children` only when the scanner proves a
-complete scope from exactly one unmatched unquoted `{` on the declaration line
-and a later standalone `}` with exactly the same indentation. Structural braces
-close in stack order. Parent ranges extend through the original closing-brace
-line; selection ranges continue to identify only the displayed label.
+complete scope from exactly one unmatched unquoted `{` on a package or namespace
+line and a later standalone `}` with exactly the same indentation. Structural
+braces close in stack order. Parent ranges extend through the original
+closing-brace line; selection ranges continue to identify only the displayed
+label.
 
 Quoted or commented braces, balanced one-line blocks, unmatched or
 cross-indented braces, multiple openings, crossed structure, and other ambiguous
 cases remain flat. A complete inner scope may remain a root when its outer
 source is unproven. Roots and siblings retain declaration order, and the final
 tree is built and frozen bottom-up without recursive product traversal.
+
+### Client compatibility
+
+The initialize capability selects only the response presentation:
+
+```text
+textDocument.documentSymbol.hierarchicalDocumentSymbolSupport === true
+  -> DocumentSymbol[]
+all other values
+  -> SymbolInformation[]
+```
+
+The flat compatibility view is derived iteratively from the same authoritative
+tree. It preserves source preorder, `name`, `kind`, the validated local document
+URI, and the enclosing `range`. Roots omit `containerName`; descendants use the
+immediate proven parent's display name. Every result array, flat record, and
+location is frozen. Missing, false, malformed, array-valued, proxied, or throwing
+capability paths fail closed to the flat view without dynamic error leakage.
 
 ## Declaration-completion contract
 
@@ -151,9 +175,10 @@ network.
 - Only monotonically increasing nonnegative safe-integer versions are accepted.
 - Incremental range edits are rejected; this foundation uses full-document
   synchronization.
-- Public diagnostics, symbol trees, completion results, child arrays, positions,
-  ranges, and edits are deeply frozen and contain no source excerpt, raw stderr,
-  raw PlantUML label, Java/JAR path, host error, or credential.
+- Public diagnostics, symbol trees, symbol information, completion results,
+  locations, child arrays, positions, ranges, and edits are deeply frozen and
+  contain no source excerpt, raw stderr, raw PlantUML label, Java/JAR path, host
+  error, or credential.
 - Hostile getters, proxies, arrays, renderer contracts, rejected mutations, and
   stale concurrent completions fail closed with stable `LanguageServerError`
   codes.
@@ -161,6 +186,5 @@ network.
 ## Release status
 
 Version `0.0.0` is an unreleased foundation. Completion resolve, snippets,
-hover, definition, references, rename, legacy flat-only symbol fallback,
-workspace indexing, cancellation, and Studio integration remain later bounded
-slices.
+hover, definition, references, rename, workspace indexing, cancellation, and
+Studio integration remain later bounded slices.
