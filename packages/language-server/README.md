@@ -1,14 +1,15 @@
 # `@contextualwisdomlab/diagramweave-language-server`
 
 A transport-neutral Language Server Protocol 3.18 session for PlantUML
-diagnostics, document outlines, and deterministic declaration completion. It is
-independently reusable by DiagramWeave Studio, IDE adapters, naruon, and other
-CWL hosts without importing a desktop shell or JSON-RPC transport.
+diagnostics, hierarchical document outlines, and deterministic declaration
+completion. It is independently reusable by DiagramWeave Studio, IDE adapters,
+naruon, and other CWL hosts without importing a desktop shell or JSON-RPC
+transport.
 
 ## Foundation scope
 
 The package implements protocol-level lifecycle, full-document diagnostic
-synchronization, conservative explicit-declaration symbols, and local keyword
+synchronization, conservative explicit-declaration hierarchy, and local keyword
 completion:
 
 - `initialize`, `initialized`, `shutdown`, and `exit`;
@@ -65,7 +66,7 @@ await session.notify('textDocument/didOpen', {
     uri: 'file:///workspace/context.puml',
     languageId: 'plantuml',
     version: 1,
-    text: '@startuml\npackage Context {\n  com\n}\n@enduml\n',
+    text: '@startuml\npackage Context {\n  class Model\n  com\n}\n@enduml\n',
   },
 });
 
@@ -75,11 +76,11 @@ const symbols = await session.request('textDocument/documentSymbol', {
 
 const completions = await session.request('textDocument/completion', {
   textDocument: { uri: 'file:///workspace/context.puml' },
-  position: { line: 2, character: 5 },
+  position: { line: 3, character: 5 },
 });
 
 console.log(initializeResult.capabilities.completionProvider);
-console.log(symbols.map(({ name }) => name));
+console.log(symbols[0].children.map(({ name }) => name));
 console.log(completions.map(({ label }) => label));
 ```
 
@@ -88,8 +89,8 @@ should omit it and use the shared DiagramWeave renderer.
 
 ## Document-symbol contract
 
-The first outline slice returns a flat declaration-order `DocumentSymbol[]` for
-explicit declarations in common class, sequence, component, deployment,
+The outline returns source-order `DocumentSymbol[]` roots for explicit
+high-signal declarations in common class, sequence, component, deployment,
 use-case, and state diagrams. Supported declarations include package,
 namespace, class, abstract class, interface, enum, annotation, entity, object,
 participant, actor, boundary, control, database, collections, queue, component,
@@ -100,7 +101,19 @@ The scanner recognizes quoted, parenthesized, bracketed, colon-delimited, bare,
 and `as`-aliased display labels. It masks PlantUML line and block comments while
 preserving UTF-16 code-unit offsets. It intentionally ignores implicit
 participants, relationships, members, directives, macros, malformed labels,
-and inferred nesting rather than inventing semantic structure.
+and renderer-dependent syntax rather than inventing semantic structure.
+
+A declaration receives optional frozen `children` only when the scanner proves a
+complete scope from exactly one unmatched unquoted `{` on the declaration line
+and a later standalone `}` with exactly the same indentation. Structural braces
+close in stack order. Parent ranges extend through the original closing-brace
+line; selection ranges continue to identify only the displayed label.
+
+Quoted or commented braces, balanced one-line blocks, unmatched or
+cross-indented braces, multiple openings, crossed structure, and other ambiguous
+cases remain flat. A complete inner scope may remain a root when its outer
+source is unproven. Roots and siblings retain declaration order, and the final
+tree is built and frozen bottom-up without recursive product traversal.
 
 ## Declaration-completion contract
 
@@ -118,9 +131,10 @@ Each item is an LSP keyword with plain-text insertion and an explicit UTF-16
 
 Completion intentionally returns an empty immutable collection inside or after
 comments, inside quoted labels, after relation or directive syntax, after a
-completed declaration, in the middle of an existing keyword, and for prefixes
-with no catalog match. It never calls an LLM, reads a URI, evaluates includes or
-macros, starts the renderer, scans a workspace, or contacts the network.
+completed declaration, in the middle of an existing identifier, and for
+prefixes with no catalog match. It never calls an LLM, reads a URI, evaluates
+includes or macros, starts the renderer, scans a workspace, or contacts the
+network.
 
 ## Safety and limits
 
@@ -131,15 +145,15 @@ macros, starts the renderer, scans a workspace, or contacts the network.
 - A session accepts at most 256 open documents.
 - Each complete source snapshot is limited to 1 MiB, matching the renderer's
   default source ceiling.
-- One document may expose at most 1,024 symbols; each symbol name is limited to
-  1,024 UTF-8 bytes.
+- One document may expose at most 1,024 explicit symbols across roots and
+  descendants; each symbol name is limited to 1,024 UTF-8 bytes.
 - One completion request may return at most 64 items.
 - Only monotonically increasing nonnegative safe-integer versions are accepted.
 - Incremental range edits are rejected; this foundation uses full-document
   synchronization.
-- Public diagnostics, symbols, completion results, positions, ranges, and edits
-  are deeply frozen and contain no source excerpt, raw stderr, raw PlantUML
-  label, Java/JAR path, host error, or credential.
+- Public diagnostics, symbol trees, completion results, child arrays, positions,
+  ranges, and edits are deeply frozen and contain no source excerpt, raw stderr,
+  raw PlantUML label, Java/JAR path, host error, or credential.
 - Hostile getters, proxies, arrays, renderer contracts, rejected mutations, and
   stale concurrent completions fail closed with stable `LanguageServerError`
   codes.
@@ -147,5 +161,6 @@ macros, starts the renderer, scans a workspace, or contacts the network.
 ## Release status
 
 Version `0.0.0` is an unreleased foundation. Completion resolve, snippets,
-hover, definition, references, rename, hierarchical symbols, workspace
-indexing, cancellation, and Studio integration remain later bounded slices.
+hover, definition, references, rename, legacy flat-only symbol fallback,
+workspace indexing, cancellation, and Studio integration remain later bounded
+slices.
