@@ -70,6 +70,8 @@ test('selects display labels on either side of aliases and supports explicit del
     'queue Jobs',
     'annotation Marker',
     'object Singleton',
+    'class FirstName as BareAlias',
+    'class MissingAlias as ',
   ].join('\r\n');
   const symbols = documentSymbolsForSource(source);
   assert.deepEqual(symbols.map(({ name }) => name), [
@@ -83,9 +85,11 @@ test('selects display labels on either side of aliases and supports explicit del
     'Jobs',
     'Marker',
     'Singleton',
+    'FirstName',
+    'MissingAlias',
   ]);
-  assert.deepEqual(symbols.map(({ kind }) => kind), [19, 5, 12, 2, 19, 19, 18, 19, 23, 19]);
-  assert.deepEqual(symbols.map(({ range }) => range.start.line), [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
+  assert.deepEqual(symbols.map(({ kind }) => kind), [19, 5, 12, 2, 19, 19, 18, 19, 23, 19, 5, 5]);
+  assert.deepEqual(symbols.map(({ range }) => range.start.line), [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
 });
 
 test('recognizes documented explicit declaration families conservatively', () => {
@@ -121,11 +125,16 @@ test('ignores comments, implicit relations, directives, and incomplete declarati
     "' class HiddenLine",
     "/'",
     'participant HiddenBlock',
+    'still hidden',
     "'/",
     'Alice -> Bob : class NotADeclaration',
     '@startuml',
     'skinparam classAttributeIconSize 0',
     'class',
+    'class ""',
+    'class #red',
+    'class <<stereotype>>',
+    'abstract interface UnsupportedAbstractInterface',
     'class "Customer\'s Account" as Account',
     'class "literal /\' content" as Literal',
     'class Visible \' trailing comment class HiddenTail',
@@ -137,6 +146,24 @@ test('ignores comments, implicit relations, directives, and incomplete declarati
     "literal /' content",
     'Visible',
   ]);
+});
+
+test('preserves escaped quote forms without shifting later UTF-16 ranges', () => {
+  const source = [
+    'class "Escaped \\" quote" as Escaped',
+    'class "Doubled "" quote" as Doubled',
+    'participant "😀 Alpha" as Alpha',
+  ].join('\n');
+  const symbols = documentSymbolsForSource(source);
+  assert.deepEqual(symbols.map(({ name }) => name), [
+    'Escaped \\" quote',
+    'Doubled "" quote',
+    '😀 Alpha',
+  ]);
+  assert.deepEqual(symbols[2].selectionRange, {
+    start: { line: 2, character: 13 },
+    end: { line: 2, character: 21 },
+  });
 });
 
 test('keeps exact UTF-16 selection positions and complete declaration-line ranges', () => {
@@ -152,10 +179,14 @@ test('keeps exact UTF-16 selection positions and complete declaration-line range
   });
 });
 
-test('fails closed for invalid source, excessive symbols, and oversized names', () => {
+test('fails closed for invalid source, oversized documents, excessive symbols, and oversized names', () => {
   assert.throws(
     () => documentSymbolsForSource(null),
     (error) => assertError(error, 'document_text_invalid'),
+  );
+  assert.throws(
+    () => documentSymbolsForSource('x'.repeat(languageServerLimits.maxDocumentBytes + 1)),
+    (error) => assertError(error, 'document_too_large'),
   );
   const excessive = Array.from(
     { length: languageServerLimits.maxDocumentSymbols + 1 },
@@ -175,6 +206,7 @@ test('fails closed for invalid source, excessive symbols, and oversized names', 
 test('skips malformed quoted and delimited labels instead of inventing symbols', () => {
   const source = [
     'class "Unclosed',
+    'class "Escaped \\',
     'usecase (Unclosed',
     'component [Unclosed',
     'actor :Unclosed',
