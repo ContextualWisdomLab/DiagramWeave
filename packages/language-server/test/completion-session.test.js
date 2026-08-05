@@ -9,6 +9,13 @@ import {
 const javaPath = process.platform === 'win32' ? 'C:\\Java\\java.exe' : '/opt/java/bin/java';
 const jarPath = process.platform === 'win32' ? 'C:\\PlantUML\\plantuml.jar' : '/opt/plantuml/plantuml.jar';
 const uri = 'file:///workspace/completion.puml';
+const completionCapabilities = Object.freeze({
+  capabilities: Object.freeze({
+    textDocument: Object.freeze({
+      completion: Object.freeze({}),
+    }),
+  }),
+});
 
 function assertError(error, code) {
   assert.equal(error instanceof LanguageServerError, true);
@@ -17,7 +24,7 @@ function assertError(error, code) {
 }
 
 function setup() {
-  const session = createLanguageServerSession({
+  return createLanguageServerSession({
     javaPath,
     jarPath,
     rendererFactory: () => Object.freeze({
@@ -27,7 +34,6 @@ function setup() {
     }),
     async publishNotification() {},
   });
-  return session;
 }
 
 function completionParams(line, character, documentUri = uri) {
@@ -38,7 +44,7 @@ function completionParams(line, character, documentUri = uri) {
 }
 
 async function initialize(session) {
-  const result = await session.request('initialize', {});
+  const result = await session.request('initialize', completionCapabilities);
   await session.notify('initialized', {});
   return result;
 }
@@ -50,7 +56,7 @@ test('advertises deterministic completion and serves the latest open snapshot', 
     (error) => assertError(error, 'server_not_initialized'),
   );
 
-  const result = await session.request('initialize', {});
+  const result = await session.request('initialize', completionCapabilities);
   assert.deepEqual(result.capabilities.completionProvider, { resolveProvider: false });
   assert.equal(Object.isFrozen(result.capabilities.completionProvider), true);
   await assert.rejects(
@@ -91,6 +97,12 @@ test('advertises deterministic completion and serves the latest open snapshot', 
     session.request('textDocument/completion', completionParams(0, 0)),
     (error) => assertError(error, 'document_not_open'),
   );
+});
+
+test('does not advertise completion to a client that omits the capability', async () => {
+  const session = setup();
+  const result = await session.request('initialize', {});
+  assert.equal(result.capabilities.completionProvider, undefined);
 });
 
 test('rejects malformed completion params hostile positions and remote URIs', async () => {
