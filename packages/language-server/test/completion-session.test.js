@@ -23,15 +23,25 @@ function assertError(error, code) {
   return true;
 }
 
-function setup() {
+function deferred() {
+  let resolve;
+  let reject;
+  const promise = new Promise((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
+}
+
+function setup(renderer = Object.freeze({
+  async render() {
+    return Object.freeze({});
+  },
+})) {
   return createLanguageServerSession({
     javaPath,
     jarPath,
-    rendererFactory: () => Object.freeze({
-      async render() {
-        return Object.freeze({});
-      },
-    }),
+    rendererFactory: () => renderer,
     async publishNotification() {},
   });
 }
@@ -43,10 +53,35 @@ function completionParams(line, character, documentUri = uri) {
   };
 }
 
+function openParams(text = 'cl', version = 1, documentUri = uri) {
+  return {
+    textDocument: {
+      uri: documentUri,
+      languageId: 'plantuml',
+      version,
+      text,
+    },
+  };
+}
+
+function changeParams(text, version = 2, documentUri = uri) {
+  return {
+    textDocument: { uri: documentUri, version },
+    contentChanges: [{ text }],
+  };
+}
+
 async function initialize(session) {
   const result = await session.request('initialize', completionCapabilities);
   await session.notify('initialized', {});
   return result;
+}
+
+async function labelsAt(session, character, documentUri = uri) {
+  return (await session.request(
+    'textDocument/completion',
+    completionParams(0, character, documentUri),
+  )).map(({ label }) => label);
 }
 
 test('advertises deterministic completion and serves the latest open snapshot', async () => {
@@ -70,27 +105,11 @@ test('advertises deterministic completion and serves the latest open snapshot', 
     (error) => assertError(error, 'document_not_open'),
   );
 
-  await session.notify('textDocument/didOpen', {
-    textDocument: {
-      uri,
-      languageId: 'plantuml',
-      version: 1,
-      text: 'cl',
-    },
-  });
-  assert.deepEqual(
-    (await session.request('textDocument/completion', completionParams(0, 2))).map(({ label }) => label),
-    ['class', 'cloud'],
-  );
+  await session.notify('textDocument/didOpen', openParams());
+  assert.deepEqual(await labelsAt(session, 2), ['class', 'cloud']);
 
-  await session.notify('textDocument/didChange', {
-    textDocument: { uri, version: 2 },
-    contentChanges: [{ text: 'par' }],
-  });
-  assert.deepEqual(
-    (await session.request('textDocument/completion', completionParams(0, 3))).map(({ label }) => label),
-    ['participant'],
-  );
+  await session.notify('textDocument/didChange', changeParams('par'));
+  assert.deepEqual(await labelsAt(session, 3), ['participant']);
 
   await session.notify('textDocument/didClose', { textDocument: { uri } });
   await assert.rejects(
@@ -117,14 +136,7 @@ test('does not advertise completion to clients that omit or hide the capability'
 test('rejects malformed completion params hostile positions and remote URIs', async () => {
   const session = setup();
   await initialize(session);
-  await session.notify('textDocument/didOpen', {
-    textDocument: {
-      uri,
-      languageId: 'plantuml',
-      version: 1,
-      text: 'class',
-    },
-  });
+  await session.notify('textDocument/didOpen', openParams('class'));
 
   for (const params of [null, {}, { textDocument: null }]) {
     await assert.rejects(
@@ -162,14 +174,7 @@ test('completion fails with lifecycle codes after shutdown exit and disposal', a
   for (const action of ['shutdown', 'exit', 'dispose']) {
     const session = setup();
     await initialize(session);
-    await session.notify('textDocument/didOpen', {
-      textDocument: {
-        uri,
-        languageId: 'plantuml',
-        version: 1,
-        text: 'cl',
-      },
-    });
+    await session.notify('textDocument/didOpen', openParams());
     if (action === 'shutdown') {
       await session.request('shutdown');
     } else if (action === 'exit') {
@@ -182,4 +187,97 @@ test('completion fails with lifecycle codes after shutdown exit and disposal', a
       (error) => assertError(error, 'server_shutting_down'),
     );
   }
+});
+
+test('rejected document mutations preserve the last accepted completion snapshot', async () => {
+  const session = setup();
+  await initialize(session);
+  await session.notify('textDocument/didOpen', openParams());
+
+  await assert.rejects(
+    session.notify('textDocument/didOpen', openParams('par', 2)),
+    (error) => assertError(error, 'document_already_open'),
+  );
+  await assert.rejects(
+    session.notify('textDocument/didChange', changeParams('par', 1)),
+    (error) => assertError(error, 'document_version_out_of_order'),
+  );
+  await assert.rejects(
+    session.notify('textDocument/didChange', {
+      textDocument: { uri, version: 2 },
+      contentChanges: [{
+        text: 'par',
+        range: {
+          start: { line: 0, character: 0 },
+          end: { line: 0, character: 2 },
+        },
+      }],
+    }),
+    (error) => assertError(error, 'incremental_change_unsupported'),
+  );
+  await assert.rejects(
+    session.notify('textDocument/didClose', {
+      textDocument: { uri: 'file:///workspace/missing.puml' },
+    }),
+    (error) => assertError(error, 'document_not_open'),
+  );
+
+  assert.deepEqual(await labelsAt(session, 2), ['class', 'cloud']);
+});
+
+test('a rejected newer open does not suppress an earlier pending completion source', async () => {
+  const first = deferred();
+  let renderCalls = 0;
+  const session = setup(Object.freeze({
+    render() {
+      renderCalls += 1;
+      return renderCalls === 1 ? first.promise : Promise.resolve(Object.freeze({}));
+    },
+  }));
+  await initialize(session);
+
+  const opening = session.notify('textDocument/didOpen', openParams());
+  await assert.rejects(
+    session.notify('textDocument/didOpen', openParams('par', 2)),
+    (error) => assertError(error, 'document_already_open'),
+  );
+  first.resolve(Object.freeze({}));
+  await opening;
+
+  assert.deepEqual(await labelsAt(session, 2), ['class', 'cloud']);
+});
+
+test('a newer accepted change supersedes an older renderer completion', async () => {
+  const first = deferred();
+  let renderCalls = 0;
+  const session = setup(Object.freeze({
+    render() {
+      renderCalls += 1;
+      return renderCalls === 1 ? first.promise : Promise.resolve(Object.freeze({}));
+    },
+  }));
+  await initialize(session);
+
+  const opening = session.notify('textDocument/didOpen', openParams());
+  await session.notify('textDocument/didChange', changeParams('par'));
+  first.resolve(Object.freeze({}));
+  await opening;
+
+  assert.deepEqual(await labelsAt(session, 3), ['participant']);
+});
+
+test('a close completed during validation prevents completion-source resurrection', async () => {
+  const pending = deferred();
+  const session = setup(Object.freeze({ render: () => pending.promise }));
+  await initialize(session);
+
+  const opening = session.notify('textDocument/didOpen', openParams());
+  await session.notify('textDocument/didClose', { textDocument: { uri } });
+  pending.resolve(Object.freeze({}));
+  await opening;
+
+  await assert.rejects(
+    session.request('textDocument/completion', completionParams(0, 2)),
+    (error) => assertError(error, 'document_not_open'),
+  );
 });
