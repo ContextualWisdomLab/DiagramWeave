@@ -15,6 +15,7 @@ The project follows Semantic Versioning after the first release.
 
 ### Added
 
+- Conservative LSP 3.18 `textDocument/documentSymbol` outlines for explicit PlantUML declarations, with UTF-16 ranges, quoted and aliased labels, comment masking, bounded symbol counts and names, immutable records, exact open-document snapshots, and stale concurrent mutation suppression across Studio, IDE, stdio, naruon, and CWL hosts.
 - A bounded JSON-RPC 2.0 stdio transport and `dweave-lsp` executable for the transport-neutral Language Server, with strict UTF-8 Content-Length framing, fixed source-free protocol errors, serialized request/notification processing, graceful shutdown/exit semantics, and independently reusable Studio, IDE, naruon, and CWL host adapters.
 - A transport-neutral LSP 3.18 PlantUML diagnostic session with bounded full-document synchronization, local file-URI validation, exact version/generation stale-result suppression, deeply frozen source-free diagnostics, and embeddable Studio, IDE, naruon, and CWL host APIs.
 - Safe structured PlantUML diagnostics that parse bounded `-stdrpt:1` output at the renderer boundary, map one-based PlantUML lines to zero-based LSP-compatible ranges, deeply freeze every record, and propagate only fixed-message diagnostics through renderer errors and `dweave` JSON/human reports without exposing raw stderr, raw labels, source excerpts, executable paths, or credentials.
