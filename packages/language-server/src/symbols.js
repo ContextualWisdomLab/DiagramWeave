@@ -4,6 +4,7 @@ import { LanguageServerError } from './errors.js';
 import { languageServerLimits } from './limits.js';
 
 const declarationPattern = /^(\s*)(?:(abstract)\s+)?(package|namespace|class|interface|enum|annotation|entity|object|participant|actor|boundary|control|database|collections|queue|component|node|cloud|frame|folder|artifact|file|stack|storage|card|agent|rectangle|usecase|state)\b(.*)$/diu;
+const hierarchicalScopeKinds = new Set(['namespace', 'package']);
 const standaloneClosingBracePattern = /^(\s*)[}]\s*$/u;
 const symbolKinds = Object.freeze({
   package: 4,
@@ -304,7 +305,7 @@ function sourceRange(startLine, startCharacter, endLine, endCharacter) {
 }
 
 /**
- * Assign declarations to the innermost complete matched scope.
+ * Assign declarations to the innermost complete package or namespace scope.
  *
  * Matched brace intervals are properly nested because the structural brace
  * stack closes only its top entry. Unmatched declarations never enter the
@@ -384,12 +385,12 @@ function freezeSymbolTree(records, rootIndices) {
  *
  * The conservative scanner recognizes documented explicit declaration keywords
  * across common class, sequence, component, use-case, state, and deployment
- * diagrams. Complete declaration scopes become hierarchy only when one
- * unquoted opening brace is closed in stack order by a standalone brace with
- * identical indentation. Ambiguous, unmatched, cross-indented, quoted,
- * delimited-label, and commented braces fail by omission. Line and selection
- * positions are JavaScript UTF-16 indices, matching the advertised LSP position
- * encoding.
+ * diagrams. Complete package and namespace scopes become hierarchy only when
+ * one unquoted opening brace is closed in stack order by a standalone brace
+ * with identical indentation. Other declaration bodies and ambiguous,
+ * unmatched, cross-indented, quoted, delimited-label, and commented braces fail
+ * by omission. Line and selection positions are JavaScript UTF-16 indices,
+ * matching the advertised LSP position encoding.
  *
  * @param {unknown} source - Complete PlantUML source snapshot.
  * @returns {readonly Readonly<object>[]} Deeply frozen source-order root symbols.
@@ -456,7 +457,10 @@ export function documentSymbolsForSource(source) {
       ? code
       : `${code.slice(0, match.indices[4][0])}${maskDelimitedLabels(match[4])}`;
     const braces = structuralBraces(structuralCode);
-    const scopeRecordIndex = recordIndex >= 0 && braces.length === 1 && braces[0] === '{'
+    const scopeRecordIndex = recordIndex >= 0 &&
+      hierarchicalScopeKinds.has(records[recordIndex].detail) &&
+      braces.length === 1 &&
+      braces[0] === '{'
       ? recordIndex
       : -1;
     const closingMatch = braces.length === 1 && braces[0] === '}'
