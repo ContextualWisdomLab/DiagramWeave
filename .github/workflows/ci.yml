@@ -35,3 +35,5 @@ jobs:
         run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Verify repository
         run: npm run verify
+      - name: Verify package contents
+        run: node scripts/check-package-contents.mjs
