@@ -91,6 +91,7 @@ test('normalizes document versions, text, and language identifiers', () => {
 
 test('publishes immutable public limits tied to the renderer default', () => {
   assert.deepEqual(languageServerLimits, {
+    maxCompletionItems: 64,
     maxDocumentBytes: 1048576,
     maxDocumentSymbols: 1024,
     maxOpenDocuments: 256,
