@@ -125,6 +125,39 @@ test('uses only complete indentation-matched unquoted declaration scopes', () =>
   assert.deepEqual(roots[11].range.end, { line: 18, character: 15 });
 });
 
+test('ignores structural-looking braces inside supported delimited labels', () => {
+  const source = [
+    'usecase (Displayed { Brace) as UseCase',
+    '  class NotUseCaseChild',
+    '}',
+    'component [Displayed { Brace] as Component',
+    '  class NotComponentChild',
+    '}',
+    'actor :Displayed { Brace: as Actor',
+    '  class NotActorChild',
+    '}',
+    'package Real {',
+    '  class RealChild',
+    '}',
+  ].join('\n');
+
+  const roots = documentSymbolsForSource(source);
+  assert.deepEqual(roots.map(({ name }) => name), [
+    'Displayed { Brace',
+    'NotUseCaseChild',
+    'Displayed { Brace',
+    'NotComponentChild',
+    'Displayed { Brace',
+    'NotActorChild',
+    'Real',
+  ]);
+  for (const index of [0, 1, 2, 3, 4, 5]) {
+    assert.equal(roots[index].children, undefined);
+    assert.equal(roots[index].range.start.line, roots[index].range.end.line);
+  }
+  assert.deepEqual(roots[6].children.map(({ name }) => name), ['RealChild']);
+});
+
 test('constructs a deep bounded hierarchy without recursive product traversal', () => {
   const depth = 512;
   const lines = [];
