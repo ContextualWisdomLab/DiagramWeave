@@ -155,7 +155,7 @@ DiagramWeave Studio는 **데스크톱·로컬 우선**으로 출시한다. 웹 S
 | FR-011 | Must | 자동완성, 진단, 문서 심볼과 개요를 제공한다. |
 | FR-012 | Should | 정의 이동, 참조 찾기, 안전한 이름 변경을 제공한다. |
 
-FR-011의 문서 심볼·개요 foundation 범위는 구현됐다. LSP 3.18 `textDocument/documentSymbol`은 명시적 PlantUML 선언을 선언 순서의 immutable UTF-16 range로 반환하며, Studio·IDE·`dweave-lsp`·naruon에서 동일한 세션을 재사용한다. implicit participant, 관계 endpoint, member, macro, include와 malformed 선언은 추측하지 않는다. 자동완성은 후속 범위다.
+FR-011의 문서 심볼·개요와 선언 키워드 자동완성 foundation 범위는 구현됐다. LSP 3.18 `textDocument/documentSymbol`은 명시적 PlantUML 선언을 선언 순서의 immutable UTF-16 range로 반환하며, capability-gated `textDocument/completion`은 안전한 줄 선두 접두사에 결정론적 UTF-16 `textEdit`를 제공한다. Studio·IDE·`dweave-lsp`·naruon에서 동일한 세션을 재사용하며 implicit participant, 관계 endpoint, member, macro, include, malformed 선언과 모호한 자동완성 문맥은 추측하지 않는다.
 
 ### 렌더와 진단
 
@@ -195,7 +195,7 @@ FR-023의 foundation 범위는 구현됐다. PlantUML `-stdrpt:1`의 one-based l
 
 FR-070과 FR-071의 foundation 범위는 구현됐다. CLI는 safe relative path, 상태, 오류 코드, revision hash와 구조화 진단만 보고하며 source, raw renderer diagnostic, raw label, Java/JAR 경로와 environment 값은 보고하지 않는다.
 
-FR-072의 진단·문서 심볼·stdio foundation 범위도 구현됐다. bounded JSON-RPC transport와 transport-neutral session이 같은 UTF-16 진단 및 document-symbol 계약을 제공한다. completion, hover, definition, references, rename과 workspace indexing은 아직 구현되지 않았다.
+FR-072의 진단·문서 심볼·선언 키워드 자동완성·stdio foundation 범위도 구현됐다. bounded JSON-RPC transport와 transport-neutral session이 같은 UTF-16 진단, document-symbol 및 capability-gated completion 계약을 제공한다. completion resolve, semantic member completion, hover, definition, references, rename과 workspace indexing은 아직 구현되지 않았다.
 
 ### 접근성
 
