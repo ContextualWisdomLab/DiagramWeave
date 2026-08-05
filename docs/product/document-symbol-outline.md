@@ -38,6 +38,12 @@ The deferred features require a larger syntax and workspace model. They must not
 be approximated by expanding regular expressions until the product has a
 versioned parser contract and realistic compatibility corpus.
 
+This slice is deliberately nonvisual, so it does not create a Figma artifact.
+The first Studio outline implementation must use Figma and Product Design to
+specify keyboard navigation, selection and reveal, empty and loading states,
+long-name truncation, high-contrast focus, narrow layouts, and screen-reader
+relationships before UI code is accepted.
+
 ## Success evidence
 
 The merge gate requires realistic mixed-diagram fixtures, multilingual and emoji
