@@ -12,21 +12,10 @@ import { documentSymbolsForSource } from './symbols.js';
 /**
  * Create an immutable initialize result that advertises document symbols.
  *
- * @param {unknown} result - Initialize result from the diagnostic session.
+ * @param {Readonly<object>} result - Initialize result from the diagnostic session.
  * @returns {Readonly<object>} Deeply frozen initialize result.
  */
 function advertiseDocumentSymbols(result) {
-  if (
-    result === null ||
-    typeof result !== 'object' ||
-    result.capabilities === null ||
-    typeof result.capabilities !== 'object'
-  ) {
-    throw new LanguageServerError(
-      'internal_language_server_error',
-      'The Language Server returned an invalid initialize result.',
-    );
-  }
   return Object.freeze({
     ...result,
     capabilities: Object.freeze({
@@ -181,7 +170,7 @@ export function createDocumentSymbolLanguageServerSession(options) {
   let mutationSequence = 0;
 
   /**
-   * Require an initialized, ready, and active session for document-symbol work.
+   * Require an initialized, ready, and active session for document work.
    *
    * @param {string} method - LSP method.
    * @returns {void}
@@ -233,6 +222,19 @@ export function createDocumentSymbolLanguageServerSession(options) {
   function isCurrentMutation(uri, identity) {
     return !shutdownRequested && !exited && epoch === identity.epoch &&
       latestMutation.get(uri) === identity;
+  }
+
+  /**
+   * Remove a rejected mutation without deleting a newer mutation identity.
+   *
+   * @param {string} uri - Validated document URI.
+   * @param {Readonly<{epoch: number, sequence: number}>} identity - Rejected mutation identity.
+   * @returns {void}
+   */
+  function forgetRejectedMutation(uri, identity) {
+    if (latestMutation.get(uri) === identity) {
+      latestMutation.delete(uri);
+    }
   }
 
   /**
@@ -288,10 +290,16 @@ export function createDocumentSymbolLanguageServerSession(options) {
      */
     async notify(method, params = null) {
       if (method === 'textDocument/didOpen') {
+        requireReady(method);
         const normalized = normalizeOpenParams(params);
         const uri = normalized.textDocument.uri;
         const identity = beginMutation(uri);
-        await diagnosticSession.notify(method, normalized);
+        try {
+          await diagnosticSession.notify(method, normalized);
+        } catch (error) {
+          forgetRejectedMutation(uri, identity);
+          throw error;
+        }
         if (isCurrentMutation(uri, identity)) {
           documents.set(uri, Object.freeze({
             version: normalized.textDocument.version,
@@ -301,10 +309,16 @@ export function createDocumentSymbolLanguageServerSession(options) {
         return;
       }
       if (method === 'textDocument/didChange') {
+        requireReady(method);
         const normalized = normalizeChangeParams(params);
         const uri = normalized.textDocument.uri;
         const identity = beginMutation(uri);
-        await diagnosticSession.notify(method, normalized);
+        try {
+          await diagnosticSession.notify(method, normalized);
+        } catch (error) {
+          forgetRejectedMutation(uri, identity);
+          throw error;
+        }
         if (isCurrentMutation(uri, identity)) {
           documents.set(uri, Object.freeze({
             version: normalized.textDocument.version,
@@ -314,10 +328,16 @@ export function createDocumentSymbolLanguageServerSession(options) {
         return;
       }
       if (method === 'textDocument/didClose') {
+        requireReady(method);
         const normalized = normalizeTextDocumentParams(params, method);
         const uri = normalized.textDocument.uri;
         const identity = beginMutation(uri);
-        await diagnosticSession.notify(method, normalized);
+        try {
+          await diagnosticSession.notify(method, normalized);
+        } catch (error) {
+          forgetRejectedMutation(uri, identity);
+          throw error;
+        }
         if (isCurrentMutation(uri, identity)) {
           documents.delete(uri);
         }
