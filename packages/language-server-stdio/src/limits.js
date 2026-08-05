@@ -4,7 +4,7 @@
 export const languageServerStdioLimits = Object.freeze({
   maxHeaderBytes: 8192,
   maxMessageBytes: 2097152,
-  maxBufferedBytes: 2105344,
+  maxBufferedBytes: 2105347,
   maxChunkBytes: 4194304,
   maxPendingMessages: 256,
   maxMethodBytes: 256,
