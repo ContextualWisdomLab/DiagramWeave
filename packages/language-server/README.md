@@ -1,22 +1,23 @@
 # `@contextualwisdomlab/diagramweave-language-server`
 
 A transport-neutral Language Server Protocol 3.18 session for PlantUML
-diagnostics. It is independently reusable by DiagramWeave Studio, IDE
-adapters, naruon, and other CWL hosts without importing a desktop shell or
-JSON-RPC transport.
+diagnostics and document outlines. It is independently reusable by
+DiagramWeave Studio, IDE adapters, naruon, and other CWL hosts without importing
+a desktop shell or JSON-RPC transport.
 
 ## Foundation scope
 
-The package implements protocol-level lifecycle and full-document diagnostic
-synchronization:
+The package implements protocol-level lifecycle, full-document diagnostic
+synchronization, and conservative explicit-declaration symbols:
 
 - `initialize`, `initialized`, `shutdown`, and `exit`;
 - `textDocument/didOpen`, `textDocument/didChange`, and
   `textDocument/didClose`;
 - `textDocument/publishDiagnostics` and source-free `window/logMessage`;
+- `textDocument/documentSymbol` with `documentSymbolProvider: true`;
 - UTF-16 positions and LSP full-document synchronization;
 - exact document-version and generation binding so stale renderer completions
-  cannot overwrite newer diagnostics;
+  cannot overwrite newer diagnostics or outline source;
 - bounded local `file:` URI identifiers for `.puml` and `.plantuml` documents;
 - the existing stdin-only PlantUML `SANDBOX` renderer and shared structured
   diagnostic sanitizer;
@@ -24,9 +25,11 @@ synchronization:
   location.
 
 The package does **not** parse Content-Length headers, read stdin, open sockets,
-or dereference document URIs. A future transport package will own JSON-RPC
-framing. The LSP client supplies complete source snapshots, and the host owns
-all file access and process lifecycle.
+or dereference document URIs. The separate
+`@contextualwisdomlab/diagramweave-language-server-stdio` package owns bounded
+JSON-RPC framing and the `dweave-lsp` executable. The LSP client supplies
+complete source snapshots, and the host owns all file access and process
+lifecycle.
 
 ## Public API
 
@@ -53,13 +56,33 @@ await session.notify('textDocument/didOpen', {
     uri: 'file:///workspace/context.puml',
     languageId: 'plantuml',
     version: 1,
-    text: '@startuml\nAlice -> Bob\n@enduml\n',
+    text: '@startuml\npackage Context {\n  component API\n}\n@enduml\n',
   },
+});
+
+const symbols = await session.request('textDocument/documentSymbol', {
+  textDocument: { uri: 'file:///workspace/context.puml' },
 });
 ```
 
 `rendererFactory` is an optional deterministic test seam. Production hosts
 should omit it and use the shared DiagramWeave renderer.
+
+## Document-symbol contract
+
+The first outline slice returns a flat declaration-order `DocumentSymbol[]` for
+explicit declarations in common class, sequence, component, deployment,
+use-case, and state diagrams. Supported declarations include package,
+namespace, class, abstract class, interface, enum, annotation, entity, object,
+participant, actor, boundary, control, database, collections, queue, component,
+node, cloud, frame, folder, artifact, file, stack, storage, card, agent,
+rectangle, usecase, and state.
+
+The scanner recognizes quoted, parenthesized, bracketed, colon-delimited, bare,
+and `as`-aliased display labels. It masks PlantUML line and block comments while
+preserving UTF-16 code-unit offsets. It intentionally ignores implicit
+participants, relationships, members, directives, macros, malformed labels,
+and inferred nesting rather than inventing semantic structure.
 
 ## Safety and limits
 
@@ -70,16 +93,20 @@ should omit it and use the shared DiagramWeave renderer.
 - A session accepts at most 256 open documents.
 - Each complete source snapshot is limited to 1 MiB, matching the renderer's
   default source ceiling.
+- One document may expose at most 1,024 symbols; each symbol name is limited to
+  1,024 UTF-8 bytes.
 - Only monotonically increasing nonnegative safe-integer versions are accepted.
 - Incremental range edits are rejected; this foundation uses full-document
   synchronization.
-- Public diagnostics are deeply frozen and contain no source excerpt, raw
-  stderr, raw PlantUML label, Java/JAR path, host error, or credential.
-- Hostile getters, proxies, arrays, and renderer contracts fail closed with
-  stable `LanguageServerError` codes.
+- Public diagnostics and symbols are deeply frozen and contain no source
+  excerpt, raw stderr, raw PlantUML label, Java/JAR path, host error, or
+  credential.
+- Hostile getters, proxies, arrays, renderer contracts, rejected mutations, and
+  stale concurrent completions fail closed with stable `LanguageServerError`
+  codes.
 
 ## Release status
 
-Version `0.0.0` is an unreleased foundation. Completion, symbols, definition,
-references, rename, JSON-RPC framing, stdio transport, cancellation, and
-workspace indexing remain later bounded slices.
+Version `0.0.0` is an unreleased foundation. Completion, hover, definition,
+references, rename, hierarchical symbols, workspace indexing, cancellation,
+and Studio integration remain later bounded slices.

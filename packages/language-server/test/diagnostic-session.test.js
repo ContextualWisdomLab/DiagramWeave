@@ -3,11 +3,9 @@ import test from 'node:test';
 
 import { PlantUmlRendererError } from '@contextualwisdomlab/diagramweave-plantuml-renderer';
 
-import {
-  LanguageServerError,
-  createLanguageServerSession,
-  languageServerLimits,
-} from '../src/index.js';
+import { LanguageServerError } from '../src/errors.js';
+import { languageServerLimits } from '../src/limits.js';
+import { createLanguageServerSession } from '../src/session.js';
 
 const javaPath = process.platform === 'win32' ? 'C:\\Java\\java.exe' : '/opt/java/bin/java';
 const jarPath = process.platform === 'win32' ? 'C:\\PlantUML\\plantuml.jar' : '/opt/plantuml/plantuml.jar';
@@ -94,7 +92,7 @@ async function initialize(session) {
   return result;
 }
 
-test('validates session options and renderer construction fail closed', () => {
+test('diagnostic session options and renderer construction fail closed', () => {
   const cases = [
     null,
     {},
@@ -147,7 +145,7 @@ test('validates session options and renderer construction fail closed', () => {
   }
 });
 
-test('returns immutable LSP 3.18 full-sync capabilities and enforces lifecycle requests', async () => {
+test('diagnostic session returns immutable full-sync capabilities and enforces lifecycle requests', async () => {
   const { session } = setup();
   await assert.rejects(session.request('shutdown'), (error) => assertError(error, 'server_not_initialized'));
   const result = await session.request('initialize', {});
@@ -155,7 +153,6 @@ test('returns immutable LSP 3.18 full-sync capabilities and enforces lifecycle r
     capabilities: {
       positionEncoding: 'utf-16',
       textDocumentSync: { openClose: true, change: 1, save: false },
-      documentSymbolProvider: true,
     },
     serverInfo: { name: 'DiagramWeave Language Server', version: '0.0.0' },
   });
@@ -168,7 +165,7 @@ test('returns immutable LSP 3.18 full-sync capabilities and enforces lifecycle r
   await assert.rejects(session.request('shutdown'), (error) => assertError(error, 'server_shutting_down'));
 });
 
-test('requires the initialized notification before document synchronization', async () => {
+test('diagnostic session requires initialized before document synchronization', async () => {
   const { session } = setup();
   await session.request('initialize', {});
   await assert.rejects(
@@ -179,7 +176,7 @@ test('requires the initialized notification before document synchronization', as
   await session.notify('textDocument/didOpen', openParams());
 });
 
-test('rejects invalid initialize and initialized protocol shapes', async () => {
+test('diagnostic session rejects invalid initialize and initialized shapes', async () => {
   const { session } = setup();
   await assert.rejects(session.notify('initialized', {}), (error) => assertError(error, 'server_not_initialized'));
   await assert.rejects(session.request('initialize', 'bad'), (error) => assertError(error, 'invalid_request'));
@@ -191,7 +188,7 @@ test('rejects invalid initialize and initialized protocol shapes', async () => {
   await assert.rejects(second.notify('initialized', {}), (error) => assertError(error, 'invalid_request'));
 });
 
-test('opens, validates, changes, and closes one document with exact notifications', async () => {
+test('diagnostic session opens validates changes and closes one document', async () => {
   const state = setup();
   await initialize(state.session);
   await state.session.notify('textDocument/didOpen', openParams());
@@ -215,7 +212,7 @@ test('opens, validates, changes, and closes one document with exact notification
   assert.equal(Object.isFrozen(state.notifications[0].params), true);
 });
 
-test('publishes source-free syntax and operational diagnostics', async () => {
+test('diagnostic session publishes source-free syntax and operational diagnostics', async () => {
   const syntaxState = setup({
     renderer: Object.freeze({
       async render() {
@@ -249,7 +246,7 @@ test('publishes source-free syntax and operational diagnostics', async () => {
   }
 });
 
-test('rejects malformed open, duplicate open, unsupported records, and document limit overflow', async () => {
+test('diagnostic session rejects malformed open duplicate open and document overflow', async () => {
   const state = setup();
   await initialize(state.session);
   for (const params of [null, {}, { textDocument: null }]) {
@@ -290,7 +287,7 @@ test('rejects malformed open, duplicate open, unsupported records, and document 
   );
 });
 
-test('collapses hostile top-level document and change collection getters', async () => {
+test('diagnostic session collapses hostile top-level document and change getters', async () => {
   const state = setup();
   await initialize(state.session);
   const hostileOpen = Object.defineProperty({}, 'textDocument', {
@@ -331,7 +328,7 @@ test('collapses hostile top-level document and change collection getters', async
   );
 });
 
-test('enforces full-sync change contracts and monotonically increasing versions', async () => {
+test('diagnostic session enforces full-sync changes and increasing versions', async () => {
   const state = setup();
   await initialize(state.session);
   await state.session.notify('textDocument/didOpen', openParams());
@@ -374,7 +371,7 @@ test('enforces full-sync change contracts and monotonically increasing versions'
   );
 });
 
-test('rejects malformed close and clears only open documents', async () => {
+test('diagnostic session rejects malformed close and missing documents', async () => {
   const state = setup();
   await initialize(state.session);
   for (const params of [null, {}, { textDocument: null }]) {
@@ -400,7 +397,7 @@ test('rejects malformed close and clears only open documents', async () => {
   );
 });
 
-test('discards a stale validation after a newer version finishes first', async () => {
+test('diagnostic session discards stale validation after newer version', async () => {
   const first = deferred();
   const second = deferred();
   let calls = 0;
@@ -422,7 +419,7 @@ test('discards a stale validation after a newer version finishes first', async (
   assert.deepEqual(state.notifications.map(({ params }) => params.version), [2]);
 });
 
-test('discards validations after close, shutdown, and dispose', async () => {
+test('diagnostic session discards validations after close shutdown and dispose', async () => {
   for (const action of ['close', 'shutdown', 'dispose']) {
     const pending = deferred();
     const state = setup({
@@ -451,7 +448,7 @@ test('discards validations after close, shutdown, and dispose', async () => {
   }
 });
 
-test('supports exit, ignores unknown notifications, and rejects later document work', async () => {
+test('diagnostic session supports exit ignores unknown notifications and rejects later work', async () => {
   const state = setup();
   await initialize(state.session);
   await state.session.notify('workspace/unknown', { anything: true });
@@ -463,7 +460,7 @@ test('supports exit, ignores unknown notifications, and rejects later document w
   await state.session.notify('workspace/unknown', null);
 });
 
-test('normalizes notification sink failures without leaking host errors', async () => {
+test('diagnostic session normalizes notification sink failures', async () => {
   const session = createLanguageServerSession({
     javaPath,
     jarPath,
@@ -483,7 +480,7 @@ test('normalizes notification sink failures without leaking host errors', async 
   );
 });
 
-test('rejects unsafe method values and active work before initialization or after shutdown', async () => {
+test('diagnostic session rejects unsafe methods and work outside lifecycle', async () => {
   const { session } = setup();
   for (const method of [null, '', 'bad\u0000method']) {
     await assert.rejects(session.request(method), LanguageServerError);
@@ -501,7 +498,7 @@ test('rejects unsafe method values and active work before initialization or afte
   );
 });
 
-test('preserves expected validation errors and collapses hostile getters at protocol boundaries', async () => {
+test('diagnostic session preserves expected validation errors and hostile boundaries', async () => {
   const optionTarget = {
     rendererFactory: () => Object.freeze({ async render() { return Object.freeze({}); } }),
     publishNotification() {},
