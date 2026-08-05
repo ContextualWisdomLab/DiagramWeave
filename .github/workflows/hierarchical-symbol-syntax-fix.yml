@@ -1,0 +1,73 @@
+name: Hierarchical Symbol Syntax Fix
+
+on:
+  push:
+    branches:
+      - agent/hierarchical-document-symbols
+    paths:
+      - .github/workflows/hierarchical-symbol-syntax-fix.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: diagramweave-hierarchical-symbol-syntax-fix
+  cancel-in-progress: true
+
+jobs:
+  patch-verify-and-clean:
+    permissions:
+      contents: write
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out exact feature branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: agent/hierarchical-document-symbols
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Escape the standalone closing brace pattern
+        shell: python
+        run: |
+          from pathlib import Path
+
+          path = Path("packages/language-server/src/symbols.js")
+          text = path.read_text(encoding="utf-8")
+          old = "const standaloneClosingBracePattern = /^(\\s*)}\\s*$/u;"
+          new = "const standaloneClosingBracePattern = /^(\\s*)[}]\\s*$/u;"
+          count = text.count(old)
+          if count != 1:
+              raise SystemExit(f"expected one closing-brace pattern, found {count}")
+          path.write_text(text.replace(old, new), encoding="utf-8")
+
+      - name: Set up Node.js 24
+        uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238
+        with:
+          node-version: 24
+          package-manager-cache: false
+
+      - name: Install locked workspace
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Verify hierarchy tests
+        run: node --test packages/language-server/test/hierarchical-symbols.test.js packages/language-server/test/symbols.test.js
+
+      - name: Verify complete repository
+        run: npm run verify
+
+      - name: Verify package contents
+        run: node scripts/check-package-contents.mjs
+
+      - name: Remove one-shot workflow and push verified tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm .github/workflows/hierarchical-symbol-syntax-fix.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add packages/language-server/src/symbols.js .github/workflows/hierarchical-symbol-syntax-fix.yml
+          git diff --cached --check
+          git commit -m "fix(language-server): escape closing-brace matcher"
+          git push origin HEAD:agent/hierarchical-document-symbols
