@@ -54,8 +54,20 @@ test('serves document symbols through the real bounded stdio transport', async (
   ]));
 
   const messages = output.map(decodeFrame);
-  assert.equal(messages[0].result.capabilities.documentSymbolProvider, true);
-  assert.deepEqual(messages[1], {
+  const initializeResponse = messages.find(({ id }) => id === 1);
+  const symbolResponse = messages.find(({ id }) => id === 2);
+  const shutdownResponse = messages.find(({ id }) => id === 3);
+  const diagnosticsNotification = messages.find(
+    ({ method }) => method === 'textDocument/publishDiagnostics',
+  );
+
+  assert.equal(initializeResponse.result.capabilities.documentSymbolProvider, true);
+  assert.deepEqual(diagnosticsNotification, {
+    jsonrpc: '2.0',
+    method: 'textDocument/publishDiagnostics',
+    params: { uri, version: 1, diagnostics: [] },
+  });
+  assert.deepEqual(symbolResponse, {
     jsonrpc: '2.0',
     id: 2,
     result: [
@@ -87,5 +99,5 @@ test('serves document symbols through the real bounded stdio transport', async (
       },
     ],
   });
-  assert.deepEqual(messages[2], { jsonrpc: '2.0', id: 3, result: null });
+  assert.deepEqual(shutdownResponse, { jsonrpc: '2.0', id: 3, result: null });
 });
