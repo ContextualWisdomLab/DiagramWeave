@@ -1,0 +1,223 @@
+name: Declaration Completion Bootstrap
+
+on:
+  push:
+    branches:
+      - agent/declaration-completion-foundation
+    paths:
+      - .github/workflows/declaration-completion-bootstrap.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: diagramweave-declaration-completion-bootstrap
+  cancel-in-progress: true
+
+jobs:
+  integrate-verify-and-clean:
+    permissions:
+      contents: write
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out exact branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: agent/declaration-completion-foundation
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Set up Node.js 24
+        uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238
+        with:
+          node-version: 24
+          package-manager-cache: false
+
+      - name: Integrate completion into the public session and stdio error map
+        shell: python
+        run: |
+          from pathlib import Path
+
+          def replace_once(path: str, old: str, new: str) -> None:
+              target = Path(path)
+              text = target.read_text(encoding="utf-8")
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"{path}: expected one replacement target, found {count}")
+              target.write_text(text.replace(old, new), encoding="utf-8")
+
+          replace_once(
+              "packages/language-server/src/symbol-session.js",
+              "import { LanguageServerError } from './errors.js';\n",
+              "import { completionItemsForSource } from './completions.js';\n"
+              "import { LanguageServerError } from './errors.js';\n",
+          )
+          replace_once(
+              "packages/language-server/src/symbol-session.js",
+              """      documentSymbolProvider: true,
+              """,
+              """      documentSymbolProvider: true,
+                    completionProvider: Object.freeze({ resolveProvider: false }),
+              """,
+          )
+          marker = """/**
+           * Create a transport-neutral DiagramWeave Language Server with document symbols.
+          """
+          completion_normalizer = """/**
+           * Normalize one completion request into owned text-document and position records.
+           *
+           * @param {unknown} params - Candidate completion request parameters.
+           * @returns {Readonly<object>} Frozen trusted completion parameters.
+           */
+          function normalizeCompletionParams(params) {
+            let textDocument;
+            let completionPosition;
+            try {
+              if (!isPlainRecord(params) || !isPlainRecord(params.textDocument)) {
+                throw new Error('invalid parameters');
+              }
+              textDocument = params.textDocument;
+              completionPosition = params.position;
+            } catch {
+              throw new LanguageServerError('invalid_request', 'Completion parameters are invalid.', {
+                method: 'textDocument/completion',
+              });
+            }
+            let line;
+            let character;
+            try {
+              if (!isPlainRecord(completionPosition)) {
+                throw new Error('invalid position');
+              }
+              line = completionPosition.line;
+              character = completionPosition.character;
+            } catch {
+              throw new LanguageServerError(
+                'document_position_invalid',
+                'The document position is invalid.',
+                { field: 'position', method: 'textDocument/completion' },
+              );
+            }
+            return Object.freeze({
+              textDocument: Object.freeze({
+                uri: normalizeDocumentUri(textDocument.uri),
+              }),
+              position: Object.freeze({ line, character }),
+            });
+          }
+
+          /**
+           * Create a transport-neutral DiagramWeave Language Server with document symbols.
+          """
+          replace_once(
+              "packages/language-server/src/symbol-session.js",
+              marker,
+              completion_normalizer,
+          )
+          replace_once(
+              "packages/language-server/src/symbol-session.js",
+              """    async request(method, params = null) {
+                if (method === 'textDocument/documentSymbol') {
+              """,
+              """    async request(method, params = null) {
+                if (method === 'textDocument/completion') {
+                  requireReady(method);
+                  const normalized = normalizeCompletionParams(params);
+                  const record = documents.get(normalized.textDocument.uri);
+                  if (record === undefined) {
+                    throw new LanguageServerError('document_not_open', 'The document is not open.', {
+                      method,
+                    });
+                  }
+                  return completionItemsForSource(record.text, normalized.position);
+                }
+                if (method === 'textDocument/documentSymbol') {
+              """,
+          )
+          replace_once(
+              "packages/language-server/test/contracts.test.js",
+              """  assert.deepEqual(languageServerLimits, {
+                maxDocumentBytes: 1048576,
+              """,
+              """  assert.deepEqual(languageServerLimits, {
+                maxCompletionItems: 64,
+                maxDocumentBytes: 1048576,
+              """,
+          )
+          replace_once(
+              "packages/language-server/test/session.test.js",
+              "      documentSymbolProvider: true,\n",
+              "      documentSymbolProvider: true,\n"
+              "      completionProvider: { resolveProvider: false },\n",
+          )
+          replace_once(
+              "packages/language-server-stdio/src/json-rpc.js",
+              "    'document_version_out_of_order',\n",
+              "    'document_version_out_of_order',\n"
+              "    'document_position_invalid',\n",
+          )
+
+      - name: Install locked workspace
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Verify complete repository
+        run: npm run verify
+
+      - name: Verify package contents
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm pack --workspace packages/language-server --dry-run --json > /tmp/language-server-pack.json
+          npm pack --workspace packages/language-server-stdio --dry-run --json > /tmp/language-server-stdio-pack.json
+          node <<'NODE'
+          const fs = require('node:fs');
+          const checks = [
+            ['/tmp/language-server-pack.json', new Set([
+              'package/LICENSE',
+              'package/README.md',
+              'package/package.json',
+              'package/src/completions.js',
+              'package/src/contracts.js',
+              'package/src/diagnostics.js',
+              'package/src/errors.js',
+              'package/src/index.js',
+              'package/src/limits.js',
+              'package/src/session.js',
+              'package/src/symbol-session.js',
+              'package/src/symbols.js',
+            ])],
+            ['/tmp/language-server-stdio-pack.json', new Set([
+              'package/LICENSE',
+              'package/README.md',
+              'package/package.json',
+              'package/bin/dweave-lsp.js',
+              'package/src/connection.js',
+              'package/src/errors.js',
+              'package/src/framing.js',
+              'package/src/index.js',
+              'package/src/json-rpc.js',
+              'package/src/limits.js',
+              'package/src/process.js',
+            ])],
+          ];
+          for (const [path, expected] of checks) {
+            const report = JSON.parse(fs.readFileSync(path, 'utf8'));
+            const actual = new Set(report[0].files.map(({ path: filePath }) => filePath));
+            if (actual.size !== expected.size || [...actual].some((path) => !expected.has(path))) {
+              throw new Error(`${path}: unexpected package contents: ${[...actual].sort().join(', ')}`);
+            }
+          }
+          NODE
+
+      - name: Remove one-shot workflow and push verified tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm .github/workflows/declaration-completion-bootstrap.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add packages/language-server/src/symbol-session.js packages/language-server/test/contracts.test.js packages/language-server/test/session.test.js packages/language-server-stdio/src/json-rpc.js .github/workflows/declaration-completion-bootstrap.yml
+          git diff --cached --check
+          git commit -m "feat(language-server): integrate declaration completions"
+          git push origin HEAD:agent/declaration-completion-foundation
