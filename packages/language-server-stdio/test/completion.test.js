@@ -29,7 +29,18 @@ test('serves declaration completion through the real stdio transport', async () 
   });
 
   await connection.acceptChunk(Buffer.concat([
-    encodeJsonRpcFrame({ jsonrpc: '2.0', id: 1, method: 'initialize', params: {} }),
+    encodeJsonRpcFrame({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'initialize',
+      params: {
+        capabilities: {
+          textDocument: {
+            completion: {},
+          },
+        },
+      },
+    }),
     encodeJsonRpcFrame({ jsonrpc: '2.0', method: 'initialized', params: {} }),
     encodeJsonRpcFrame({
       jsonrpc: '2.0',
