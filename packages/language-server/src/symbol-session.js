@@ -146,10 +146,10 @@ function normalizeTextDocumentParams(params, method) {
  *
  * The wrapper delegates lifecycle, validation, and diagnostics to the original
  * diagnostic session while owning only sanitized full-document snapshots used
- * by `textDocument/documentSymbol`. Each open/change/close invocation receives
- * a mutation sequence. A completion updates the outline snapshot only when it
- * is still the newest mutation in the same session epoch, so concurrent stale
- * notifications cannot resurrect closed or older source.
+ * by `textDocument/documentSymbol`. Concurrent mutations are tracked by epoch,
+ * start sequence, active set, and last applied sequence. A rejected newer
+ * mutation therefore cannot suppress an older valid completion, while an older
+ * completion can never overwrite a newer successfully applied snapshot.
  *
  * @param {unknown} options - Diagnostic-session renderer and notification options.
  * @returns {Readonly<{
@@ -161,7 +161,8 @@ function normalizeTextDocumentParams(params, method) {
 export function createDocumentSymbolLanguageServerSession(options) {
   const diagnosticSession = createDiagnosticSession(options);
   const documents = new Map();
-  const latestMutation = new Map();
+  const activeMutations = new Map();
+  const lastAppliedSequence = new Map();
   let initialized = false;
   let ready = false;
   let shutdownRequested = false;
@@ -200,7 +201,7 @@ export function createDocumentSymbolLanguageServerSession(options) {
   }
 
   /**
-   * Allocate the newest mutation identity for one document URI.
+   * Allocate and register one document mutation identity.
    *
    * @param {string} uri - Validated document URI.
    * @returns {Readonly<{epoch: number, sequence: number}>} Mutation identity.
@@ -208,33 +209,68 @@ export function createDocumentSymbolLanguageServerSession(options) {
   function beginMutation(uri) {
     mutationSequence += 1;
     const identity = Object.freeze({ epoch, sequence: mutationSequence });
-    latestMutation.set(uri, identity);
+    let active = activeMutations.get(uri);
+    if (active === undefined) {
+      active = new Set();
+      activeMutations.set(uri, active);
+    }
+    active.add(identity);
     return identity;
   }
 
   /**
-   * Return whether one mutation may still update the owned snapshot.
+   * Return whether one successful mutation is the newest applicable completion.
    *
    * @param {string} uri - Validated document URI.
    * @param {Readonly<{epoch: number, sequence: number}>} identity - Captured mutation identity.
-   * @returns {boolean} True only for the newest active mutation.
+   * @returns {boolean} True only for a newest active mutation not superseded by applied work.
    */
   function isCurrentMutation(uri, identity) {
-    return !shutdownRequested && !exited && epoch === identity.epoch &&
-      latestMutation.get(uri) === identity;
+    if (shutdownRequested || exited || epoch !== identity.epoch) {
+      return false;
+    }
+    const active = activeMutations.get(uri);
+    if (active === undefined || !active.has(identity)) {
+      return false;
+    }
+    if (identity.sequence <= (lastAppliedSequence.get(uri) ?? 0)) {
+      return false;
+    }
+    for (const candidate of active) {
+      if (candidate.sequence > identity.sequence) {
+        return false;
+      }
+    }
+    return true;
   }
 
   /**
-   * Remove a rejected mutation without deleting a newer mutation identity.
+   * Remove one settled mutation identity and its empty per-document set.
    *
    * @param {string} uri - Validated document URI.
-   * @param {Readonly<{epoch: number, sequence: number}>} identity - Rejected mutation identity.
+   * @param {Readonly<{epoch: number, sequence: number}>} identity - Settled identity.
    * @returns {void}
    */
-  function forgetRejectedMutation(uri, identity) {
-    if (latestMutation.get(uri) === identity) {
-      latestMutation.delete(uri);
+  function finishMutation(uri, identity) {
+    const active = activeMutations.get(uri);
+    if (active === undefined) {
+      return;
     }
+    active.delete(identity);
+    if (active.size === 0) {
+      activeMutations.delete(uri);
+    }
+  }
+
+  /**
+   * Record one successfully applied mutation sequence.
+   *
+   * @param {string} uri - Validated document URI.
+   * @param {Readonly<{epoch: number, sequence: number}>} identity - Applied identity.
+   * @returns {void}
+   */
+  function markApplied(uri, identity) {
+    lastAppliedSequence.set(uri, identity.sequence);
   }
 
   /**
@@ -245,7 +281,8 @@ export function createDocumentSymbolLanguageServerSession(options) {
   function invalidateDocuments() {
     epoch += 1;
     documents.clear();
-    latestMutation.clear();
+    activeMutations.clear();
+    lastAppliedSequence.clear();
   }
 
   const session = {
@@ -296,15 +333,15 @@ export function createDocumentSymbolLanguageServerSession(options) {
         const identity = beginMutation(uri);
         try {
           await diagnosticSession.notify(method, normalized);
-        } catch (error) {
-          forgetRejectedMutation(uri, identity);
-          throw error;
-        }
-        if (isCurrentMutation(uri, identity)) {
-          documents.set(uri, Object.freeze({
-            version: normalized.textDocument.version,
-            text: normalized.textDocument.text,
-          }));
+          if (isCurrentMutation(uri, identity)) {
+            documents.set(uri, Object.freeze({
+              version: normalized.textDocument.version,
+              text: normalized.textDocument.text,
+            }));
+            markApplied(uri, identity);
+          }
+        } finally {
+          finishMutation(uri, identity);
         }
         return;
       }
@@ -315,15 +352,15 @@ export function createDocumentSymbolLanguageServerSession(options) {
         const identity = beginMutation(uri);
         try {
           await diagnosticSession.notify(method, normalized);
-        } catch (error) {
-          forgetRejectedMutation(uri, identity);
-          throw error;
-        }
-        if (isCurrentMutation(uri, identity)) {
-          documents.set(uri, Object.freeze({
-            version: normalized.textDocument.version,
-            text: normalized.contentChanges[0].text,
-          }));
+          if (isCurrentMutation(uri, identity)) {
+            documents.set(uri, Object.freeze({
+              version: normalized.textDocument.version,
+              text: normalized.contentChanges[0].text,
+            }));
+            markApplied(uri, identity);
+          }
+        } finally {
+          finishMutation(uri, identity);
         }
         return;
       }
@@ -334,12 +371,12 @@ export function createDocumentSymbolLanguageServerSession(options) {
         const identity = beginMutation(uri);
         try {
           await diagnosticSession.notify(method, normalized);
-        } catch (error) {
-          forgetRejectedMutation(uri, identity);
-          throw error;
-        }
-        if (isCurrentMutation(uri, identity)) {
-          documents.delete(uri);
+          if (isCurrentMutation(uri, identity)) {
+            documents.delete(uri);
+            markApplied(uri, identity);
+          }
+        } finally {
+          finishMutation(uri, identity);
         }
         return;
       }
