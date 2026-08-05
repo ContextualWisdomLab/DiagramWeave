@@ -1,6 +1,6 @@
 # Legacy document-symbol fallback design
 
-**Status:** Approved for bounded implementation  
+**Status:** Implemented; exact-head verification pending  
 **Date:** 2026-08-05  
 **Scope:** `@contextualwisdomlab/diagramweave-language-server`
 
