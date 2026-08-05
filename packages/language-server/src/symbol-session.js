@@ -1,0 +1,348 @@
+import {
+  isPlainRecord,
+  normalizeDocumentText,
+  normalizeDocumentUri,
+  normalizeDocumentVersion,
+  normalizeLanguageId,
+} from './contracts.js';
+import { LanguageServerError } from './errors.js';
+import { createLanguageServerSession as createDiagnosticSession } from './session.js';
+import { documentSymbolsForSource } from './symbols.js';
+
+/**
+ * Create an immutable initialize result that advertises document symbols.
+ *
+ * @param {unknown} result - Initialize result from the diagnostic session.
+ * @returns {Readonly<object>} Deeply frozen initialize result.
+ */
+function advertiseDocumentSymbols(result) {
+  if (
+    result === null ||
+    typeof result !== 'object' ||
+    result.capabilities === null ||
+    typeof result.capabilities !== 'object'
+  ) {
+    throw new LanguageServerError(
+      'internal_language_server_error',
+      'The Language Server returned an invalid initialize result.',
+    );
+  }
+  return Object.freeze({
+    ...result,
+    capabilities: Object.freeze({
+      ...result.capabilities,
+      documentSymbolProvider: true,
+    }),
+  });
+}
+
+/**
+ * Normalize one didOpen notification into an owned full-document snapshot.
+ *
+ * @param {unknown} params - Candidate notification parameters.
+ * @returns {Readonly<object>} Frozen trusted notification parameters.
+ */
+function normalizeOpenParams(params) {
+  let textDocument;
+  try {
+    if (!isPlainRecord(params)) {
+      throw new Error('invalid parameters');
+    }
+    textDocument = params.textDocument;
+    if (!isPlainRecord(textDocument)) {
+      throw new Error('invalid text document');
+    }
+    return Object.freeze({
+      textDocument: Object.freeze({
+        uri: normalizeDocumentUri(textDocument.uri),
+        languageId: normalizeLanguageId(textDocument.languageId),
+        version: normalizeDocumentVersion(textDocument.version),
+        text: normalizeDocumentText(textDocument.text),
+      }),
+    });
+  } catch (error) {
+    if (error instanceof LanguageServerError) {
+      throw error;
+    }
+    throw new LanguageServerError('invalid_request', 'didOpen parameters are invalid.', {
+      method: 'textDocument/didOpen',
+    });
+  }
+}
+
+/**
+ * Normalize one full-document didChange notification into an owned snapshot.
+ *
+ * @param {unknown} params - Candidate notification parameters.
+ * @returns {Readonly<object>} Frozen trusted notification parameters.
+ */
+function normalizeChangeParams(params) {
+  let textDocument;
+  let contentChanges;
+  let contentChange;
+  try {
+    if (!isPlainRecord(params)) {
+      throw new Error('invalid parameters');
+    }
+    textDocument = params.textDocument;
+    contentChanges = params.contentChanges;
+    if (
+      !isPlainRecord(textDocument) ||
+      !Array.isArray(contentChanges) ||
+      contentChanges.length !== 1
+    ) {
+      throw new Error('invalid change collection');
+    }
+    contentChange = contentChanges[0];
+    if (!isPlainRecord(contentChange)) {
+      throw new Error('invalid change record');
+    }
+    const range = contentChange.range;
+    const rangeLength = contentChange.rangeLength;
+    if (range !== undefined || rangeLength !== undefined) {
+      throw new LanguageServerError(
+        'incremental_change_unsupported',
+        'The foundation accepts full-document changes only.',
+        { method: 'textDocument/didChange' },
+      );
+    }
+    return Object.freeze({
+      textDocument: Object.freeze({
+        uri: normalizeDocumentUri(textDocument.uri),
+        version: normalizeDocumentVersion(textDocument.version),
+      }),
+      contentChanges: Object.freeze([
+        Object.freeze({ text: normalizeDocumentText(contentChange.text) }),
+      ]),
+    });
+  } catch (error) {
+    if (error instanceof LanguageServerError) {
+      throw error;
+    }
+    throw new LanguageServerError('invalid_request', 'didChange parameters are invalid.', {
+      method: 'textDocument/didChange',
+    });
+  }
+}
+
+/**
+ * Normalize one didClose or document-symbol text-document identifier.
+ *
+ * @param {unknown} params - Candidate request or notification parameters.
+ * @param {string} method - LSP method used in safe error metadata.
+ * @returns {Readonly<object>} Frozen trusted parameters.
+ */
+function normalizeTextDocumentParams(params, method) {
+  try {
+    if (!isPlainRecord(params) || !isPlainRecord(params.textDocument)) {
+      throw new Error('invalid parameters');
+    }
+    return Object.freeze({
+      textDocument: Object.freeze({
+        uri: normalizeDocumentUri(params.textDocument.uri),
+      }),
+    });
+  } catch (error) {
+    if (error instanceof LanguageServerError) {
+      throw error;
+    }
+    throw new LanguageServerError('invalid_request', 'Text document parameters are invalid.', {
+      method,
+    });
+  }
+}
+
+/**
+ * Create a transport-neutral DiagramWeave Language Server with document symbols.
+ *
+ * The wrapper delegates lifecycle, validation, and diagnostics to the original
+ * diagnostic session while owning only sanitized full-document snapshots used
+ * by `textDocument/documentSymbol`. Each open/change/close invocation receives
+ * a mutation sequence. A completion updates the outline snapshot only when it
+ * is still the newest mutation in the same session epoch, so concurrent stale
+ * notifications cannot resurrect closed or older source.
+ *
+ * @param {unknown} options - Diagnostic-session renderer and notification options.
+ * @returns {Readonly<{
+ *   request(method: unknown, params?: unknown): Promise<unknown>,
+ *   notify(method: unknown, params?: unknown): Promise<void>,
+ *   dispose(): void,
+ * }>} Frozen document-symbol session API.
+ */
+export function createDocumentSymbolLanguageServerSession(options) {
+  const diagnosticSession = createDiagnosticSession(options);
+  const documents = new Map();
+  const latestMutation = new Map();
+  let initialized = false;
+  let ready = false;
+  let shutdownRequested = false;
+  let exited = false;
+  let epoch = 0;
+  let mutationSequence = 0;
+
+  /**
+   * Require an initialized, ready, and active session for document-symbol work.
+   *
+   * @param {string} method - LSP method.
+   * @returns {void}
+   */
+  function requireReady(method) {
+    if (!initialized) {
+      throw new LanguageServerError(
+        'server_not_initialized',
+        'The Language Server has not been initialized.',
+        { method },
+      );
+    }
+    if (shutdownRequested || exited) {
+      throw new LanguageServerError(
+        'server_shutting_down',
+        'The Language Server is shutting down.',
+        { method },
+      );
+    }
+    if (!ready) {
+      throw new LanguageServerError(
+        'server_not_ready',
+        'The client has not completed Language Server initialization.',
+        { method },
+      );
+    }
+  }
+
+  /**
+   * Allocate the newest mutation identity for one document URI.
+   *
+   * @param {string} uri - Validated document URI.
+   * @returns {Readonly<{epoch: number, sequence: number}>} Mutation identity.
+   */
+  function beginMutation(uri) {
+    mutationSequence += 1;
+    const identity = Object.freeze({ epoch, sequence: mutationSequence });
+    latestMutation.set(uri, identity);
+    return identity;
+  }
+
+  /**
+   * Return whether one mutation may still update the owned snapshot.
+   *
+   * @param {string} uri - Validated document URI.
+   * @param {Readonly<{epoch: number, sequence: number}>} identity - Captured mutation identity.
+   * @returns {boolean} True only for the newest active mutation.
+   */
+  function isCurrentMutation(uri, identity) {
+    return !shutdownRequested && !exited && epoch === identity.epoch &&
+      latestMutation.get(uri) === identity;
+  }
+
+  /**
+   * Invalidate every owned document snapshot and in-flight mutation.
+   *
+   * @returns {void}
+   */
+  function invalidateDocuments() {
+    epoch += 1;
+    documents.clear();
+    latestMutation.clear();
+  }
+
+  const session = {
+    /**
+     * Handle an LSP request and provide document symbols for open source.
+     *
+     * @param {unknown} method - Request method.
+     * @param {unknown} [params] - Request parameters.
+     * @returns {Promise<unknown>} Request result.
+     */
+    async request(method, params = null) {
+      if (method === 'textDocument/documentSymbol') {
+        requireReady(method);
+        const normalized = normalizeTextDocumentParams(params, method);
+        const record = documents.get(normalized.textDocument.uri);
+        if (record === undefined) {
+          throw new LanguageServerError('document_not_open', 'The document is not open.', {
+            method,
+          });
+        }
+        return documentSymbolsForSource(record.text);
+      }
+
+      const result = await diagnosticSession.request(method, params);
+      if (method === 'initialize') {
+        initialized = true;
+        return advertiseDocumentSymbols(result);
+      }
+      if (method === 'shutdown') {
+        shutdownRequested = true;
+        invalidateDocuments();
+      }
+      return result;
+    },
+
+    /**
+     * Handle an LSP notification and mirror accepted full-document snapshots.
+     *
+     * @param {unknown} method - Notification method.
+     * @param {unknown} [params] - Notification parameters.
+     * @returns {Promise<void>}
+     */
+    async notify(method, params = null) {
+      if (method === 'textDocument/didOpen') {
+        const normalized = normalizeOpenParams(params);
+        const uri = normalized.textDocument.uri;
+        const identity = beginMutation(uri);
+        await diagnosticSession.notify(method, normalized);
+        if (isCurrentMutation(uri, identity)) {
+          documents.set(uri, Object.freeze({
+            version: normalized.textDocument.version,
+            text: normalized.textDocument.text,
+          }));
+        }
+        return;
+      }
+      if (method === 'textDocument/didChange') {
+        const normalized = normalizeChangeParams(params);
+        const uri = normalized.textDocument.uri;
+        const identity = beginMutation(uri);
+        await diagnosticSession.notify(method, normalized);
+        if (isCurrentMutation(uri, identity)) {
+          documents.set(uri, Object.freeze({
+            version: normalized.textDocument.version,
+            text: normalized.contentChanges[0].text,
+          }));
+        }
+        return;
+      }
+      if (method === 'textDocument/didClose') {
+        const normalized = normalizeTextDocumentParams(params, method);
+        const uri = normalized.textDocument.uri;
+        const identity = beginMutation(uri);
+        await diagnosticSession.notify(method, normalized);
+        if (isCurrentMutation(uri, identity)) {
+          documents.delete(uri);
+        }
+        return;
+      }
+
+      await diagnosticSession.notify(method, params);
+      if (method === 'initialized') {
+        ready = true;
+      } else if (method === 'exit') {
+        exited = true;
+        invalidateDocuments();
+      }
+    },
+
+    /**
+     * Dispose the delegated session and invalidate all outline source.
+     *
+     * @returns {void}
+     */
+    dispose() {
+      exited = true;
+      invalidateDocuments();
+      diagnosticSession.dispose();
+    },
+  };
+  return Object.freeze(session);
+}
