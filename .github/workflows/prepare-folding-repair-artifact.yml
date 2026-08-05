@@ -70,31 +70,36 @@ jobs:
                   f'old={old_count}, new={new_count}'
               )
 
-          replace_or_confirm(
-              'docs/product/folding-ranges.md',
-              'A client that negotiates the LSP 3.18 `textDocument.foldingRange` capability\nreceives deterministic, source-order package and namespace folds from the same\nauthoritative scanner used by document outlines.',
-              'A client that negotiates the LSP 3.18 `textDocument.foldingRange` capability can\nrequest `textDocument/foldingRange` and receive deterministic, source-order\npackage and namespace folds from the same authoritative scanner used by document\noutlines.',
+          repairs = (
+              (
+                  'docs/product/folding-ranges.md',
+                  'A client that negotiates the LSP 3.18 `textDocument.foldingRange` capability\nreceives deterministic, source-order package and namespace folds from the same\nauthoritative scanner used by document outlines.',
+                  'A client that negotiates the LSP 3.18 `textDocument.foldingRange` capability can\nrequest `textDocument/foldingRange` and receive deterministic, source-order\npackage and namespace folds from the same authoritative scanner used by document\noutlines.',
+              ),
+              (
+                  'docs/product/diagramweave-prd.md',
+                  'legacy `SymbolInformation[]` compatibility와 `textDocument/foldingRange` 구현은 완료됐고, completion resolve, semantic member completion, hover, definition, references, rename, arbitrary region folding과 workspace indexing은 아직 구현되지 않았다.',
+                  'legacy `SymbolInformation[]` compatibility 구현은 완료됐고, `textDocument/foldingRange` 구현도 완료됐다. completion resolve, semantic member completion, hover, definition, references, rename, arbitrary region folding과 workspace indexing은 아직 구현되지 않았다.',
+              ),
+              (
+                  'docs/operations/folding-ranges.md',
+                  'A missing, malformed, array-valued, proxied, revoked, or throwing capability\npath does not advertise the provider. A request in that session returns the\nfixed `method_not_found` Language Server error.',
+                  'A missing or hostile capability path—including malformed, array-valued,\nproxied, revoked, or throwing records—does not advertise the provider. A request\nin that session returns the fixed `method_not_found` Language Server error.',
+              ),
+              (
+                  'docs/product/folding-ranges.md',
+                  'This backend slice exposes a standard LSP capability and does not add a\nDiagramWeave Studio visual component, so it does not require a new Figma\nartifact. Product Design and Figma become mandatory when Studio adds explicit\n',
+                  'This backend slice exposes a standard LSP capability and does not add a\nDiagramWeave Studio visual component, so it does not require a new Figma artifact.\nProduct Design and Figma become mandatory when Studio adds explicit\n',
+              ),
           )
-          replace_or_confirm(
-              'docs/product/diagramweave-prd.md',
-              'legacy `SymbolInformation[]` compatibility와 `textDocument/foldingRange` 구현은 완료됐고, completion resolve, semantic member completion, hover, definition, references, rename, arbitrary region folding과 workspace indexing은 아직 구현되지 않았다.',
-              'legacy `SymbolInformation[]` compatibility 구현은 완료됐고, `textDocument/foldingRange` 구현도 완료됐다. completion resolve, semantic member completion, hover, definition, references, rename, arbitrary region folding과 workspace indexing은 아직 구현되지 않았다.',
-          )
-          replace_or_confirm(
-              'docs/operations/folding-ranges.md',
-              'A missing, malformed, array-valued, proxied, revoked, or throwing capability\npath does not advertise the provider. A request in that session returns the\nfixed `method_not_found` Language Server error.',
-              'A missing or hostile capability path—including malformed, array-valued,\nproxied, revoked, or throwing records—does not advertise the provider. A request\nin that session returns the fixed `method_not_found` Language Server error.',
-          )
-          replace_or_confirm(
-              'docs/product/folding-ranges.md',
-              'This backend slice exposes a standard LSP capability and does not add a\nDiagramWeave Studio visual component, so it does not require a new Figma\nartifact. Product Design and Figma become mandatory when Studio adds explicit\n',
-              'This backend slice exposes a standard LSP capability and does not add a\nDiagramWeave Studio visual component, so it does not require a new Figma artifact.\nProduct Design and Figma become mandatory when Studio adds explicit\n',
-          )
-          replace_or_confirm(
-              'docs/superpowers/specs/2026-08-05-conservative-folding-ranges-design.md',
-              'A reverse stack walks the authoritative tree in source preorder without\nrecursive product traversal.',
-              'A reverse stack walks the authoritative tree in source preorder without recursive product traversal.',
-          )
+          for repair in repairs:
+              replace_or_confirm(*repair)
+
+          design = Path(
+              'docs/superpowers/specs/2026-08-05-conservative-folding-ranges-design.md'
+          ).read_text(encoding='utf-8')
+          if 'without recursive product traversal' not in design:
+              raise SystemExit('folding design does not contain the nonrecursive contract')
           PY
 
       - name: Remove every temporary repair workflow from the candidate tree
