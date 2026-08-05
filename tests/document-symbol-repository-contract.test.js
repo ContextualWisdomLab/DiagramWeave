@@ -47,7 +47,7 @@ test('document-symbol documentation records LSP, PlantUML, privacy, and modular-
   assert.match(architecture, /fail\nby omission/i);
   assert.match(architecture, /NVIDIA_NIM_API_KEY/);
   assert.match(claude, /Read and follow \[`AGENTS\.md`\]/);
-  assert.doesNotMatch(claude, /COPILOT_GITHUB_TOKEN/);
+  assert.match(claude, /never introduce `COPILOT_GITHUB_TOKEN`/);
 });
 
 test('public Language Server entry point composes the symbol session', async () => {
