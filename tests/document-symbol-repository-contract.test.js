@@ -44,7 +44,7 @@ test('document-symbol documentation records LSP, PlantUML, privacy, and modular-
   assert.match(product, /Studio, IDE clients,\n`dweave-lsp`, naruon, and other CWL hosts/);
   assert.match(product, /without an LLM/i);
   assert.match(changelog, /textDocument\/documentSymbol/);
-  assert.match(architecture, /fail\nby omission/i);
+  assert.match(architecture, /fail\n\s*by omission/i);
   assert.match(architecture, /NVIDIA_NIM_API_KEY/);
   assert.match(claude, /Read and follow \[`AGENTS\.md`\]/);
   assert.match(claude, /never introduce `COPILOT_GITHUB_TOKEN`/);
