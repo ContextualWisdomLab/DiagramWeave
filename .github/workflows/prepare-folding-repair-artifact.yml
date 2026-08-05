@@ -6,17 +6,23 @@ on:
       - agent/conservative-folding-ranges
     paths:
       - .github/workflows/prepare-folding-repair-artifact.yml
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [main]
+    paths:
+      - .github/workflows/prepare-folding-repair-artifact.yml
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: prepare-folding-repair-artifact
+  group: prepare-folding-repair-artifact-${{ github.event_name }}
   cancel-in-progress: true
 
 jobs:
   prepare:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
@@ -124,7 +130,7 @@ jobs:
       - name: Upload immutable verified repair artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
-          name: verified-folding-documentation-repair
+          name: verified-folding-documentation-repair-${{ github.event_name }}
           path: |
             repaired-files.tar.gz
             deleted-files.txt
