@@ -152,9 +152,6 @@ export function createLspFrameReader() {
           const bodyStart = headerEnd + headerDelimiter.length;
           const frameEnd = bodyStart + contentLength;
           if (combined.length < frameEnd) {
-            if (combined.length > languageServerStdioLimits.maxBufferedBytes) {
-              throw framingError('buffer_too_large', 'The incomplete transport frame exceeds the limit.');
-            }
             break;
           }
           frames.push(Buffer.from(combined.subarray(bodyStart, frameEnd)));
