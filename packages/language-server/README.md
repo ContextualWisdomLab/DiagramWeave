@@ -145,8 +145,8 @@ network.
 - A session accepts at most 256 open documents.
 - Each complete source snapshot is limited to 1 MiB, matching the renderer's
   default source ceiling.
-- One document may expose at most 1,024 explicit symbols across roots and
-  descendants; each symbol name is limited to 1,024 UTF-8 bytes.
+- One document may expose at most 1,024 symbols across roots and descendants;
+  each symbol name is limited to 1,024 UTF-8 bytes.
 - One completion request may return at most 64 items.
 - Only monotonically increasing nonnegative safe-integer versions are accepted.
 - Incremental range edits are rejected; this foundation uses full-document
