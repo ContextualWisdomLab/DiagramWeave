@@ -94,11 +94,12 @@ function maskComments(line, state) {
 /**
  * Return structural braces outside quoted labels in source order.
  *
- * Comments must already be masked. Escaped quotes and doubled quote forms use
- * the same rules as label parsing, so braces displayed inside labels never
- * create or close outline scopes.
+ * Comments and supported delimited declaration labels must already be masked.
+ * Escaped quotes and doubled quote forms use the same rules as label parsing,
+ * so braces displayed inside quoted labels never create or close outline
+ * scopes.
  *
- * @param {string} line - One comment-masked source line.
+ * @param {string} line - One masked source line.
  * @returns {string[]} Unquoted opening and closing brace characters.
  */
 function structuralBraces(line) {
@@ -204,6 +205,48 @@ function parseLabelToken(value, from = 0) {
     tokenEnd: end,
     delimited: false,
   };
+}
+
+/**
+ * Replace one complete delimited label token with spaces.
+ *
+ * Every supported opening delimiter is one UTF-16 code unit. Masking the
+ * delimiter and label body preserves later source coordinates while preventing
+ * displayed braces from entering the structural scope stack.
+ *
+ * @param {string[]} characters - Mutable declaration remainder code units.
+ * @param {{selectionStart: number, tokenEnd: number, delimited: boolean}|null} token - Parsed label token.
+ * @returns {void}
+ */
+function maskDelimitedToken(characters, token) {
+  if (token?.delimited === true) {
+    characters.fill(' ', token.selectionStart - 1, token.tokenEnd);
+  }
+}
+
+/**
+ * Mask supported quoted, parenthesized, bracketed, and colon labels.
+ *
+ * Both the first declaration label and one token following `as` are considered.
+ * This prevents malformed but parseable secondary labels from contributing
+ * braces even when the first displayed token remains authoritative.
+ *
+ * @param {string} remainder - Declaration text following its keyword.
+ * @returns {string} Same-length remainder with complete delimited labels masked.
+ */
+function maskDelimitedLabels(remainder) {
+  const characters = remainder.split('');
+  const first = parseLabelToken(remainder);
+  if (first === null) {
+    return remainder;
+  }
+  maskDelimitedToken(characters, first);
+  const aliasMatch = /^\s+as\s+/diu.exec(remainder.slice(first.tokenEnd));
+  if (aliasMatch !== null) {
+    const secondStart = first.tokenEnd + aliasMatch[0].length;
+    maskDelimitedToken(characters, parseLabelToken(remainder, secondStart));
+  }
+  return characters.join('');
 }
 
 /**
@@ -343,9 +386,10 @@ function freezeSymbolTree(records, rootIndices) {
  * across common class, sequence, component, use-case, state, and deployment
  * diagrams. Complete declaration scopes become hierarchy only when one
  * unquoted opening brace is closed in stack order by a standalone brace with
- * identical indentation. Ambiguous, unmatched, cross-indented, quoted, and
- * commented braces fail by omission. Line and selection positions are
- * JavaScript UTF-16 indices, matching the advertised LSP position encoding.
+ * identical indentation. Ambiguous, unmatched, cross-indented, quoted,
+ * delimited-label, and commented braces fail by omission. Line and selection
+ * positions are JavaScript UTF-16 indices, matching the advertised LSP position
+ * encoding.
  *
  * @param {unknown} source - Complete PlantUML source snapshot.
  * @returns {readonly Readonly<object>[]} Deeply frozen source-order root symbols.
@@ -408,12 +452,15 @@ export function documentSymbolsForSource(source) {
       }
     }
 
-    const braces = structuralBraces(code);
+    const structuralCode = match === null
+      ? code
+      : `${code.slice(0, match.indices[4][0])}${maskDelimitedLabels(match[4])}`;
+    const braces = structuralBraces(structuralCode);
     const scopeRecordIndex = recordIndex >= 0 && braces.length === 1 && braces[0] === '{'
       ? recordIndex
       : -1;
     const closingMatch = braces.length === 1 && braces[0] === '}'
-      ? standaloneClosingBracePattern.exec(code)
+      ? standaloneClosingBracePattern.exec(structuralCode)
       : null;
     for (const brace of braces) {
       if (brace === '{') {
