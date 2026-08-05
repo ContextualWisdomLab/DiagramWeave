@@ -131,6 +131,36 @@ test('rejects malformed and non-local document-symbol request parameters', async
   );
 });
 
+test('normalizes malformed open and change notifications at the direct symbol boundary', async () => {
+  const { session } = setup();
+  await initialize(session);
+
+  for (const params of [null, {}, { textDocument: null }]) {
+    await assert.rejects(
+      session.notify('textDocument/didOpen', params),
+      (error) => assertError(error, 'invalid_request'),
+    );
+  }
+  await assert.rejects(
+    session.notify(
+      'textDocument/didOpen',
+      openParams('class Remote', 1, 'https://example.com/remote.puml'),
+    ),
+    (error) => assertError(error, 'document_uri_invalid'),
+  );
+
+  for (const params of [
+    null,
+    { textDocument: { uri, version: 2 }, contentChanges: [] },
+    { textDocument: { uri, version: 2 }, contentChanges: [null] },
+  ]) {
+    await assert.rejects(
+      session.notify('textDocument/didChange', params),
+      (error) => assertError(error, 'invalid_request'),
+    );
+  }
+});
+
 test('invalidates document symbols after shutdown, exit, and disposal', async () => {
   for (const action of ['shutdown', 'exit', 'dispose']) {
     const { session } = setup();
