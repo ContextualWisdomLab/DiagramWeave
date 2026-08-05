@@ -12,7 +12,7 @@ architecture filenames.
 | `@contextualwisdomlab/diagramweave-contextual-orchestrator` | Provider-neutral, bounded, strict LLM proposal adapter |
 | `@contextualwisdomlab/diagramweave-plantuml-renderer` | Sandboxed stdin-only local SVG/PNG rendering and safe diagnostics |
 | `@contextualwisdomlab/diagramweave-cli` | Deterministic manual/CI validation and rendering |
-| `@contextualwisdomlab/diagramweave-language-server` | Transport-neutral LSP lifecycle, diagnostics, conservative hierarchical document symbols, and deterministic declaration completion |
+| `@contextualwisdomlab/diagramweave-language-server` | Transport-neutral LSP lifecycle, diagnostics, capability-negotiated hierarchical or legacy-flat document symbols, and deterministic declaration completion |
 | `@contextualwisdomlab/diagramweave-language-server-stdio` | Bounded JSON-RPC stdio process and `dweave-lsp` executable |
 
 Studio, naruon, IDE extensions, and other CWL hosts compose these packages but
@@ -37,18 +37,22 @@ the trust kernel.
 7. Hierarchical symbols are built and frozen bottom-up without recursive
    product traversal; roots and siblings remain in declaration order and parent
    ranges enclose proven children.
-8. Declaration completion is a fixed, deterministic, capability-gated local
+8. Non-hierarchical LSP clients receive immutable `SymbolInformation[]` from the
+   same authoritative tree. Only exact boolean
+   `hierarchicalDocumentSymbolSupport: true` selects `DocumentSymbol[]`; all
+   other and hostile capability states fail closed to the flat adapter.
+9. Declaration completion is a fixed, deterministic, capability-gated local
    catalog. It replaces only a line-leading prefix and returns no candidates in
    comments, quotes, relations, directives, completed declarations, or the
    middle of an identifier.
-9. Diagnostics, outlines, and completion are composed layers with independent
-   tests and source ownership; a rejected or late mutation cannot restore stale
-   state in an outer layer.
-10. LSP positions use UTF-16 code units; multilingual and emoji ranges are
+10. Diagnostics, outlines, compatibility adaptation, and completion are composed
+    layers with independent tests and source ownership; a rejected or late
+    mutation cannot restore stale state in an outer layer.
+11. LSP positions use UTF-16 code units; multilingual and emoji ranges are
     regression-tested across LF, CRLF, and CR source.
-11. Organization-central `.github` workflows own merge governance. Scheduled
+12. Organization-central `.github` workflows own merge governance. Scheduled
     product development uses OpenCode with `NVIDIA_NIM_API_KEY`, not Copilot.
-12. No release occurs while packages remain `0.0.0` under `Unreleased` or while
+13. No release occurs while packages remain `0.0.0` under `Unreleased` or while
     Studio, cross-platform runtime evidence, signing, SBOM/provenance, and
     rollback evidence remain incomplete.
 
@@ -58,17 +62,22 @@ the trust kernel.
 - [`docs/product/diagramweave-prd.md`](docs/product/diagramweave-prd.md)
 - [`docs/product/declaration-completion.md`](docs/product/declaration-completion.md)
 - [`docs/product/hierarchical-document-outline.md`](docs/product/hierarchical-document-outline.md)
+- [`docs/product/document-symbol-compatibility.md`](docs/product/document-symbol-compatibility.md)
 - [`docs/research/plantuml-structured-diagnostics.md`](docs/research/plantuml-structured-diagnostics.md)
 - [`docs/research/language-server-foundation.md`](docs/research/language-server-foundation.md)
 - [`docs/research/language-server-stdio.md`](docs/research/language-server-stdio.md)
 - [`docs/research/plantuml-document-symbols.md`](docs/research/plantuml-document-symbols.md)
 - [`docs/research/plantuml-declaration-completion.md`](docs/research/plantuml-declaration-completion.md)
 - [`docs/research/plantuml-hierarchical-document-symbols.md`](docs/research/plantuml-hierarchical-document-symbols.md)
+- [`docs/research/lsp-document-symbol-compatibility.md`](docs/research/lsp-document-symbol-compatibility.md)
 - [`docs/operations/document-symbols.md`](docs/operations/document-symbols.md)
 - [`docs/operations/declaration-completion.md`](docs/operations/declaration-completion.md)
 - [`docs/operations/hierarchical-document-symbols.md`](docs/operations/hierarchical-document-symbols.md)
+- [`docs/operations/document-symbol-compatibility.md`](docs/operations/document-symbol-compatibility.md)
 - [`docs/operations/hourly-development.md`](docs/operations/hourly-development.md)
 - [`docs/superpowers/specs/2026-08-05-declaration-completion-design.md`](docs/superpowers/specs/2026-08-05-declaration-completion-design.md)
 - [`docs/superpowers/plans/2026-08-05-declaration-completion.md`](docs/superpowers/plans/2026-08-05-declaration-completion.md)
 - [`docs/superpowers/specs/2026-08-05-hierarchical-document-symbols-design.md`](docs/superpowers/specs/2026-08-05-hierarchical-document-symbols-design.md)
 - [`docs/superpowers/plans/2026-08-05-hierarchical-document-symbols.md`](docs/superpowers/plans/2026-08-05-hierarchical-document-symbols.md)
+- [`docs/superpowers/specs/2026-08-05-legacy-document-symbol-fallback-design.md`](docs/superpowers/specs/2026-08-05-legacy-document-symbol-fallback-design.md)
+- [`docs/superpowers/plans/2026-08-05-legacy-document-symbol-fallback.md`](docs/superpowers/plans/2026-08-05-legacy-document-symbol-fallback.md)
