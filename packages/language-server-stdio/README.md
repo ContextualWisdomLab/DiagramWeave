@@ -47,7 +47,7 @@ queue overflow, or `exit` without successful shutdown returns code `1`.
 | Header | 8 KiB |
 | JSON body | 2 MiB |
 | One input chunk | 4 MiB |
-| Retained incomplete frame | 2 MiB + 8 KiB |
+| Retained incomplete frame | 2,105,347 bytes |
 | Pending chunks/messages | 256 |
 | Method | 256 UTF-8 bytes |
 | String request ID | 256 UTF-8 bytes |
