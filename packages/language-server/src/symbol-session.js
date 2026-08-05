@@ -221,6 +221,10 @@ export function createDocumentSymbolLanguageServerSession(options) {
   /**
    * Return whether one successful mutation is the newest applicable completion.
    *
+   * `beginMutation` registers the identity before delegated work starts and the
+   * corresponding `finally` removes it only after this function returns, so an
+   * active set is an internal invariant whenever the epoch remains current.
+   *
    * @param {string} uri - Validated document URI.
    * @param {Readonly<{epoch: number, sequence: number}>} identity - Captured mutation identity.
    * @returns {boolean} True only for a newest active mutation not superseded by applied work.
@@ -230,7 +234,7 @@ export function createDocumentSymbolLanguageServerSession(options) {
       return false;
     }
     const active = activeMutations.get(uri);
-    if (active === undefined || !active.has(identity)) {
+    if (!active.has(identity)) {
       return false;
     }
     if (identity.sequence <= (lastAppliedSequence.get(uri) ?? 0)) {
