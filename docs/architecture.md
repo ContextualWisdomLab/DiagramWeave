@@ -2,7 +2,7 @@
 
 ## Purpose
 
-DiagramWeave is a source-first editor platform for PlantUML and future text diagram languages. The architecture protects manual editing as the authoritative workflow while making LLM output reviewable, revision-bound, and replaceable. The implemented foundation contains a portable trust kernel, a Contextual Orchestrator adapter, an isolated local PlantUML renderer, safe structured diagnostics, and a deterministic CLI. It still contains no database, desktop shell, or hidden document store; future surfaces must reuse these boundaries rather than reimplement them.
+DiagramWeave is a source-first editor platform for PlantUML and future text diagram languages. The architecture protects manual editing as the authoritative workflow while making LLM output reviewable, revision-bound, and replaceable. The implemented foundation contains a portable trust kernel, a Contextual Orchestrator adapter, an isolated local PlantUML renderer, safe structured diagnostics, a deterministic CLI, a transport-neutral Language Server, bounded JSON-RPC stdio integration, explicit document symbols, and deterministic declaration completion. It still contains no database, desktop shell, or hidden document store; future surfaces must reuse these boundaries rather than reimplement them.
 
 ## Architectural principles
 
@@ -14,6 +14,8 @@ DiagramWeave is a source-first editor platform for PlantUML and future text diag
 6. **Modules compose without becoming inseparable.** Each package has one purpose and can run inside DiagramWeave Studio, naruon, an IDE extension, a CLI, or another CWL service.
 7. **Provider and renderer boundaries are adapters.** Core never imports a network client, renderer process, UI framework, or persistence implementation.
 8. **Diagnostics are safe data contracts.** Raw child output stays inside the renderer boundary; reusable hosts receive only bounded, fixed-message, deeply frozen records.
+9. **Editor intelligence fails by omission.** Document symbols and declaration completion recognize only explicit high-signal syntax and do not invent semantics from relations, includes, macros, malformed source, or remote content.
+10. **Composed layers retain independent evidence.** Diagnostics, document symbols, and completion own separate state and tests so an outer feature cannot hide regressions in an inner layer.
 
 ## System context
 
@@ -28,6 +30,8 @@ component "Contextual Orchestrator" as Orchestrator
 component "PlantUML Renderer\n(local sandbox)" as Renderer
 component "Structured Diagnostics" as Diagnostics
 component "DiagramWeave CLI" as CLI
+component "DiagramWeave Language Server" as LSP
+component "dweave-lsp\n(bounded stdio)" as Stdio
 component "naruon / CWL hosts" as Hosts
 
 User --> Studio : manual edit / review
@@ -36,17 +40,20 @@ Studio --> Core : validate, preview, apply
 Studio --> Adapter : request proposal
 Adapter --> Orchestrator : POST /v1/chat/completions
 Studio --> Renderer : render accepted source
+Studio --> LSP : snapshots / diagnostics / outline / completion
 CLI --> Renderer : bounded local render
 Renderer --> Diagnostics : bounded stdrpt bytes
 Diagnostics --> CLI : safe line diagnostics
-Diagnostics --> Studio : future editor diagnostics
+Diagnostics --> LSP : safe editor diagnostics
+Stdio --> LSP : serialized JSON-RPC
 Hosts --> Core : embed trust kernel
 Hosts --> Adapter : optional LLM proposals
 Hosts --> CLI : programmatic batch contract
+Hosts --> LSP : embedded editor intelligence
 @enduml
 ```
 
-The diagram is documentation, not a runtime dependency. DiagramWeave Core can be used without Studio, Contextual Orchestrator, or PlantUML.
+The diagram is documentation, not a runtime dependency. DiagramWeave Core can be used without Studio, Contextual Orchestrator, PlantUML, or the Language Server. The Language Server can be embedded without the stdio package.
 
 ## Module boundaries
 
@@ -111,7 +118,7 @@ Non-responsibilities:
 
 Status: future product surface.
 
-Studio will own file tabs, manual source editing, preview layout, diagnostics, Context Inspector, diff review, keyboard interaction, recovery, and user approval. It must consume Core rather than reimplement revision or scope checks, and consume the shared renderer diagnostic record rather than parse stderr. UI work requires Figma/Product Design state coverage before implementation because source, preview, diff, diagnostics, offline, timeout, conflict, and scope-expansion states interact visibly.
+Studio will own file tabs, manual source editing, preview layout, diagnostics, outline, completion presentation, Context Inspector, diff review, keyboard interaction, recovery, and user approval. It must consume Core rather than reimplement revision or scope checks, consume the shared renderer diagnostic record rather than parse stderr, and apply Language Server text edits rather than reconstruct completion ranges. UI work requires Figma/Product Design state coverage before implementation because source, preview, completion, outline, diff, diagnostics, offline, timeout, conflict, and scope-expansion states interact visibly.
 
 ### PlantUML renderer
 
@@ -136,7 +143,7 @@ Non-responsibilities:
 - enabling local or remote includes;
 - persisting source or artifacts;
 - implementing a full PlantUML parser or character-accurate diagnostics;
-- providing a CLI or Studio preview state.
+- providing a CLI, Language Server lifecycle, or Studio preview state.
 
 Public entry points:
 
@@ -150,7 +157,7 @@ import {
 
 The public diagnostic uses the Language Server Protocol range shape, error severity `1`, code `plantuml.syntax`, a fixed product message, and a one-based `data.plantUmlLineNumber`. Raw stderr, raw labels, source excerpts, paths, and credentials never cross the renderer boundary.
 
-The renderer is independently reusable by Studio, CLI, naruon, or another CWL host. A future include-capable renderer must be a separate explicit policy mode; it must not weaken this package's `SANDBOX` contract.
+The renderer is independently reusable by Studio, CLI, naruon, the Language Server, or another CWL host. A future include-capable renderer must be a separate explicit policy mode; it must not weaken this package's `SANDBOX` contract.
 
 ### DiagramWeave CLI
 
@@ -174,9 +181,61 @@ Non-responsibilities:
 
 ### DiagramWeave Language Server
 
-Status: future reusable module.
+Package: `@contextualwisdomlab/diagramweave-language-server`
 
-The language server will provide editor diagnostics and navigation without depending on Studio. It must consume the same LSP-compatible renderer diagnostic record, while richer semantic diagnostics require a separately reviewed PlantUML language adapter rather than stderr parsing in the server.
+Responsibilities:
+
+- implement initialize, initialized, shutdown, and exit lifecycle rules;
+- own bounded full-document synchronization for local `.puml` and `.plantuml` identifiers;
+- publish safe diagnostics from the shared renderer boundary;
+- provide conservative declaration-order `textDocument/documentSymbol` results;
+- advertise and serve deterministic `textDocument/completion` only to clients that declare completion support;
+- preserve UTF-16 positions across multilingual source and emoji;
+- normalize caller-owned records into frozen snapshots;
+- prevent stale concurrent open, change, and close completions from restoring old state;
+- expose one transport-neutral API for Studio, IDE adapters, naruon, and service wrappers.
+
+The implementation is layered:
+
+```text
+diagnostic session
+  -> document-symbol session
+    -> declaration-completion session
+```
+
+Each wrapper delegates lifecycle and inner features while owning only the source required by its feature. Direct unit tests cover every layer independently, even though the public entry point exposes the outer completion session.
+
+Declaration completion uses a fixed catalog, LSP keyword CompletionItems, plain-text insertion, stable order, and explicit text edits. It returns no result in comments, quoted labels, relations, directives, completed declarations, or the middle of an existing keyword. It does not call an LLM, renderer, filesystem, workspace index, include processor, macro processor, or network service.
+
+Non-responsibilities:
+
+- opening, saving, or watching source files;
+- parsing the complete PlantUML grammar;
+- evaluating includes, macros, relations, or renderer output for editor intelligence;
+- implementing completion resolve, snippets, semantic member completion, hover, definition, references, or rename;
+- owning UI focus, selection, acceptance, or accessibility state;
+- persisting source or telemetry.
+
+### Bounded stdio Language Server
+
+Package: `@contextualwisdomlab/diagramweave-language-server-stdio`
+
+Responsibilities:
+
+- parse bounded ASCII Content-Length headers and strict UTF-8 JSON-RPC 2.0;
+- reject malformed, oversized, duplicated, unsupported, or non-ASCII framing;
+- serialize incoming chunks and protocol dispatch;
+- translate stable Language Server failures to fixed JSON-RPC error codes;
+- map invalid completion positions to `-32602` Invalid params;
+- frame bounded response and notification messages;
+- provide the `dweave-lsp` process boundary and graceful shutdown/exit semantics.
+
+Non-responsibilities:
+
+- duplicating diagnostics, document symbols, completion, or source snapshots;
+- reading source URIs;
+- applying returned completion edits;
+- exposing source, paths, child stderr, or host exception values.
 
 ## Data flow
 
@@ -206,9 +265,28 @@ The language server will provide editor diagnostics and navigation without depen
 3. `parsePlantUmlStandardReport` decodes bounded stderr once and validates only the documented protocol fields.
 4. A valid error line becomes one fixed-message, zero-width, LSP-compatible diagnostic.
 5. `PlantUmlRendererError` revalidates and clones the diagnostic before exposure.
-6. The CLI revalidates and clones it again before publication in a report.
-7. Human output prints the safe relative path and one-based PlantUML line; JSON retains the zero-based LSP range.
+6. The CLI or Language Server revalidates the diagnostic before publication.
+7. Human CLI output prints the safe relative path and one-based PlantUML line; JSON and LSP retain the zero-based range.
 8. Raw stderr, labels, source, absolute parent paths, and process configuration remain inside their originating boundaries.
+
+### Document symbols
+
+1. The client initializes the server, sends initialized, and opens a complete source snapshot.
+2. The diagnostic layer validates lifecycle, URI, language, version, source size, and renderer behavior.
+3. The document-symbol layer stores only the accepted frozen source.
+4. A document-symbol request scans explicit declarations and masks comments without shifting UTF-16 offsets.
+5. The layer returns a bounded frozen declaration-order outline or a stable source-free error.
+6. Later accepted changes replace the snapshot; close and lifecycle invalidation remove it.
+
+### Declaration completion
+
+1. During initialize, the completion layer probes the plain client capability path and does not trust hostile getters.
+2. If supported, the server adds `completionProvider: { resolveProvider: false }` to the frozen initialize result.
+3. Open and change notifications are normalized, delegated through inner layers, and copied into the completion snapshot only after successful acceptance.
+4. A completion request validates the local URI and UTF-16 position against the latest accepted source.
+5. The pure engine masks comment state, accepts only a line-leading declaration prefix, suppresses ambiguous contexts, and returns stable frozen keyword text edits.
+6. The stdio package serializes the same result without reimplementing completion.
+7. The host decides whether to display and apply the text edit; the server never mutates a file.
 
 ## Error model
 
@@ -241,7 +319,9 @@ Adapter errors have stable `code` fields:
 - `provider_response_invalid`
 - `assistant_json_invalid`
 
-Host products branch on `code`, not localized message text. They must not show provider response bodies, bearer tokens, raw child diagnostics, or raw PlantUML labels.
+Language Server errors include stable lifecycle, URI, source, document, version, completion-position, and method codes. Completion-specific malformed positions use `document_position_invalid`; the stdio layer maps this and other parameter families to fixed JSON-RPC Invalid params responses.
+
+Host products branch on `code`, not localized message text. They must not show provider response bodies, bearer tokens, raw child diagnostics, raw PlantUML labels, source values, rejected URI values, or hostile getter exceptions.
 
 ## Modular MSA compatibility
 
@@ -251,9 +331,10 @@ DiagramWeave uses package boundaries first and service boundaries only where the
 - The Contextual Orchestrator adapter is replaceable and can point to local, organizational, or managed deployments.
 - The PlantUML renderer is an isolated local process adapter and can later be wrapped by a versioned service without changing its artifact, error, or diagnostic contracts.
 - The CLI is an independent batch host that composes the renderer with deterministic path and report contracts for CI and naruon.
-- The diagnostic contract is reusable by CLI, Studio, Language Server, naruon, and service wrappers without exposing stderr.
-- Collaboration, policy, and persistence can become local processes or services behind versioned contracts.
-- naruon can invoke Core, the renderer, CLI, and the Contextual Orchestrator adapter without embedding Studio.
+- The Language Server is independently embeddable; the stdio package is a replaceable process transport.
+- Diagnostics, document symbols, and completion remain transport-neutral contracts reusable by CLI, Studio, IDEs, naruon, and service wrappers.
+- Collaboration, policy, indexing, and persistence can become local processes or services behind versioned contracts.
+- naruon can invoke Core, the renderer, CLI, the Language Server, and the Contextual Orchestrator adapter without embedding Studio.
 - organization-central `.github` workflows govern PRs without copying policy logic into production packages.
 - each package retains independent tests, version metadata, and public documentation.
 
@@ -265,7 +346,8 @@ The foundation introduces no database. If persistence is added, source files rem
 
 - Node.js 22 and 24 are supported foundation runtimes.
 - Packages use ECMAScript modules.
-- Public error codes, diagnostic fields, proposal schema version, and package exports are compatibility contracts.
-- A breaking proposal or diagnostic schema requires an explicit version and migration guidance.
+- Public error codes, diagnostic fields, proposal schema version, Language Server capabilities, completion item shape, and package exports are compatibility contracts.
+- A breaking proposal, diagnostic, symbol, or completion schema requires an explicit version and migration guidance.
+- Compatible completion catalog additions must remain documented, deterministic, bounded, and covered by exact-prefix tests.
 - Package releases follow Semantic Versioning after an integrated release candidate is ready.
 - `CHANGELOG.md` remains the user-facing history of contract changes.
