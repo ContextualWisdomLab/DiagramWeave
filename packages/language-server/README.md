@@ -1,23 +1,26 @@
 # `@contextualwisdomlab/diagramweave-language-server`
 
 A transport-neutral Language Server Protocol 3.18 session for PlantUML
-diagnostics and document outlines. It is independently reusable by
-DiagramWeave Studio, IDE adapters, naruon, and other CWL hosts without importing
-a desktop shell or JSON-RPC transport.
+diagnostics, document outlines, and deterministic declaration completion. It is
+independently reusable by DiagramWeave Studio, IDE adapters, naruon, and other
+CWL hosts without importing a desktop shell or JSON-RPC transport.
 
 ## Foundation scope
 
 The package implements protocol-level lifecycle, full-document diagnostic
-synchronization, and conservative explicit-declaration symbols:
+synchronization, conservative explicit-declaration symbols, and local keyword
+completion:
 
 - `initialize`, `initialized`, `shutdown`, and `exit`;
 - `textDocument/didOpen`, `textDocument/didChange`, and
   `textDocument/didClose`;
 - `textDocument/publishDiagnostics` and source-free `window/logMessage`;
 - `textDocument/documentSymbol` with `documentSymbolProvider: true`;
+- capability-gated `textDocument/completion` with
+  `completionProvider: { resolveProvider: false }`;
 - UTF-16 positions and LSP full-document synchronization;
 - exact document-version and generation binding so stale renderer completions
-  cannot overwrite newer diagnostics or outline source;
+  cannot overwrite newer diagnostics, outline source, or completion source;
 - bounded local `file:` URI identifiers for `.puml` and `.plantuml` documents;
 - the existing stdin-only PlantUML `SANDBOX` renderer and shared structured
   diagnostic sanitizer;
@@ -49,20 +52,35 @@ const session = createLanguageServerSession({
   },
 });
 
-await session.request('initialize', {});
+const initializeResult = await session.request('initialize', {
+  capabilities: {
+    textDocument: {
+      completion: {},
+    },
+  },
+});
 await session.notify('initialized', {});
 await session.notify('textDocument/didOpen', {
   textDocument: {
     uri: 'file:///workspace/context.puml',
     languageId: 'plantuml',
     version: 1,
-    text: '@startuml\npackage Context {\n  component API\n}\n@enduml\n',
+    text: '@startuml\npackage Context {\n  com\n}\n@enduml\n',
   },
 });
 
 const symbols = await session.request('textDocument/documentSymbol', {
   textDocument: { uri: 'file:///workspace/context.puml' },
 });
+
+const completions = await session.request('textDocument/completion', {
+  textDocument: { uri: 'file:///workspace/context.puml' },
+  position: { line: 2, character: 5 },
+});
+
+console.log(initializeResult.capabilities.completionProvider);
+console.log(symbols.map(({ name }) => name));
+console.log(completions.map(({ label }) => label));
 ```
 
 `rendererFactory` is an optional deterministic test seam. Production hosts
@@ -84,6 +102,26 @@ preserving UTF-16 code-unit offsets. It intentionally ignores implicit
 participants, relationships, members, directives, macros, malformed labels,
 and inferred nesting rather than inventing semantic structure.
 
+## Declaration-completion contract
+
+The completion slice returns deterministic declaration-keyword
+`CompletionItem[]` only when the client advertises a plain
+`capabilities.textDocument.completion` object during initialize. The provider
+does not support resolve, snippets, commands, documentation fetches, or
+additional edits.
+
+The catalog contains `@startuml`, `@enduml`, and the same high-signal explicit
+PlantUML declaration families used by the outline, including `abstract class`.
+Matching is case-insensitive and candidates remain in stable catalog order.
+Each item is an LSP keyword with plain-text insertion and an explicit UTF-16
+`textEdit` that replaces only the line-leading typed prefix.
+
+Completion intentionally returns an empty immutable collection inside or after
+comments, inside quoted labels, after relation or directive syntax, after a
+completed declaration, in the middle of an existing keyword, and for prefixes
+with no catalog match. It never calls an LLM, reads a URI, evaluates includes or
+macros, starts the renderer, scans a workspace, or contacts the network.
+
 ## Safety and limits
 
 - The session never dereferences, reads, or writes a URI and accepts only local
@@ -95,18 +133,19 @@ and inferred nesting rather than inventing semantic structure.
   default source ceiling.
 - One document may expose at most 1,024 symbols; each symbol name is limited to
   1,024 UTF-8 bytes.
+- One completion request may return at most 64 items.
 - Only monotonically increasing nonnegative safe-integer versions are accepted.
 - Incremental range edits are rejected; this foundation uses full-document
   synchronization.
-- Public diagnostics and symbols are deeply frozen and contain no source
-  excerpt, raw stderr, raw PlantUML label, Java/JAR path, host error, or
-  credential.
+- Public diagnostics, symbols, completion results, positions, ranges, and edits
+  are deeply frozen and contain no source excerpt, raw stderr, raw PlantUML
+  label, Java/JAR path, host error, or credential.
 - Hostile getters, proxies, arrays, renderer contracts, rejected mutations, and
   stale concurrent completions fail closed with stable `LanguageServerError`
   codes.
 
 ## Release status
 
-Version `0.0.0` is an unreleased foundation. Completion, hover, definition,
-references, rename, hierarchical symbols, workspace indexing, cancellation,
-and Studio integration remain later bounded slices.
+Version `0.0.0` is an unreleased foundation. Completion resolve, snippets,
+hover, definition, references, rename, hierarchical symbols, workspace
+indexing, cancellation, and Studio integration remain later bounded slices.
