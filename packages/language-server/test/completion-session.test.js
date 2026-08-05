@@ -117,12 +117,16 @@ test('rejects malformed completion params hostile positions and remote URIs', as
     },
   });
 
-  for (const params of [null, {}, { textDocument: null }, { textDocument: { uri } }]) {
+  for (const params of [null, {}, { textDocument: null }]) {
     await assert.rejects(
       session.request('textDocument/completion', params),
       (error) => assertError(error, 'invalid_request'),
     );
   }
+  await assert.rejects(
+    session.request('textDocument/completion', { textDocument: { uri } }),
+    (error) => assertError(error, 'document_position_invalid'),
+  );
   await assert.rejects(
     session.request('textDocument/completion', completionParams(0, 0, 'https://example.com/model.puml')),
     (error) => assertError(error, 'document_uri_invalid'),
