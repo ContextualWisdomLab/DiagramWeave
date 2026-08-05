@@ -4,6 +4,7 @@ import { plantUmlRendererLimits } from '@contextualwisdomlab/diagramweave-plantu
  * Immutable resource limits for one in-memory Language Server session.
  */
 export const languageServerLimits = Object.freeze({
+  maxCompletionItems: 64,
   maxDocumentBytes: plantUmlRendererLimits.maxSourceBytes.default,
   maxDocumentSymbols: 1024,
   maxOpenDocuments: 256,
