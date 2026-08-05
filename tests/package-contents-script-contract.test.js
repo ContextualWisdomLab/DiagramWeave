@@ -2,19 +2,16 @@ import assert from 'node:assert/strict';
 import { readFile, stat } from 'node:fs/promises';
 import test from 'node:test';
 
-test('root verification runs exact workspace package dry runs', async () => {
+test('CI runs exact workspace package dry runs after repository verification', async () => {
   const scriptPath = new URL('../scripts/check-package-contents.mjs', import.meta.url);
   const scriptStat = await stat(scriptPath);
   assert.equal(scriptStat.isFile(), true);
 
-  const packageJson = JSON.parse(
-    await readFile(new URL('../package.json', import.meta.url), 'utf8'),
+  const workflow = await readFile(
+    new URL('../.github/workflows/ci.yml', import.meta.url),
+    'utf8',
   );
-  assert.equal(
-    packageJson.scripts['package-contents'],
-    'node scripts/check-package-contents.mjs',
-  );
-  assert.match(packageJson.scripts.verify, /npm run package-contents$/u);
+  assert.match(workflow, /- name: Verify package contents\n\s+run: node scripts\/check-package-contents\.mjs/u);
 
   const source = await readFile(scriptPath, 'utf8');
   assert.match(source, /npm pack/u);
