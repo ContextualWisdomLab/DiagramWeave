@@ -1,0 +1,133 @@
+name: Document Symbol Finalize
+
+on:
+  push:
+    branches:
+      - agent/document-symbol-outline
+    paths:
+      - .github/workflows/document-symbol-finalize.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: diagramweave-document-symbol-bootstrap
+  cancel-in-progress: true
+
+jobs:
+  patch-verify-and-clean:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out exact branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: agent/document-symbol-outline
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Set up Node.js 24
+        uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238
+        with:
+          node-version: 24
+          package-manager-cache: false
+
+      - name: Apply exact durable patches
+        shell: python
+        run: |
+          from pathlib import Path
+
+          def replace_once(path: str, old: str, new: str) -> None:
+              target = Path(path)
+              text = target.read_text(encoding="utf-8")
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"{path}: expected one replacement target, found {count}")
+              target.write_text(text.replace(old, new), encoding="utf-8")
+
+          replace_once(
+              "packages/language-server/test/session.test.js",
+              "      textDocumentSync: { openClose: true, change: 1, save: false },\n",
+              "      textDocumentSync: { openClose: true, change: 1, save: false },\n"
+              "      documentSymbolProvider: true,\n",
+          )
+          replace_once(
+              "docs/product/diagramweave-prd.md",
+              "| FR-012 | Should | 정의 이동, 참조 찾기, 안전한 이름 변경을 제공한다. |\n\n"
+              "### 렌더와 진단\n",
+              "| FR-012 | Should | 정의 이동, 참조 찾기, 안전한 이름 변경을 제공한다. |\n\n"
+              "FR-011의 문서 심볼·개요 foundation 범위는 구현됐다. LSP 3.18 `textDocument/documentSymbol`은 명시적 PlantUML 선언을 선언 순서의 immutable UTF-16 range로 반환하며, Studio·IDE·`dweave-lsp`·naruon에서 동일한 세션을 재사용한다. implicit participant, 관계 endpoint, member, macro, include와 malformed 선언은 추측하지 않는다. 자동완성은 후속 범위다.\n\n"
+              "### 렌더와 진단\n",
+          )
+          replace_once(
+              "docs/product/diagramweave-prd.md",
+              "FR-070과 FR-071의 foundation 범위는 구현됐다. CLI는 safe relative path, 상태, 오류 코드, revision hash와 구조화 진단만 보고하며 source, raw renderer diagnostic, raw label, Java/JAR 경로와 environment 값은 보고하지 않는다.\n\n"
+              "### 접근성\n",
+              "FR-070과 FR-071의 foundation 범위는 구현됐다. CLI는 safe relative path, 상태, 오류 코드, revision hash와 구조화 진단만 보고하며 source, raw renderer diagnostic, raw label, Java/JAR 경로와 environment 값은 보고하지 않는다.\n\n"
+              "FR-072의 진단·문서 심볼·stdio foundation 범위도 구현됐다. bounded JSON-RPC transport와 transport-neutral session이 같은 UTF-16 진단 및 document-symbol 계약을 제공한다. completion, hover, definition, references, rename과 workspace indexing은 아직 구현되지 않았다.\n\n"
+              "### 접근성\n",
+          )
+
+      - name: Install locked workspace
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Verify complete repository
+        run: npm run verify
+
+      - name: Verify package contents
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm pack --workspace packages/language-server --dry-run --json > /tmp/language-server-pack.json
+          npm pack --workspace packages/language-server-stdio --dry-run --json > /tmp/language-server-stdio-pack.json
+          node <<'NODE'
+          const fs = require('node:fs');
+          const checks = [
+            ['/tmp/language-server-pack.json', new Set([
+              'package/LICENSE',
+              'package/README.md',
+              'package/package.json',
+              'package/src/contracts.js',
+              'package/src/diagnostics.js',
+              'package/src/errors.js',
+              'package/src/index.js',
+              'package/src/limits.js',
+              'package/src/session.js',
+              'package/src/symbol-session.js',
+              'package/src/symbols.js',
+            ])],
+            ['/tmp/language-server-stdio-pack.json', new Set([
+              'package/LICENSE',
+              'package/README.md',
+              'package/package.json',
+              'package/bin/dweave-lsp.js',
+              'package/src/connection.js',
+              'package/src/errors.js',
+              'package/src/framing.js',
+              'package/src/index.js',
+              'package/src/json-rpc.js',
+              'package/src/limits.js',
+              'package/src/process.js',
+            ])],
+          ];
+          for (const [path, expected] of checks) {
+            const report = JSON.parse(fs.readFileSync(path, 'utf8'));
+            const actual = new Set(report[0].files.map(({ path: filePath }) => filePath));
+            if (actual.size !== expected.size || [...actual].some((path) => !expected.has(path))) {
+              throw new Error(`${path}: unexpected package contents: ${[...actual].sort().join(', ')}`);
+            }
+          }
+          NODE
+
+      - name: Remove one-shot workflows and push verified tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm .github/workflows/document-symbol-bootstrap.yml
+          rm .github/workflows/document-symbol-finalize.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add packages/language-server/test/session.test.js docs/product/diagramweave-prd.md .github/workflows/document-symbol-bootstrap.yml .github/workflows/document-symbol-finalize.yml
+          git diff --cached --check
+          git commit -m "test(language-server): verify document-symbol product contract"
+          git push origin HEAD:agent/document-symbol-outline
