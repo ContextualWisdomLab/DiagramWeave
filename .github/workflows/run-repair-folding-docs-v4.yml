@@ -1,0 +1,117 @@
+name: Finish folding documentation contract repair
+
+on:
+  push:
+    branches:
+      - agent/conservative-folding-ranges
+    paths:
+      - .github/workflows/run-repair-folding-docs-v4.yml
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [main]
+    paths:
+      - .github/workflows/run-repair-folding-docs-v4.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: finish-folding-docs-repair
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    permissions:
+      contents: write
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out repair branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: agent/conservative-folding-ranges
+          fetch-depth: 0
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238
+        with:
+          node-version: 22
+          package-manager-cache: false
+
+      - name: Execute reviewed documentation repair
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          from textwrap import dedent
+
+          workflow = Path('.github/workflows/repair-folding-docs.yml').read_text(encoding='utf-8')
+          start = "          python3 - <<'PY'\n"
+          end = "\n          PY\n"
+          if workflow.count(start) != 1 or workflow.count(end) != 1:
+              raise SystemExit('repair workflow does not contain one extractable Python program')
+          program = workflow.split(start, 1)[1].split(end, 1)[0]
+          exec(compile(dedent(program), 'repair-folding-docs.py', 'exec'), {'__name__': '__main__'})
+          PY
+
+      - name: Preserve exact durable contracts
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path: str, old: str, new: str) -> None:
+              file_path = Path(path)
+              text = file_path.read_text(encoding='utf-8')
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{path}: expected one replacement target, found {count}')
+              file_path.write_text(text.replace(old, new), encoding='utf-8')
+
+          replace_once(
+              'docs/product/folding-ranges.md',
+              'A client that negotiates the LSP 3.18 `textDocument.foldingRange` capability\nreceives deterministic, source-order package and namespace folds from the same\nauthoritative scanner used by document outlines.',
+              'A client that negotiates the LSP 3.18 `textDocument.foldingRange` capability can\nrequest `textDocument/foldingRange` and receive deterministic, source-order\npackage and namespace folds from the same authoritative scanner used by document\noutlines.',
+          )
+
+          replace_once(
+              'docs/product/diagramweave-prd.md',
+              'legacy `SymbolInformation[]` compatibility와 `textDocument/foldingRange` 구현은 완료됐고, completion resolve, semantic member completion, hover, definition, references, rename, arbitrary region folding과 workspace indexing은 아직 구현되지 않았다.',
+              'legacy `SymbolInformation[]` compatibility 구현은 완료됐고, `textDocument/foldingRange` 구현도 완료됐다. completion resolve, semantic member completion, hover, definition, references, rename, arbitrary region folding과 workspace indexing은 아직 구현되지 않았다.',
+          )
+
+          replace_once(
+              'docs/operations/folding-ranges.md',
+              'A missing, malformed, array-valued, proxied, revoked, or throwing capability\npath does not advertise the provider. A request in that session returns the\nfixed `method_not_found` Language Server error.',
+              'A missing or hostile capability path—including malformed, array-valued,\nproxied, revoked, or throwing records—does not advertise the provider. A request\nin that session returns the fixed `method_not_found` Language Server error.',
+          )
+
+          replace_once(
+              'docs/product/folding-ranges.md',
+              'This backend slice exposes a standard LSP capability and does not add a\nDiagramWeave Studio visual component, so it does not require a new Figma\nartifact. Product Design and Figma become mandatory when Studio adds explicit\n',
+              'This backend slice exposes a standard LSP capability and does not add a\nDiagramWeave Studio visual component, so it does not require a new Figma artifact.\nProduct Design and Figma become mandatory when Studio adds explicit\n',
+          )
+          PY
+
+      - name: Install and verify exact repository
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm run verify
+          node scripts/check-package-contents.mjs
+
+      - name: Commit verified documentation and remove one-shot automation
+        shell: bash
+        run: |
+          git config user.name "DiagramWeave Documentation Repair"
+          git config user.email "actions@users.noreply.github.com"
+          rm .github/workflows/repair-folding-docs.yml
+          rm .github/workflows/run-repair-folding-docs.yml
+          rm .github/workflows/run-repair-folding-docs-v2.yml
+          rm .github/workflows/run-repair-folding-docs-v3.yml
+          rm .github/workflows/run-repair-folding-docs-v4.yml
+          git add -A
+          git diff --cached --check
+          git commit -m "docs: complete folding-range product contracts"
+          git push origin HEAD:agent/conservative-folding-ranges
