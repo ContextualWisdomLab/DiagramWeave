@@ -1,0 +1,356 @@
+name: Repair folding-range documentation contracts
+
+on:
+  push:
+    branches:
+      - agent/conservative-folding-ranges
+    paths:
+      - .github/workflows/repair-folding-docs.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: repair-folding-docs-agent-conservative-folding-ranges
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out exact branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: agent/conservative-folding-ranges
+          fetch-depth: 0
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238
+        with:
+          node-version: 22
+          package-manager-cache: false
+
+      - name: Repair durable documentation
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path: str, old: str, new: str) -> None:
+              file_path = Path(path)
+              text = file_path.read_text(encoding="utf-8")
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"{path}: expected one replacement target, found {count}")
+              file_path.write_text(text.replace(old, new), encoding="utf-8")
+
+          def insert_after(path: str, marker: str, addition: str) -> None:
+              replace_once(path, marker, marker + addition)
+
+          # Root README: expose the negotiated folding capability and modular host contract.
+          replace_once(
+              "README.md",
+              "capability-negotiated document outlines, and deterministic declaration\ncompletion:",
+              "capability-negotiated document outlines, deterministic declaration completion,\nand conservative folding ranges:",
+          )
+          replace_once(
+              "README.md",
+              "      completion: {},\n",
+              "      completion: {},\n      foldingRange: {\n        rangeLimit: 1024,\n        lineFoldingOnly: true,\n      },\n",
+          )
+          replace_once(
+              "README.md",
+              "capability-negotiated `textDocument/documentSymbol`, and capability-gated\n`textDocument/completion`.",
+              "capability-negotiated `textDocument/documentSymbol`, capability-gated\n`textDocument/completion`, and capability-gated `textDocument/foldingRange`.",
+          )
+          insert_after(
+              "README.md",
+              "It performs no LLM, renderer, file, include, macro, workspace, or network work.\n",
+              "\nFolding advertises `foldingRangeProvider: true` only when the client supplies a\nvalid plain `textDocument.foldingRange` capability. It reuses the same\nauthoritative document-symbol tree, honors `rangeLimit` up to the 1,024-symbol\nceiling, accepts boolean `lineFoldingOnly`, and returns immutable source-order\npackage and namespace ranges without a second parser.\n",
+          )
+          replace_once(
+              "README.md",
+              "transport-neutral session, so diagnostics, negotiated document symbols, and\ndeclaration completion do not diverge between embedded and process-based hosts.",
+              "transport-neutral session, so diagnostics, negotiated document symbols,\ndeclaration completion, and conservative folding ranges do not diverge between\nembedded and process-based hosts.",
+          )
+          replace_once(
+              "README.md",
+              "- **DiagramWeave Language Server:** implemented diagnostics, capability-negotiated hierarchical or legacy-flat document outlines, deterministic declaration completion, and bounded stdio integration reusable by Studio and external IDEs;",
+              "- **DiagramWeave Language Server:** implemented diagnostics, capability-negotiated hierarchical or legacy-flat document outlines, deterministic declaration completion, conservative package and namespace folding ranges, and bounded stdio integration reusable by Studio and external IDEs;",
+          )
+          replace_once(
+              "README.md",
+              "11. Declaration completion fails by omission in comments, strings, relations, directives, completed declarations, and ambiguous cursor positions.\n12. The user remains responsible for accepting, rejecting, saving, and committing changes.",
+              "11. Declaration completion fails by omission in comments, strings, relations, directives, completed declarations, and ambiguous cursor positions.\n12. Folding ranges are derived only from complete nonempty package or namespace scopes in the same authoritative symbol tree; ambiguous structure produces no fold.\n13. The user remains responsible for accepting, rejecting, saving, and committing changes.",
+          )
+          insert_after(
+              "README.md",
+              "- [Document-symbol compatibility product slice](docs/product/document-symbol-compatibility.md)\n",
+              "- [Conservative folding-ranges product slice](docs/product/folding-ranges.md)\n",
+          )
+          insert_after(
+              "README.md",
+              "- [LSP document-symbol compatibility research](docs/research/lsp-document-symbol-compatibility.md)\n",
+              "- [PlantUML folding-ranges research](docs/research/plantuml-folding-ranges.md)\n",
+          )
+          insert_after(
+              "README.md",
+              "- [Document-symbol compatibility operations](docs/operations/document-symbol-compatibility.md)\n",
+              "- [Folding-ranges operations](docs/operations/folding-ranges.md)\n",
+          )
+
+          # Language Server package README: document capability, bounds, and exact API use.
+          replace_once(
+              "packages/language-server/README.md",
+              "diagnostics, capability-negotiated document outlines, and deterministic\ndeclaration completion.",
+              "diagnostics, capability-negotiated document outlines, deterministic declaration\ncompletion, and conservative folding ranges.",
+          )
+          replace_once(
+              "packages/language-server/README.md",
+              "compatibility, and local keyword completion:",
+              "compatibility, local keyword completion, and bounded package/namespace folding:",
+          )
+          insert_after(
+              "packages/language-server/README.md",
+              "- capability-gated `textDocument/completion` with\n  `completionProvider: { resolveProvider: false }`;\n",
+              "- capability-gated `textDocument/foldingRange` with\n  `foldingRangeProvider: true`;\n",
+          )
+          replace_once(
+              "packages/language-server/README.md",
+              "cannot overwrite newer diagnostics, outline source, or completion source;",
+              "cannot overwrite newer diagnostics, outline source, completion source, or folding source;",
+          )
+          replace_once(
+              "packages/language-server/README.md",
+              "      completion: {},\n",
+              "      completion: {},\n      foldingRange: {\n        rangeLimit: 1024,\n        lineFoldingOnly: true,\n      },\n",
+          )
+          insert_after(
+              "packages/language-server/README.md",
+              "const completions = await session.request('textDocument/completion', {\n  textDocument: { uri: 'file:///workspace/context.puml' },\n  position: { line: 3, character: 5 },\n});\n",
+              "\nconst folds = await session.request('textDocument/foldingRange', {\n  textDocument: { uri: 'file:///workspace/context.puml' },\n});\n",
+          )
+          insert_after(
+              "packages/language-server/README.md",
+              "console.log(completions.map(({ label }) => label));\n",
+              "console.log(folds);\n",
+          )
+          insert_after(
+              "packages/language-server/README.md",
+              "It never calls an LLM, reads a URI, evaluates\nincludes or macros, starts the renderer, scans a workspace, or contacts the\nnetwork.\n",
+              "\n## Folding-range contract\n\nThe folding slice is enabled only when initialize receives a plain\n`capabilities.textDocument.foldingRange` record. The server then advertises\n`foldingRangeProvider: true` and accepts `textDocument/foldingRange` for the\nlatest accepted local document snapshot.\n\nThe optional `rangeLimit` must be an LSP unsigned integer. When absent, the\nserver returns at most 1,024 source-order ranges; `0` returns the shared frozen\nempty result, and larger valid values remain capped by the 1,024-symbol ceiling.\nThe optional `lineFoldingOnly` value may be absent or boolean. Malformed, array,\nproxied, revoked, or throwing capability data fails closed and does not advertise\nthe provider.\n\n`foldingRangesForSource` iteratively walks the same authoritative symbol tree\nused by `textDocument/documentSymbol`. It emits only nonempty package and\nnamespace scopes whose stack-ordered closing brace and matching indentation were\nalready proven. The immutable result contains only zero-based `startLine` and\n`endLine`; it performs no LLM, renderer, filesystem, include, macro, workspace,\nor network work.\n",
+          )
+          replace_once(
+              "packages/language-server/README.md",
+              "- Public diagnostics, symbol trees, symbol information, completion results,\n  locations, child arrays, positions, ranges, and edits are deeply frozen and",
+              "- Public diagnostics, symbol trees, symbol information, completion results,\n  folding results, locations, child arrays, positions, ranges, and edits are deeply frozen and",
+          )
+          replace_once(
+              "packages/language-server/README.md",
+              "hover, definition, references, rename, workspace indexing, cancellation, and\nStudio integration remain later bounded slices.",
+              "hover, definition, references, rename, arbitrary region folding, workspace\nindexing, cancellation, and Studio integration remain later bounded slices.",
+          )
+
+          # Stdio README: prove transport parity for folding.
+          replace_once(
+              "packages/language-server-stdio/README.md",
+              "document state, diagnostics, document symbols, and\ndeclaration completion in the existing",
+              "document state, diagnostics, document symbols, declaration completion, and\nconservative folding ranges in the existing",
+          )
+          insert_after(
+              "packages/language-server-stdio/README.md",
+              "- capability-gated `textDocument/completion`.\n",
+              "- capability-gated `textDocument/foldingRange`.\n",
+          )
+          insert_after(
+              "packages/language-server-stdio/README.md",
+              "caller exception, or hostile getter content.\n",
+              "\nA folding-capable client sends a plain `capabilities.textDocument.foldingRange`\nrecord during initialize. The server advertises `foldingRangeProvider: true`,\nhonors valid `rangeLimit` and boolean `lineFoldingOnly` options, and serializes\nthe same immutable `textDocument/foldingRange` result as an embedded host. A\nnon-negotiated request maps to the fixed method-not-found response without\nechoing source or URI values.\n",
+          )
+          replace_once(
+              "packages/language-server-stdio/README.md",
+              "The stdio layer does not duplicate completion or document snapshots.",
+              "The stdio layer does not duplicate completion, folding, or document snapshots.",
+          )
+          replace_once(
+              "packages/language-server-stdio/README.md",
+              "parallel request execution, Studio packaging, completion resolve, semantic\nnavigation, workspace indexing, and signed binaries remain separate bounded\nslices.",
+              "parallel request execution, Studio packaging, completion resolve, arbitrary\nregion folding, semantic navigation, workspace indexing, and signed binaries\nremain separate bounded slices.",
+          )
+
+          # PRD: make folding an explicit implemented product requirement.
+          replace_once(
+              "docs/product/diagramweave-prd.md",
+              "- **문서 버전:** 0.3",
+              "- **문서 버전:** 0.4",
+          )
+          insert_after(
+              "docs/product/diagramweave-prd.md",
+              "| FR-012 | Should | 정의 이동, 참조 찾기, 안전한 이름 변경을 제공한다. |\n",
+              "| FR-013 | Must | 대규모 소스를 위해 검증된 package·namespace 범위의 접기를 제공한다. |\n",
+          )
+          insert_after(
+              "docs/product/diagramweave-prd.md",
+              "Studio·IDE·`dweave-lsp`·naruon에서 동일한 세션을 재사용하며 implicit participant, 관계 endpoint, member, macro, include, renderer-dependent syntax, malformed 선언, 불완전 hierarchy와 모호한 자동완성 문맥은 추측하지 않는다.\n",
+              "\nLSP 3.18 `textDocument/foldingRange` 구현도 완료됐다. 클라이언트가 plain `textDocument.foldingRange` capability를 제공한 경우에만 `foldingRangeProvider: true`를 광고하고, 같은 authoritative symbol tree에서 완전하고 비어 있지 않은 package·namespace scope만 source-order `FoldingRange[]`로 반환한다. 유효한 `rangeLimit`과 boolean `lineFoldingOnly`를 fail-closed로 협상하며, 결과는 최대 1,024개로 제한되고 renderer·LLM·파일·네트워크를 호출하지 않는다.\n",
+          )
+          replace_once(
+              "docs/product/diagramweave-prd.md",
+              "FR-072의 진단·capability-negotiated 문서 심볼·선언 키워드 자동완성·stdio foundation 범위도 구현됐다.",
+              "FR-072의 진단·capability-negotiated 문서 심볼·선언 키워드 자동완성·conservative folding range·stdio foundation 범위도 구현됐다.",
+          )
+          replace_once(
+              "docs/product/diagramweave-prd.md",
+              "legacy `SymbolInformation[]` compatibility 구현은 완료됐고, completion resolve, semantic member completion, hover, definition, references, rename과 workspace indexing은 아직 구현되지 않았다.",
+              "legacy `SymbolInformation[]` compatibility와 `textDocument/foldingRange` 구현은 완료됐고, completion resolve, semantic member completion, hover, definition, references, rename, arbitrary region folding과 workspace indexing은 아직 구현되지 않았다.",
+          )
+
+          # Changelog: durable user-facing contract.
+          insert_after(
+              "CHANGELOG.md",
+              "### Added\n\n",
+              "- Conservative LSP 3.18 `textDocument/foldingRange` support for nonempty package and namespace scopes proven by the authoritative document-symbol tree, with `foldingRangeProvider` capability negotiation, bounded `rangeLimit`, boolean `lineFoldingOnly`, iterative source-order traversal, immutable line-only records, stale-snapshot protection, and shared Studio, IDE, stdio, naruon, and CWL host behavior without an LLM, renderer, file read, or network request.\n",
+          )
+
+          # Normative architecture: add the outer folding layer without weakening earlier contracts.
+          replace_once(
+              "docs/architecture.md",
+              "capability-negotiated hierarchical or legacy-flat document symbols, and deterministic declaration completion.",
+              "capability-negotiated hierarchical or legacy-flat document symbols, deterministic declaration completion, and conservative folding ranges.",
+          )
+          replace_once(
+              "docs/architecture.md",
+              "9. **Editor intelligence fails by omission.** Document symbols and declaration completion recognize only explicit high-signal syntax and do not invent semantics from relations, includes, macros, malformed source, or remote content.",
+              "9. **Editor intelligence fails by omission.** Document symbols, declaration completion, and folding ranges recognize only explicit high-signal syntax and do not invent semantics from relations, includes, macros, malformed source, or remote content.",
+          )
+          replace_once(
+              "docs/architecture.md",
+              "12. **Composed layers retain independent evidence.** Diagnostics, document symbols, compatibility adaptation, and completion own separate state and tests so an outer feature cannot hide regressions in an inner layer.",
+              "12. **Composed layers retain independent evidence.** Diagnostics, document symbols, compatibility adaptation, completion, and folding own separate state and tests so an outer feature cannot hide regressions in an inner layer.",
+          )
+          replace_once(
+              "docs/architecture.md",
+              "Studio --> LSP : snapshots / diagnostics / outline / completion",
+              "Studio --> LSP : snapshots / diagnostics / outline / completion / folding",
+          )
+          replace_once(
+              "docs/architecture.md",
+              "Studio will own file tabs, manual source editing, preview layout, diagnostics, outline, completion presentation, Context Inspector, diff review, keyboard interaction, recovery, and user approval.",
+              "Studio will own file tabs, manual source editing, preview layout, diagnostics, outline, completion and folding presentation, Context Inspector, diff review, keyboard interaction, recovery, and user approval.",
+          )
+          insert_after(
+              "docs/architecture.md",
+              "- advertise and serve deterministic `textDocument/completion` only to clients that declare completion support;\n",
+              "- advertise and serve conservative `textDocument/foldingRange` only to clients that declare a valid folding capability;\n",
+          )
+          replace_once(
+              "docs/architecture.md",
+              "diagnostic session\n  -> document-symbol session\n    -> declaration-completion session\n",
+              "diagnostic session\n  -> document-symbol session\n    -> declaration-completion session\n      -> folding-range session\n",
+          )
+          replace_once(
+              "docs/architecture.md",
+              "even though the public entry point exposes the outer completion session.",
+              "even though the public entry point exposes the outer folding session.",
+          )
+          insert_after(
+              "docs/architecture.md",
+              "Declaration completion uses a fixed catalog, LSP keyword CompletionItems, plain-text insertion, stable order, and explicit text edits. It returns no result in comments, quoted labels, relations, directives, completed declarations, or the middle of an existing identifier. It does not call an LLM, renderer, filesystem, workspace index, include processor, macro processor, or network service.\n",
+              "\n`createFoldingLanguageServerSession` wraps the completion session and stores only successful accepted source snapshots. `foldingRangesForSource` walks the same authoritative symbol tree iteratively, emitting immutable zero-based line ranges only for complete nonempty package and namespace scopes. Initialize-time `rangeLimit` and `lineFoldingOnly` values are validated under hostile boundaries; unsupported or malformed capabilities do not advertise `foldingRangeProvider`. Folding performs no renderer, LLM, filesystem, include, macro, workspace, or network work.\n",
+          )
+          replace_once(
+              "docs/architecture.md",
+              "- implementing completion resolve, snippets, semantic member completion, hover, definition, references, or rename;",
+              "- implementing completion resolve, snippets, semantic member completion, hover, definition, references, rename, or arbitrary region folding;",
+          )
+          replace_once(
+              "docs/architecture.md",
+              "- duplicating diagnostics, document symbols, completion, or source snapshots;",
+              "- duplicating diagnostics, document symbols, completion, folding, or source snapshots;",
+          )
+          insert_after(
+              "docs/architecture.md",
+              "7. The host decides whether to display and apply the text edit; the server never mutates a file.\n",
+              "\n### Folding ranges\n\n1. During initialize, the folding layer accepts only a plain `textDocument.foldingRange` capability with valid optional `rangeLimit` and `lineFoldingOnly` values.\n2. A supported client receives `foldingRangeProvider: true`; every unsupported or hostile capability state fails closed without advertising it.\n3. Successful open and full-document change notifications are copied into the folding snapshot only after all inner layers accept them.\n4. A `textDocument/foldingRange` request validates the local open-document URI and reads the latest accepted source.\n5. `foldingRangesForSource` obtains the same authoritative document-symbol tree and walks it iteratively in source preorder.\n6. Only proven nonempty package or namespace scopes emit immutable `{ startLine, endLine }` records, bounded by the client preference and 1,024-symbol ceiling.\n7. The stdio adapter serializes the same transport-neutral result; the host owns display, collapse state, and keyboard interaction.\n",
+          )
+          replace_once(
+              "docs/architecture.md",
+              "Diagnostics, capability-negotiated hierarchical or legacy-flat document symbols, and completion remain transport-neutral contracts reusable by CLI, Studio, IDEs, naruon, and service wrappers.",
+              "Diagnostics, capability-negotiated hierarchical or legacy-flat document symbols, completion, and folding ranges remain transport-neutral contracts reusable by CLI, Studio, IDEs, naruon, and service wrappers.",
+          )
+          replace_once(
+              "docs/architecture.md",
+              "completion item shape, and package exports are compatibility contracts.",
+              "completion item shape, folding range shape, and package exports are compatibility contracts.",
+          )
+          replace_once(
+              "docs/architecture.md",
+              "symbol-information, or completion schema requires an explicit version and migration guidance.",
+              "symbol-information, completion, or folding schema requires an explicit version and migration guidance.",
+          )
+          insert_after(
+              "docs/architecture.md",
+              "- Compatible completion catalog additions must remain documented, deterministic, bounded, and covered by exact-prefix tests.\n",
+              "- Compatible folding behavior must remain sourced from the authoritative symbol tree, deterministic, bounded, and covered by capability and lifecycle tests.\n",
+          )
+
+          # Root ADR index: make the new architectural decision discoverable.
+          replace_once(
+              "ARCHITECTURE.md",
+              "capability-negotiated hierarchical or legacy-flat document symbols, and deterministic declaration completion |",
+              "capability-negotiated hierarchical or legacy-flat document symbols, deterministic declaration completion, and conservative folding ranges |",
+          )
+          replace_once(
+              "ARCHITECTURE.md",
+              "10. Diagnostics, outlines, compatibility adaptation, and completion are composed\n    layers with independent tests and source ownership; a rejected or late\n    mutation cannot restore stale state in an outer layer.\n11. LSP positions use UTF-16 code units; multilingual and emoji ranges are\n    regression-tested across LF, CRLF, and CR source.\n12. Organization-central `.github` workflows own merge governance. Scheduled\n    product development uses OpenCode with `NVIDIA_NIM_API_KEY`, not Copilot.\n13. No release occurs while packages remain `0.0.0` under `Unreleased` or while\n    Studio, cross-platform runtime evidence, signing, SBOM/provenance, and\n    rollback evidence remain incomplete.",
+              "10. Conservative folding ranges reuse the authoritative document-symbol tree,\n    expose only proven nonempty package and namespace scopes, and walk source\n    preorder without recursive product traversal or a second parser.\n11. Diagnostics, outlines, compatibility adaptation, completion, and folding are\n    composed layers with independent tests and source ownership; a rejected or\n    late mutation cannot restore stale state in an outer layer.\n12. LSP positions use UTF-16 code units; multilingual and emoji ranges are\n    regression-tested across LF, CRLF, and CR source.\n13. Organization-central `.github` workflows own merge governance. Scheduled\n    product development uses OpenCode with `NVIDIA_NIM_API_KEY`, not Copilot.\n14. No release occurs while packages remain `0.0.0` under `Unreleased` or while\n    Studio, cross-platform runtime evidence, signing, SBOM/provenance, and\n    rollback evidence remain incomplete.",
+          )
+          insert_after(
+              "ARCHITECTURE.md",
+              "- [`docs/product/document-symbol-compatibility.md`](docs/product/document-symbol-compatibility.md)\n",
+              "- [`docs/product/folding-ranges.md`](docs/product/folding-ranges.md)\n",
+          )
+          insert_after(
+              "ARCHITECTURE.md",
+              "- [`docs/research/lsp-document-symbol-compatibility.md`](docs/research/lsp-document-symbol-compatibility.md)\n",
+              "- [`docs/research/plantuml-folding-ranges.md`](docs/research/plantuml-folding-ranges.md)\n",
+          )
+          insert_after(
+              "ARCHITECTURE.md",
+              "- [`docs/operations/document-symbol-compatibility.md`](docs/operations/document-symbol-compatibility.md)\n",
+              "- [`docs/operations/folding-ranges.md`](docs/operations/folding-ranges.md)\n",
+          )
+          insert_after(
+              "ARCHITECTURE.md",
+              "- [`docs/superpowers/plans/2026-08-05-legacy-document-symbol-fallback.md`](docs/superpowers/plans/2026-08-05-legacy-document-symbol-fallback.md)\n",
+              "- [`docs/superpowers/specs/2026-08-05-conservative-folding-ranges-design.md`](docs/superpowers/specs/2026-08-05-conservative-folding-ranges-design.md)\n- [`docs/superpowers/plans/2026-08-05-conservative-folding-ranges.md`](docs/superpowers/plans/2026-08-05-conservative-folding-ranges.md)\n",
+          )
+
+          # Design contract: keep the exact nonrecursive phrase contiguous.
+          replace_once(
+              "docs/superpowers/specs/2026-08-05-conservative-folding-ranges-design.md",
+              "A reverse stack walks the authoritative tree in source preorder without\nrecursive product traversal.",
+              "A reverse stack walks the authoritative tree in source preorder without recursive product traversal.",
+          )
+          PY
+
+      - name: Install locked workspace
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Verify repository and package contents
+        run: |
+          npm run verify
+          node scripts/check-package-contents.mjs
+
+      - name: Commit verified repair and remove one-shot workflow
+        shell: bash
+        run: |
+          git config user.name "DiagramWeave Documentation Repair"
+          git config user.email "actions@users.noreply.github.com"
+          rm .github/workflows/repair-folding-docs.yml
+          git add README.md ARCHITECTURE.md CHANGELOG.md docs/architecture.md docs/product/diagramweave-prd.md docs/superpowers/specs/2026-08-05-conservative-folding-ranges-design.md packages/language-server/README.md packages/language-server-stdio/README.md .github/workflows/repair-folding-docs.yml
+          git diff --cached --check
+          git commit -m "docs: complete folding-range product contracts"
+          git push origin HEAD:agent/conservative-folding-ranges
