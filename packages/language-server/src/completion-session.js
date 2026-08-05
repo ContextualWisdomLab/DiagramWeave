@@ -205,8 +205,9 @@ function normalizeCompletionParams(params) {
  * source snapshots used for deterministic `textDocument/completion`. Mutations
  * are ordered by epoch, active sequence, and latest applied sequence so stale
  * completions cannot restore older source and a rejected newer mutation cannot
- * suppress an earlier valid completion. Completion is advertised only when the
- * client declares the standard text-document completion capability.
+ * suppress an earlier valid completion. Completion is advertised and served
+ * only when the client declares the standard text-document completion
+ * capability.
  *
  * @param {unknown} options - Renderer and notification options for the composed session.
  * @returns {Readonly<{
@@ -222,6 +223,7 @@ export function createCompletionLanguageServerSession(options) {
   const lastAppliedSequence = new Map();
   let initialized = false;
   let ready = false;
+  let completionSupported = false;
   let shutdownRequested = false;
   let exited = false;
   let epoch = 0;
@@ -350,6 +352,11 @@ export function createCompletionLanguageServerSession(options) {
     async request(method, params = null) {
       if (method === 'textDocument/completion') {
         requireReady(method);
+        if (!completionSupported) {
+          throw new LanguageServerError('method_not_found', 'The request method is not supported.', {
+            method,
+          });
+        }
         const normalized = normalizeCompletionParams(params);
         const record = documents.get(normalized.textDocument.uri);
         if (record === undefined) {
@@ -364,6 +371,7 @@ export function createCompletionLanguageServerSession(options) {
       const result = await languageSession.request(method, params);
       if (method === 'initialize') {
         initialized = true;
+        completionSupported = supportsCompletion;
         return supportsCompletion ? advertiseCompletion(result) : result;
       }
       if (method === 'shutdown') {
