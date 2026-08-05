@@ -10,6 +10,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: diagramweave-document-symbol-bootstrap
+  cancel-in-progress: true
+
 jobs:
   patch-verify-and-clean:
     runs-on: ubuntu-24.04
@@ -43,45 +47,27 @@ jobs:
 
           replace_once(
               "packages/language-server/test/session.test.js",
-              """    capabilities: {
-                positionEncoding: 'utf-16',
-                textDocumentSync: { openClose: true, change: 1, save: false },
-              },
-          """,
-              """    capabilities: {
-                positionEncoding: 'utf-16',
-                textDocumentSync: { openClose: true, change: 1, save: false },
-                documentSymbolProvider: true,
-              },
-          """,
+              "      textDocumentSync: { openClose: true, change: 1, save: false },\n",
+              "      textDocumentSync: { openClose: true, change: 1, save: false },\n"
+              "      documentSymbolProvider: true,\n",
           )
 
           replace_once(
               "docs/product/diagramweave-prd.md",
-              """| FR-012 | Should | 정의 이동, 참조 찾기, 안전한 이름 변경을 제공한다. |
-
-          ### 렌더와 진단
-          """,
-              """| FR-012 | Should | 정의 이동, 참조 찾기, 안전한 이름 변경을 제공한다. |
-
-          FR-011의 문서 심볼·개요 foundation 범위는 구현됐다. LSP 3.18 `textDocument/documentSymbol`은 명시적 PlantUML 선언을 선언 순서의 immutable UTF-16 range로 반환하며, Studio·IDE·`dweave-lsp`·naruon에서 동일한 세션을 재사용한다. implicit participant, 관계 endpoint, member, macro, include와 malformed 선언은 추측하지 않는다. 자동완성은 후속 범위다.
-
-          ### 렌더와 진단
-          """,
+              "| FR-012 | Should | 정의 이동, 참조 찾기, 안전한 이름 변경을 제공한다. |\n\n"
+              "### 렌더와 진단\n",
+              "| FR-012 | Should | 정의 이동, 참조 찾기, 안전한 이름 변경을 제공한다. |\n\n"
+              "FR-011의 문서 심볼·개요 foundation 범위는 구현됐다. LSP 3.18 `textDocument/documentSymbol`은 명시적 PlantUML 선언을 선언 순서의 immutable UTF-16 range로 반환하며, Studio·IDE·`dweave-lsp`·naruon에서 동일한 세션을 재사용한다. implicit participant, 관계 endpoint, member, macro, include와 malformed 선언은 추측하지 않는다. 자동완성은 후속 범위다.\n\n"
+              "### 렌더와 진단\n",
           )
 
           replace_once(
               "docs/product/diagramweave-prd.md",
-              """FR-070과 FR-071의 foundation 범위는 구현됐다. CLI는 safe relative path, 상태, 오류 코드, revision hash와 구조화 진단만 보고하며 source, raw renderer diagnostic, raw label, Java/JAR 경로와 environment 값은 보고하지 않는다.
-
-          ### 접근성
-          """,
-              """FR-070과 FR-071의 foundation 범위는 구현됐다. CLI는 safe relative path, 상태, 오류 코드, revision hash와 구조화 진단만 보고하며 source, raw renderer diagnostic, raw label, Java/JAR 경로와 environment 값은 보고하지 않는다.
-
-          FR-072의 진단·문서 심볼·stdio foundation 범위도 구현됐다. bounded JSON-RPC transport와 transport-neutral session이 같은 UTF-16 진단 및 document-symbol 계약을 제공한다. completion, hover, definition, references, rename과 workspace indexing은 아직 구현되지 않았다.
-
-          ### 접근성
-          """,
+              "FR-070과 FR-071의 foundation 범위는 구현됐다. CLI는 safe relative path, 상태, 오류 코드, revision hash와 구조화 진단만 보고하며 source, raw renderer diagnostic, raw label, Java/JAR 경로와 environment 값은 보고하지 않는다.\n\n"
+              "### 접근성\n",
+              "FR-070과 FR-071의 foundation 범위는 구현됐다. CLI는 safe relative path, 상태, 오류 코드, revision hash와 구조화 진단만 보고하며 source, raw renderer diagnostic, raw label, Java/JAR 경로와 environment 값은 보고하지 않는다.\n\n"
+              "FR-072의 진단·문서 심볼·stdio foundation 범위도 구현됐다. bounded JSON-RPC transport와 transport-neutral session이 같은 UTF-16 진단 및 document-symbol 계약을 제공한다. completion, hover, definition, references, rename과 workspace indexing은 아직 구현되지 않았다.\n\n"
+              "### 접근성\n",
           )
 
       - name: Install locked workspace
