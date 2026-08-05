@@ -1,0 +1,22 @@
+{
+  "name": "@contextualwisdomlab/diagramweave-language-server-stdio",
+  "version": "0.0.0",
+  "description": "Bounded JSON-RPC stdio transport for the DiagramWeave Language Server.",
+  "license": "MIT",
+  "type": "module",
+  "exports": "./src/index.js",
+  "bin": {
+    "dweave-lsp": "./bin/dweave-lsp.js"
+  },
+  "engines": {
+    "node": ">=22 <25"
+  },
+  "dependencies": {
+    "@contextualwisdomlab/diagramweave-language-server": "0.0.0"
+  },
+  "files": [
+    "bin",
+    "src"
+  ],
+  "sideEffects": false
+}
