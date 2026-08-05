@@ -1,0 +1,71 @@
+name: Declaration Completion PRD Sync
+
+on:
+  push:
+    branches:
+      - agent/declaration-completion-foundation
+    paths:
+      - .github/workflows/declaration-completion-prd-sync.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: diagramweave-declaration-completion-prd-sync
+  cancel-in-progress: true
+
+jobs:
+  patch-and-clean:
+    permissions:
+      contents: write
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out exact feature branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: agent/declaration-completion-foundation
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Synchronize implemented PRD requirements
+        shell: python
+        run: |
+          from pathlib import Path
+
+          path = Path("docs/product/diagramweave-prd.md")
+          text = path.read_text(encoding="utf-8")
+          replacements = {
+              "FR-011의 문서 심볼·개요 foundation 범위는 구현됐다. LSP 3.18 `textDocument/documentSymbol`은 명시적 PlantUML 선언을 선언 순서의 immutable UTF-16 range로 반환하며, Studio·IDE·`dweave-lsp`·naruon에서 동일한 세션을 재사용한다. implicit participant, 관계 endpoint, member, macro, include와 malformed 선언은 추측하지 않는다. 자동완성은 후속 범위다.":
+              "FR-011의 문서 심볼·개요와 선언 키워드 자동완성 foundation 범위는 구현됐다. LSP 3.18 `textDocument/documentSymbol`은 명시적 PlantUML 선언을 선언 순서의 immutable UTF-16 range로 반환하며, capability-gated `textDocument/completion`은 안전한 줄 선두 접두사에 결정론적 UTF-16 `textEdit`를 제공한다. Studio·IDE·`dweave-lsp`·naruon에서 동일한 세션을 재사용하며 implicit participant, 관계 endpoint, member, macro, include, malformed 선언과 모호한 자동완성 문맥은 추측하지 않는다.",
+              "FR-072의 진단·문서 심볼·stdio foundation 범위도 구현됐다. bounded JSON-RPC transport와 transport-neutral session이 같은 UTF-16 진단 및 document-symbol 계약을 제공한다. completion, hover, definition, references, rename과 workspace indexing은 아직 구현되지 않았다.":
+              "FR-072의 진단·문서 심볼·선언 키워드 자동완성·stdio foundation 범위도 구현됐다. bounded JSON-RPC transport와 transport-neutral session이 같은 UTF-16 진단, document-symbol 및 capability-gated completion 계약을 제공한다. completion resolve, semantic member completion, hover, definition, references, rename과 workspace indexing은 아직 구현되지 않았다.",
+          }
+          for old, new in replacements.items():
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"expected one PRD replacement target, found {count}: {old[:80]}")
+              text = text.replace(old, new)
+          path.write_text(text, encoding="utf-8")
+
+      - name: Verify synchronized PRD
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -F '선언 키워드 자동완성 foundation 범위는 구현됐다' docs/product/diagramweave-prd.md
+          grep -F 'completion resolve, semantic member completion' docs/product/diagramweave-prd.md
+          if grep -Fq '자동완성은 후속 범위다' docs/product/diagramweave-prd.md; then
+            exit 1
+          fi
+
+      - name: Remove one-shot workflow and push verified tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm .github/workflows/declaration-completion-prd-sync.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/product/diagramweave-prd.md .github/workflows/declaration-completion-prd-sync.yml
+          git diff --cached --check
+          git commit -m "docs(prd): mark declaration completion implemented"
+          git push origin HEAD:agent/declaration-completion-foundation
