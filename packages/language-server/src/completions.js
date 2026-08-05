@@ -13,6 +13,7 @@ const completionCatalog = Object.freeze([
   'abstract class',
 ]);
 const emptyCompletionItems = Object.freeze([]);
+const identifierContinuation = /[\p{L}\p{N}_@]/u;
 
 /**
  * Mask PlantUML comments without changing UTF-16 line length.
@@ -150,7 +151,7 @@ export function completionItemsForSource(source, completionPosition) {
 
   const line = lines[lineIndex];
   const nextCharacter = line[character];
-  if (nextCharacter !== undefined && /[A-Za-z@]/u.test(nextCharacter)) {
+  if (nextCharacter !== undefined && identifierContinuation.test(nextCharacter)) {
     return emptyCompletionItems;
   }
 
