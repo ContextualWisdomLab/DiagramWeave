@@ -88,6 +88,9 @@ test('suppresses completions in comments strings relations directives and comple
     ['skinparam cla', { line: 0, character: 13 }],
     ['class Customer', { line: 0, character: 14 }],
     ['class', { line: 0, character: 2 }],
+    ['cl1', { line: 0, character: 2 }],
+    ['cl_name', { line: 0, character: 2 }],
+    ['clé', { line: 0, character: 2 }],
   ];
   for (const [source, position] of cases) {
     assert.deepEqual(completionItemsForSource(source, position), []);
