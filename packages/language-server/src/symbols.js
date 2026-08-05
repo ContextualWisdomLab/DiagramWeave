@@ -4,6 +4,8 @@ import { LanguageServerError } from './errors.js';
 import { languageServerLimits } from './limits.js';
 
 const declarationPattern = /^(\s*)(?:(abstract)\s+)?(package|namespace|class|interface|enum|annotation|entity|object|participant|actor|boundary|control|database|collections|queue|component|node|cloud|frame|folder|artifact|file|stack|storage|card|agent|rectangle|usecase|state)\b(.*)$/diu;
+const hierarchicalScopeKinds = new Set(['namespace', 'package']);
+const standaloneClosingBracePattern = /^(\s*)[}]\s*$/u;
 const symbolKinds = Object.freeze({
   package: 4,
   namespace: 3,
@@ -91,6 +93,44 @@ function maskComments(line, state) {
 }
 
 /**
+ * Return structural braces outside quoted labels in source order.
+ *
+ * Comments and supported delimited declaration labels must already be masked.
+ * Escaped quotes and doubled quote forms use the same rules as label parsing,
+ * so braces displayed inside quoted labels never create or close outline
+ * scopes.
+ *
+ * @param {string} line - One masked source line.
+ * @returns {string[]} Unquoted opening and closing brace characters.
+ */
+function structuralBraces(line) {
+  const braces = [];
+  let inQuote = false;
+  for (let index = 0; index < line.length; index += 1) {
+    const character = line[index];
+    const next = line[index + 1];
+    if (character === '"') {
+      if (inQuote && next === '"') {
+        index += 1;
+        continue;
+      }
+      let backslashes = 0;
+      for (let cursor = index - 1; cursor >= 0 && line[cursor] === '\\'; cursor -= 1) {
+        backslashes += 1;
+      }
+      if (backslashes % 2 === 0) {
+        inQuote = !inQuote;
+      }
+      continue;
+    }
+    if (!inQuote && (character === '{' || character === '}')) {
+      braces.push(character);
+    }
+  }
+  return braces;
+}
+
+/**
  * Parse one quoted or paired-delimiter label token.
  *
  * @param {string} value - Declaration remainder.
@@ -169,6 +209,48 @@ function parseLabelToken(value, from = 0) {
 }
 
 /**
+ * Replace one complete delimited label token with spaces.
+ *
+ * Every supported opening delimiter is one UTF-16 code unit. Masking the
+ * delimiter and label body preserves later source coordinates while preventing
+ * displayed braces from entering the structural scope stack.
+ *
+ * @param {string[]} characters - Mutable declaration remainder code units.
+ * @param {{selectionStart: number, tokenEnd: number, delimited: boolean}|null} token - Parsed label token.
+ * @returns {void}
+ */
+function maskDelimitedToken(characters, token) {
+  if (token?.delimited === true) {
+    characters.fill(' ', token.selectionStart - 1, token.tokenEnd);
+  }
+}
+
+/**
+ * Mask supported quoted, parenthesized, bracketed, and colon labels.
+ *
+ * Both the first declaration label and one token following `as` are considered.
+ * This prevents malformed but parseable secondary labels from contributing
+ * braces even when the first displayed token remains authoritative.
+ *
+ * @param {string} remainder - Declaration text following its keyword.
+ * @returns {string} Same-length remainder with complete delimited labels masked.
+ */
+function maskDelimitedLabels(remainder) {
+  const characters = remainder.split('');
+  const first = parseLabelToken(remainder);
+  if (first === null) {
+    return remainder;
+  }
+  maskDelimitedToken(characters, first);
+  const aliasMatch = /^\s+as\s+/diu.exec(remainder.slice(first.tokenEnd));
+  if (aliasMatch !== null) {
+    const secondStart = first.tokenEnd + aliasMatch[0].length;
+    maskDelimitedToken(characters, parseLabelToken(remainder, secondStart));
+  }
+  return characters.join('');
+}
+
+/**
  * Choose the displayed label from a declaration and optional `as` alias.
  *
  * A delimited first token is the display label. When the first token is bare
@@ -207,32 +289,111 @@ function position(line, character) {
 }
 
 /**
- * Create one immutable LSP range.
+ * Create one immutable multi-line LSP range.
  *
- * @param {number} line - Zero-based source line.
+ * @param {number} startLine - Zero-based start line.
  * @param {number} startCharacter - Inclusive UTF-16 start.
+ * @param {number} endLine - Zero-based end line.
  * @param {number} endCharacter - Exclusive UTF-16 end.
  * @returns {Readonly<object>} Frozen range and positions.
  */
-function range(line, startCharacter, endCharacter) {
+function sourceRange(startLine, startCharacter, endLine, endCharacter) {
   return Object.freeze({
-    start: position(line, startCharacter),
-    end: position(line, endCharacter),
+    start: position(startLine, startCharacter),
+    end: position(endLine, endCharacter),
   });
 }
 
 /**
- * Create a deterministic flat LSP DocumentSymbol outline for explicit PlantUML declarations.
+ * Assign declarations to the innermost complete package or namespace scope.
+ *
+ * Matched brace intervals are properly nested because the structural brace
+ * stack closes only its top entry. Unmatched declarations never enter the
+ * active scope stack and therefore cannot acquire children accidentally.
+ *
+ * @param {object[]} records - Mutable bounded declaration records.
+ * @returns {number[]} Root record indices in source order.
+ */
+function assignParents(records) {
+  const rootIndices = [];
+  const activeScopeIndices = [];
+  for (let index = 0; index < records.length; index += 1) {
+    const record = records[index];
+    while (
+      activeScopeIndices.length > 0 &&
+      record.lineIndex >= records[activeScopeIndices.at(-1)].closeLine
+    ) {
+      activeScopeIndices.pop();
+    }
+    if (activeScopeIndices.length === 0) {
+      rootIndices.push(index);
+    } else {
+      records[activeScopeIndices.at(-1)].childIndices.push(index);
+    }
+    if (record.closeLine !== null) {
+      activeScopeIndices.push(index);
+    }
+  }
+  return rootIndices;
+}
+
+/**
+ * Freeze bounded declaration records into a non-recursive DocumentSymbol tree.
+ *
+ * Children always occur later in source order than their parent, so reverse
+ * construction guarantees that each child is frozen before its parent without
+ * recursive traversal.
+ *
+ * @param {object[]} records - Mutable bounded declaration records.
+ * @param {number[]} rootIndices - Root record indices in source order.
+ * @returns {readonly Readonly<object>[]} Deeply frozen root symbols.
+ */
+function freezeSymbolTree(records, rootIndices) {
+  const frozenSymbols = new Array(records.length);
+  for (let index = records.length - 1; index >= 0; index -= 1) {
+    const record = records[index];
+    const children = record.childIndices.length === 0
+      ? null
+      : Object.freeze(record.childIndices.map((childIndex) => frozenSymbols[childIndex]));
+    const symbol = {
+      name: record.name,
+      detail: record.detail,
+      kind: record.kind,
+      range: sourceRange(
+        record.lineIndex,
+        record.lineStart,
+        record.closeLine ?? record.lineIndex,
+        record.closeCharacter ?? record.lineEnd,
+      ),
+      selectionRange: sourceRange(
+        record.lineIndex,
+        record.selectionStart,
+        record.lineIndex,
+        record.selectionEnd,
+      ),
+    };
+    if (children !== null) {
+      symbol.children = children;
+    }
+    frozenSymbols[index] = Object.freeze(symbol);
+  }
+  return Object.freeze(rootIndices.map((rootIndex) => frozenSymbols[rootIndex]));
+}
+
+/**
+ * Create a deterministic hierarchical LSP DocumentSymbol outline.
  *
  * The conservative scanner recognizes documented explicit declaration keywords
  * across common class, sequence, component, use-case, state, and deployment
- * diagrams. It deliberately ignores implicit participants, relations,
- * directives, members, macros, and malformed labels rather than inventing
- * semantic structure. Line and selection positions are JavaScript UTF-16
- * indices, matching the session's advertised LSP position encoding.
+ * diagrams. Complete package and namespace scopes become hierarchy only when
+ * one unquoted opening brace is closed in stack order by a standalone brace
+ * with identical indentation. Other declaration bodies and ambiguous,
+ * unmatched, cross-indented, quoted, delimited-label, and commented braces fail
+ * by omission. Line and selection positions are JavaScript UTF-16 indices,
+ * matching the advertised LSP position encoding.
  *
  * @param {unknown} source - Complete PlantUML source snapshot.
- * @returns {readonly Readonly<object>[]} Deeply frozen declaration-order symbols.
+ * @returns {readonly Readonly<object>[]} Deeply frozen source-order root symbols.
  * @throws {LanguageServerError} When source or bounded symbol contracts fail.
  */
 export function documentSymbolsForSource(source) {
@@ -246,46 +407,81 @@ export function documentSymbolsForSource(source) {
       field: 'text',
     });
   }
+
   const lines = source.split(/\r\n|\n|\r/u);
   const commentState = { inBlockComment: false };
-  const symbols = [];
+  const records = [];
+  const structuralStack = [];
   for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
     const originalLine = lines[lineIndex];
     const code = maskComments(originalLine, commentState);
     const match = declarationPattern.exec(code);
-    if (match === null || (match[2] !== undefined && match[3].toLowerCase() !== 'class')) {
-      continue;
+    let recordIndex = -1;
+    if (match !== null && (match[2] === undefined || match[3].toLowerCase() === 'class')) {
+      const remainder = match[4];
+      const label = selectDisplayLabel(remainder);
+      if (label !== null && label.name.length > 0) {
+        if (Buffer.byteLength(label.name, 'utf8') > languageServerLimits.maxSymbolNameBytes) {
+          throw new LanguageServerError(
+            'document_symbol_name_too_large',
+            'A document symbol name exceeds the session limit.',
+          );
+        }
+        if (records.length >= languageServerLimits.maxDocumentSymbols) {
+          throw new LanguageServerError(
+            'document_symbols_too_many',
+            'The document contains too many explicit symbols.',
+          );
+        }
+        const keyword = match[3].toLowerCase();
+        const remainderStart = match.indices[4][0];
+        recordIndex = records.length;
+        records.push({
+          name: label.name,
+          detail: match[2] === undefined ? keyword : 'abstract class',
+          kind: symbolKinds[keyword],
+          lineIndex,
+          lineStart: match[1].length,
+          lineEnd: originalLine.length,
+          selectionStart: remainderStart + label.selectionStart,
+          selectionEnd: remainderStart + label.selectionEnd,
+          indentation: match[1],
+          closeLine: null,
+          closeCharacter: null,
+          childIndices: [],
+        });
+      }
     }
-    const remainder = match[4];
-    const label = selectDisplayLabel(remainder);
-    if (label === null || label.name.length === 0) {
-      continue;
+
+    const structuralCode = match === null
+      ? code
+      : `${code.slice(0, match.indices[4][0])}${maskDelimitedLabels(match[4])}`;
+    const braces = structuralBraces(structuralCode);
+    const scopeRecordIndex = recordIndex >= 0 &&
+      hierarchicalScopeKinds.has(records[recordIndex].detail) &&
+      braces.length === 1 &&
+      braces[0] === '{'
+      ? recordIndex
+      : -1;
+    const closingMatch = braces.length === 1 && braces[0] === '}'
+      ? standaloneClosingBracePattern.exec(structuralCode)
+      : null;
+    for (const brace of braces) {
+      if (brace === '{') {
+        structuralStack.push(scopeRecordIndex);
+        continue;
+      }
+      const openingRecordIndex = structuralStack.pop() ?? -1;
+      if (
+        openingRecordIndex >= 0 &&
+        closingMatch !== null &&
+        closingMatch[1] === records[openingRecordIndex].indentation
+      ) {
+        records[openingRecordIndex].closeLine = lineIndex;
+        records[openingRecordIndex].closeCharacter = originalLine.length;
+      }
     }
-    if (Buffer.byteLength(label.name, 'utf8') > languageServerLimits.maxSymbolNameBytes) {
-      throw new LanguageServerError(
-        'document_symbol_name_too_large',
-        'A document symbol name exceeds the session limit.',
-      );
-    }
-    if (symbols.length >= languageServerLimits.maxDocumentSymbols) {
-      throw new LanguageServerError(
-        'document_symbols_too_many',
-        'The document contains too many explicit symbols.',
-      );
-    }
-    const keyword = match[3].toLowerCase();
-    const detail = match[2] === undefined ? keyword : 'abstract class';
-    const remainderStart = match.indices[4][0];
-    const lineStart = match[1].length;
-    const selectionStart = remainderStart + label.selectionStart;
-    const selectionEnd = remainderStart + label.selectionEnd;
-    symbols.push(Object.freeze({
-      name: label.name,
-      detail,
-      kind: symbolKinds[keyword],
-      range: range(lineIndex, lineStart, originalLine.length),
-      selectionRange: range(lineIndex, selectionStart, selectionEnd),
-    }));
   }
-  return Object.freeze(symbols);
+
+  return freezeSymbolTree(records, assignParents(records));
 }

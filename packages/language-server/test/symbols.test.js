@@ -11,6 +11,20 @@ function assertError(error, code) {
   return true;
 }
 
+function flattenSymbols(roots) {
+  const flattened = [];
+  const stack = [...roots].reverse();
+  while (stack.length > 0) {
+    const symbol = stack.pop();
+    flattened.push(symbol);
+    const children = symbol.children ?? [];
+    for (let index = children.length - 1; index >= 0; index -= 1) {
+      stack.push(children[index]);
+    }
+  }
+  return flattened;
+}
+
 test('extracts deterministic explicit declarations across common PlantUML diagrams', () => {
   const source = [
     '@startuml',
@@ -28,7 +42,22 @@ test('extracts deterministic explicit declarations across common PlantUML diagra
     '@enduml',
   ].join('\n');
 
-  const symbols = documentSymbolsForSource(source);
+  const roots = documentSymbolsForSource(source);
+  const symbols = flattenSymbols(roots);
+  assert.deepEqual(roots.map(({ name }) => name), [
+    'Core Services',
+    '사용자 😀',
+    'Admin',
+    'API Gateway',
+    'Submit Order',
+    'Ready',
+  ]);
+  assert.deepEqual(roots[0].children.map(({ name }) => name), [
+    'Customer',
+    'Order 😀',
+    'PaymentPort',
+    'Status',
+  ]);
   assert.deepEqual(symbols.map(({ name, detail, kind }) => ({ name, detail, kind })), [
     { name: 'Core Services', detail: 'package', kind: 4 },
     { name: 'Customer', detail: 'class', kind: 5 },
@@ -42,11 +71,12 @@ test('extracts deterministic explicit declarations across common PlantUML diagra
     { name: 'Ready', detail: 'state', kind: 24 },
   ]);
   assert.deepEqual(symbols.map(({ range }) => range.start.line), [1, 2, 3, 4, 5, 7, 8, 9, 10, 11]);
+  assert.deepEqual(roots[0].range.end, { line: 6, character: 1 });
   assert.deepEqual(symbols[5].selectionRange, {
     start: { line: 7, character: 13 },
     end: { line: 7, character: 19 },
   });
-  assert.equal(Object.isFrozen(symbols), true);
+  assert.equal(Object.isFrozen(roots), true);
   for (const symbol of symbols) {
     assert.equal(Object.isFrozen(symbol), true);
     assert.equal(Object.isFrozen(symbol.range), true);
@@ -54,7 +84,13 @@ test('extracts deterministic explicit declarations across common PlantUML diagra
     assert.equal(Object.isFrozen(symbol.range.end), true);
     assert.equal(Object.isFrozen(symbol.selectionRange), true);
     assert.equal(symbol.range.start.line <= symbol.selectionRange.start.line, true);
-    assert.equal(symbol.selectionRange.end.character <= symbol.range.end.character, true);
+    assert.equal(symbol.selectionRange.end.line <= symbol.range.end.line, true);
+    if (symbol.selectionRange.end.line === symbol.range.end.line) {
+      assert.equal(symbol.selectionRange.end.character <= symbol.range.end.character, true);
+    }
+    if (symbol.children !== undefined) {
+      assert.equal(Object.isFrozen(symbol.children), true);
+    }
   }
 });
 
