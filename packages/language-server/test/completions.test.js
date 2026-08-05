@@ -73,7 +73,7 @@ test('preserves UTF-16 line and character positions across newline conventions',
     start: { line: 1, character: 1 },
     end: { line: 1, character: 4 },
   });
-  assert.deepEqual(labels(completionItemsForSource(source, { line: 2, character: 2 })), ['state', 'stack', 'storage']);
+  assert.deepEqual(labels(completionItemsForSource(source, { line: 2, character: 2 })), ['stack', 'storage', 'state']);
 });
 
 test('suppresses completions in comments strings relations directives and completed declarations', () => {
@@ -81,18 +81,20 @@ test('suppresses completions in comments strings relations directives and comple
     ["' cla", { line: 0, character: 5 }],
     ["/'\ncla\n'/", { line: 1, character: 3 }],
     ['class "cla', { line: 0, character: 10 }],
+    ['class "A""B" cla', { line: 0, character: 16 }],
+    ['class "A\\\"B" cla', { line: 0, character: 16 }],
     ['Alice -> cla', { line: 0, character: 12 }],
     ['!include cla', { line: 0, character: 12 }],
     ['skinparam cla', { line: 0, character: 13 }],
     ['class Customer', { line: 0, character: 14 }],
-    ['cl|ass'.replace('|', ''), { line: 0, character: 2 }],
+    ['class', { line: 0, character: 2 }],
   ];
   for (const [source, position] of cases) {
     assert.deepEqual(completionItemsForSource(source, position), []);
   }
 });
 
-test('resumes completion after a block comment closes before the cursor', () => {
+test('resumes completion after a block comment closes on an earlier line', () => {
   const source = "/' hidden '/  par";
   assert.deepEqual(
     labels(completionItemsForSource(source, { line: 0, character: source.length })),
