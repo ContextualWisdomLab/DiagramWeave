@@ -66,7 +66,7 @@ test('filters case-insensitively and replaces only the leading typed prefix', ()
 });
 
 test('preserves UTF-16 line and character positions across newline conventions', () => {
-  const source = 'participant "😀 User"\r\n\tcom\rstate Done\n';
+  const source = 'participant "😀 User"\r\n\tcom\rst Done\n';
   const component = completionItemsForSource(source, { line: 1, character: 4 });
   assert.deepEqual(labels(component), ['component']);
   assert.deepEqual(component[0].textEdit.range, {
