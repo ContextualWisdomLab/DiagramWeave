@@ -58,7 +58,7 @@ test('completion documentation records protocol safety product and modular-host 
   assert.match(operations, /No skipped completion test is accepted/);
   assert.match(product, /Studio, IDE extensions, naruon, and other CWL hosts/);
   assert.match(product, /Figma must define at least/);
-  assert.match(prd, /계층형 문서 심볼·개요와 선언 키워드 자동완성 foundation 범위는 구현됐다/);
+  assert.match(prd, /capability-negotiated 문서 심볼·개요와 선언 키워드 자동완성 foundation 범위는 구현됐다/);
   assert.match(prd, /completion resolve, semantic member completion/);
   assert.doesNotMatch(prd, /자동완성은 후속 범위다/);
   assert.match(changelog, /textDocument\/completion/);

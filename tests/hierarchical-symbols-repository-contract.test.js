@@ -41,7 +41,7 @@ test('hierarchical outline records preserve LSP PlantUML safety and modular-host
     readFile(new URL('../ARCHITECTURE.md', import.meta.url), 'utf8'),
   ]);
 
-  assert.match(rootReadme, /bounded\nimmutable `textDocument\/documentSymbol` trees/);
+  assert.match(rootReadme, /capability-negotiated `textDocument\/documentSymbol`/);
   assert.match(rootReadme, /Hierarchical-outline product slice/);
   assert.match(packageReadme, /optional frozen `children`/);
   assert.match(packageReadme, /built and frozen bottom-up without recursive product traversal/);
@@ -52,11 +52,11 @@ test('hierarchical outline records preserve LSP PlantUML safety and modular-host
   assert.match(operations, /URIs are identifiers only and are never dereferenced/);
   assert.match(product, /Studio, IDE extensions, naruon, and other CWL/);
   assert.match(product, /Product Design and Figma must define/);
-  assert.match(prd, /계층형 문서 심볼·개요와 선언 키워드 자동완성 foundation 범위는 구현됐다/);
-  assert.match(prd, /legacy flat-only symbol fallback/);
+  assert.match(prd, /capability-negotiated 문서 심볼·개요와 선언 키워드 자동완성 foundation 범위는 구현됐다/);
+  assert.match(prd, /legacy `SymbolInformation\[\]` compatibility 구현은 완료됐/);
   assert.match(changelog, /Conservative hierarchical LSP 3\.18 document symbols/);
   assert.match(architecture, /Hierarchy requires complete structural evidence/);
-  assert.match(architecture, /children bottom-up and returns bounded source-order roots/);
+  assert.match(architecture, /freezes children bottom-up into one authoritative bounded tree/);
   assert.match(architectureIndex, /Outline hierarchy is created only from one unmatched unquoted declaration/);
 });
 

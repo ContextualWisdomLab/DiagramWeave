@@ -13,7 +13,7 @@ function decodeFrame(frame) {
   return JSON.parse(frame.subarray(separator + 4).toString('utf8'));
 }
 
-test('serves hierarchical document symbols through the real bounded stdio transport', async () => {
+async function documentSymbolMessages(initializeParams) {
   const output = [];
   const connection = createLanguageServerStdioConnection({
     javaPath,
@@ -29,7 +29,12 @@ test('serves hierarchical document symbols through the real bounded stdio transp
   });
 
   await connection.acceptChunk(Buffer.concat([
-    encodeJsonRpcFrame({ jsonrpc: '2.0', id: 1, method: 'initialize', params: {} }),
+    encodeJsonRpcFrame({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'initialize',
+      params: initializeParams,
+    }),
     encodeJsonRpcFrame({ jsonrpc: '2.0', method: 'initialized', params: {} }),
     encodeJsonRpcFrame({
       jsonrpc: '2.0',
@@ -53,7 +58,17 @@ test('serves hierarchical document symbols through the real bounded stdio transp
     encodeJsonRpcFrame({ jsonrpc: '2.0', method: 'exit' }),
   ]));
 
-  const messages = output.map(decodeFrame);
+  return output.map(decodeFrame);
+}
+
+test('serves hierarchical document symbols through the real bounded stdio transport', async () => {
+  const messages = await documentSymbolMessages({
+    capabilities: {
+      textDocument: {
+        documentSymbol: { hierarchicalDocumentSymbolSupport: true },
+      },
+    },
+  });
   const initializeResponse = messages.find(({ id }) => id === 1);
   const symbolResponse = messages.find(({ id }) => id === 2);
   const shutdownResponse = messages.find(({ id }) => id === 3);
@@ -94,4 +109,39 @@ test('serves hierarchical document symbols through the real bounded stdio transp
     ],
   });
   assert.deepEqual(shutdownResponse, { jsonrpc: '2.0', id: 3, result: null });
+});
+
+test('serves flat symbol information to legacy clients through the same stdio transport', async () => {
+  const messages = await documentSymbolMessages({ capabilities: {} });
+  const symbolResponse = messages.find(({ id }) => id === 2);
+
+  assert.deepEqual(symbolResponse, {
+    jsonrpc: '2.0',
+    id: 2,
+    result: [
+      {
+        name: 'Core',
+        kind: 4,
+        location: {
+          uri,
+          range: {
+            start: { line: 0, character: 0 },
+            end: { line: 2, character: 1 },
+          },
+        },
+      },
+      {
+        name: 'Api',
+        kind: 5,
+        location: {
+          uri,
+          range: {
+            start: { line: 1, character: 2 },
+            end: { line: 1, character: 11 },
+          },
+        },
+        containerName: 'Core',
+      },
+    ],
+  });
 });

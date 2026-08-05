@@ -2,7 +2,7 @@
 
 ## Purpose
 
-DiagramWeave is a source-first editor platform for PlantUML and future text diagram languages. The architecture protects manual editing as the authoritative workflow while making LLM output reviewable, revision-bound, and replaceable. The implemented foundation contains a portable trust kernel, a Contextual Orchestrator adapter, an isolated local PlantUML renderer, safe structured diagnostics, a deterministic CLI, a transport-neutral Language Server, bounded JSON-RPC stdio integration, conservative hierarchical document symbols, and deterministic declaration completion. It still contains no database, desktop shell, or hidden document store; future surfaces must reuse these boundaries rather than reimplement them.
+DiagramWeave is a source-first editor platform for PlantUML and future text diagram languages. The architecture protects manual editing as the authoritative workflow while making LLM output reviewable, revision-bound, and replaceable. The implemented foundation contains a portable trust kernel, a Contextual Orchestrator adapter, an isolated local PlantUML renderer, safe structured diagnostics, a deterministic CLI, a transport-neutral Language Server, bounded JSON-RPC stdio integration, capability-negotiated hierarchical or legacy-flat document symbols, and deterministic declaration completion. It still contains no database, desktop shell, or hidden document store; future surfaces must reuse these boundaries rather than reimplement them.
 
 ## Architectural principles
 
@@ -15,8 +15,9 @@ DiagramWeave is a source-first editor platform for PlantUML and future text diag
 7. **Provider and renderer boundaries are adapters.** Core never imports a network client, renderer process, UI framework, or persistence implementation.
 8. **Diagnostics are safe data contracts.** Raw child output stays inside the renderer boundary; reusable hosts receive only bounded, fixed-message, deeply frozen records.
 9. **Editor intelligence fails by omission.** Document symbols and declaration completion recognize only explicit high-signal syntax and do not invent semantics from relations, includes, macros, malformed source, or remote content.
-10. **Hierarchy requires complete structural evidence.** Only stack-ordered declaration braces with identical opening and closing indentation create children; ambiguous or incomplete source remains flat.
-11. **Composed layers retain independent evidence.** Diagnostics, document symbols, and completion own separate state and tests so an outer feature cannot hide regressions in an inner layer.
+10. **Hierarchy requires complete structural evidence.** Only stack-ordered package or namespace declaration braces with identical opening and closing indentation create children; ambiguous or incomplete source remains flat.
+11. **Protocol compatibility is presentation, not parsing.** `symbolInformationForDocument` iteratively derives immutable `SymbolInformation[]` from the same authoritative tree when a client does not advertise hierarchical support.
+12. **Composed layers retain independent evidence.** Diagnostics, document symbols, compatibility adaptation, and completion own separate state and tests so an outer feature cannot hide regressions in an inner layer.
 
 ## System context
 
@@ -189,7 +190,7 @@ Responsibilities:
 - implement initialize, initialized, shutdown, and exit lifecycle rules;
 - own bounded full-document synchronization for local `.puml` and `.plantuml` identifiers;
 - publish safe diagnostics from the shared renderer boundary;
-- provide conservative source-order `textDocument/documentSymbol` trees with optional proven children and enclosing parent ranges;
+- provide conservative source-order `textDocument/documentSymbol` results, returning `DocumentSymbol[]` only to clients that explicitly advertise `hierarchicalDocumentSymbolSupport: true` and otherwise returning legacy-compatible `SymbolInformation[]`;
 - advertise and serve deterministic `textDocument/completion` only to clients that declare completion support;
 - preserve UTF-16 positions across multilingual source and emoji;
 - normalize caller-owned records into frozen snapshots;
@@ -206,7 +207,9 @@ diagnostic session
 
 Each wrapper delegates lifecycle and inner features while owning only the source required by its feature. Direct unit tests cover every layer independently, even though the public entry point exposes the outer completion session.
 
-Document-symbol hierarchy is computed locally after explicit declaration parsing. One unmatched unquoted declaration brace may become a parent only when it is closed in stack order by a standalone brace with identical indentation. Quoted, commented, balanced one-line, unmatched, multi-open, cross-indented, and crossed structure remains flat. Parent ranges extend through proven close lines, roots and siblings preserve source order, and the frozen tree is constructed bottom-up without recursive product traversal.
+Document-symbol hierarchy is computed locally after explicit declaration parsing. One unmatched unquoted package or namespace declaration brace may become a parent only when it is closed in stack order by a standalone brace with identical indentation. Quoted, commented, balanced one-line, unmatched, multi-open, cross-indented, and crossed structure remains flat. Parent ranges extend through proven close lines, roots and siblings preserve source order, and the frozen tree is constructed bottom-up without recursive product traversal.
+
+Initialize-time capability negotiation changes only presentation. Exact boolean `hierarchicalDocumentSymbolSupport: true` returns the authoritative `DocumentSymbol[]` tree. Every other and hostile capability state invokes `symbolInformationForDocument`, which walks the same authoritative tree iteratively and returns deeply frozen source-preorder `SymbolInformation[]` with the validated local URI, enclosing range, and immediate proven `containerName`. Both response shapes come from the same authoritative symbol tree; no second PlantUML scanner is introduced.
 
 Declaration completion uses a fixed catalog, LSP keyword CompletionItems, plain-text insertion, stable order, and explicit text edits. It returns no result in comments, quoted labels, relations, directives, completed declarations, or the middle of an existing identifier. It does not call an LLM, renderer, filesystem, workspace index, include processor, macro processor, or network service.
 
@@ -274,14 +277,16 @@ Non-responsibilities:
 
 ### Document symbols
 
-1. The client initializes the server, sends initialized, and opens a complete source snapshot.
-2. The diagnostic layer validates lifecycle, URI, language, version, source size, and renderer behavior.
-3. The document-symbol layer stores only the accepted frozen source.
-4. A document-symbol request scans explicit declarations and masks comments without shifting UTF-16 offsets.
-5. A bounded structural pass matches only complete stack-ordered declaration braces with identical opening and closing indentation.
-6. Matched intervals receive source-order children and enclosing ranges; ambiguous and incomplete structure remains flat.
-7. The layer freezes children bottom-up and returns bounded source-order roots or a stable source-free error.
-8. Later accepted changes replace the snapshot; close and lifecycle invalidation remove it.
+1. During initialize, the document-symbol layer probes `hierarchicalDocumentSymbolSupport` without trusting hostile getters or proxies.
+2. The client initializes the server, sends initialized, and opens a complete source snapshot.
+3. The diagnostic layer validates lifecycle, URI, language, version, source size, and renderer behavior.
+4. The document-symbol layer stores only the accepted frozen source.
+5. A document-symbol request scans explicit declarations and masks comments without shifting UTF-16 offsets.
+6. A bounded structural pass matches only complete stack-ordered package or namespace declaration braces with identical opening and closing indentation.
+7. Matched intervals receive source-order children and enclosing ranges; ambiguous and incomplete structure remains flat.
+8. The layer freezes children bottom-up into one authoritative bounded tree.
+9. Hierarchical clients receive that tree; all other clients receive `symbolInformationForDocument` output from the same tree, URI, and proven immediate-parent relationships.
+10. Later accepted changes replace the snapshot; close and lifecycle invalidation remove it.
 
 ### Declaration completion
 
@@ -337,7 +342,7 @@ DiagramWeave uses package boundaries first and service boundaries only where the
 - The PlantUML renderer is an isolated local process adapter and can later be wrapped by a versioned service without changing its artifact, error, or diagnostic contracts.
 - The CLI is an independent batch host that composes the renderer with deterministic path and report contracts for CI and naruon.
 - The Language Server is independently embeddable; the stdio package is a replaceable process transport.
-- Diagnostics, hierarchical document symbols, and completion remain transport-neutral contracts reusable by CLI, Studio, IDEs, naruon, and service wrappers.
+- Diagnostics, capability-negotiated hierarchical or legacy-flat document symbols, and completion remain transport-neutral contracts reusable by CLI, Studio, IDEs, naruon, and service wrappers.
 - Collaboration, policy, indexing, and persistence can become local processes or services behind versioned contracts.
 - naruon can invoke Core, the renderer, CLI, the Language Server, and the Contextual Orchestrator adapter without embedding Studio.
 - organization-central `.github` workflows govern PRs without copying policy logic into production packages.
@@ -351,8 +356,8 @@ The foundation introduces no database. If persistence is added, source files rem
 
 - Node.js 22 and 24 are supported foundation runtimes.
 - Packages use ECMAScript modules.
-- Public error codes, diagnostic fields, proposal schema version, Language Server capabilities, document-symbol hierarchy, completion item shape, and package exports are compatibility contracts.
-- A breaking proposal, diagnostic, symbol-tree, or completion schema requires an explicit version and migration guidance.
+- Public error codes, diagnostic fields, proposal schema version, Language Server capabilities, negotiated `DocumentSymbol[]` and `SymbolInformation[]` shapes, completion item shape, and package exports are compatibility contracts.
+- A breaking proposal, diagnostic, symbol-tree, symbol-information, or completion schema requires an explicit version and migration guidance.
 - Compatible completion catalog additions must remain documented, deterministic, bounded, and covered by exact-prefix tests.
 - Package releases follow Semantic Versioning after an integrated release candidate is ready.
 - `CHANGELOG.md` remains the user-facing history of contract changes.

@@ -23,6 +23,7 @@ const packageContracts = Object.freeze([
       'package/src/index.js',
       'package/src/limits.js',
       'package/src/session.js',
+      'package/src/symbol-information.js',
       'package/src/symbol-session.js',
       'package/src/symbols.js',
     ]),

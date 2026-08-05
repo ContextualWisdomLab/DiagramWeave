@@ -7,6 +7,7 @@ import {
 } from './contracts.js';
 import { LanguageServerError } from './errors.js';
 import { createLanguageServerSession as createDiagnosticSession } from './session.js';
+import { symbolInformationForDocument } from './symbol-information.js';
 import { documentSymbolsForSource } from './symbols.js';
 
 /**
@@ -23,6 +24,28 @@ function advertiseDocumentSymbols(result) {
       documentSymbolProvider: true,
     }),
   });
+}
+
+/**
+ * Return whether one initialize request explicitly supports hierarchical symbols.
+ *
+ * The capability path is hostile input. Missing, malformed, proxied, or throwing
+ * values fail closed to the legacy-compatible flat response.
+ *
+ * @param {unknown} params - Candidate initialize parameters.
+ * @returns {boolean} True only for the exact standard boolean capability.
+ */
+function clientSupportsHierarchicalDocumentSymbols(params) {
+  try {
+    return isPlainRecord(params) &&
+      isPlainRecord(params.capabilities) &&
+      isPlainRecord(params.capabilities.textDocument) &&
+      isPlainRecord(params.capabilities.textDocument.documentSymbol) &&
+      params.capabilities.textDocument.documentSymbol
+        .hierarchicalDocumentSymbolSupport === true;
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -146,8 +169,10 @@ function normalizeTextDocumentParams(params, method) {
  *
  * The wrapper delegates lifecycle, validation, and diagnostics to the original
  * diagnostic session while owning only sanitized full-document snapshots used
- * by `textDocument/documentSymbol`. Concurrent mutations are tracked by epoch,
- * start sequence, active set, and last applied sequence. A rejected newer
+ * by `textDocument/documentSymbol`. It returns the authoritative hierarchy only
+ * to clients that explicitly advertise it and otherwise derives immutable flat
+ * symbol information from the same tree. Concurrent mutations are tracked by
+ * epoch, start sequence, active set, and last applied sequence. A rejected newer
  * mutation therefore cannot suppress an older valid completion, while an older
  * completion can never overwrite a newer successfully applied snapshot.
  *
@@ -165,6 +190,7 @@ export function createDocumentSymbolLanguageServerSession(options) {
   const lastAppliedSequence = new Map();
   let initialized = false;
   let ready = false;
+  let hierarchicalDocumentSymbolsSupported = false;
   let shutdownRequested = false;
   let exited = false;
   let epoch = 0;
@@ -288,7 +314,7 @@ export function createDocumentSymbolLanguageServerSession(options) {
 
   const session = {
     /**
-     * Handle an LSP request and provide document symbols for open source.
+     * Handle an LSP request and provide negotiated document symbols for open source.
      *
      * @param {unknown} method - Request method.
      * @param {unknown} [params] - Request parameters.
@@ -304,12 +330,17 @@ export function createDocumentSymbolLanguageServerSession(options) {
             method,
           });
         }
-        return documentSymbolsForSource(record.text);
+        const symbols = documentSymbolsForSource(record.text);
+        return hierarchicalDocumentSymbolsSupported
+          ? symbols
+          : symbolInformationForDocument(normalized.textDocument.uri, symbols);
       }
 
       const result = await diagnosticSession.request(method, params);
       if (method === 'initialize') {
         initialized = true;
+        hierarchicalDocumentSymbolsSupported =
+          clientSupportsHierarchicalDocumentSymbols(params);
         return advertiseDocumentSymbols(result);
       }
       if (method === 'shutdown') {
