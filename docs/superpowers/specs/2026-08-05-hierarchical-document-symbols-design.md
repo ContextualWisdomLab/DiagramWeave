@@ -106,7 +106,7 @@ At most 1,024 explicit symbols are accepted. Internal records may be mutable
 while scanning, but no mutable record crosses the function boundary.
 
 The final tree is constructed bottom-up in reverse declaration order so child
-symbols are frozen before parents. This avoids recursive freezing and preserves
+symbols are frozen before parents, without recursive traversal. This preserves
 safe behavior for deeply nested but bounded documents. Root and child arrays,
 individual symbols, ranges, and positions are frozen.
 
