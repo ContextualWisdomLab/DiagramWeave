@@ -16,7 +16,10 @@ test('publishes an independently reusable transport-neutral package', () => {
   assert.deepEqual(manifest.dependencies, {
     '@contextualwisdomlab/diagramweave-plantuml-renderer': '0.0.0',
   });
-  assert.match(indexSource, /createLanguageServerSession/);
+  assert.match(
+    indexSource,
+    /createFoldingLanguageServerSession as createLanguageServerSession/,
+  );
   assert.match(indexSource, /LanguageServerError/);
   assert.match(indexSource, /languageServerLimits/);
   assert.doesNotMatch(indexSource, /normalizeDocumentUri|diagnosticsForRendererOutcome/);
