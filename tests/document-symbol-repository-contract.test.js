@@ -3,6 +3,8 @@ import { readFile, stat } from 'node:fs/promises';
 import test from 'node:test';
 
 const requiredFiles = [
+  'ARCHITECTURE.md',
+  'CLAUDE.md',
   'packages/language-server/src/symbols.js',
   'packages/language-server/src/symbol-session.js',
   'docs/research/plantuml-document-symbols.md',
@@ -20,12 +22,14 @@ test('repository publishes document-symbol code and durable records', async () =
 });
 
 test('document-symbol documentation records LSP, PlantUML, privacy, and modular-host contracts', async () => {
-  const [readme, research, operations, product, changelog] = await Promise.all([
+  const [readme, research, operations, product, changelog, architecture, claude] = await Promise.all([
     readFile(new URL('../packages/language-server/README.md', import.meta.url), 'utf8'),
     readFile(new URL('../docs/research/plantuml-document-symbols.md', import.meta.url), 'utf8'),
     readFile(new URL('../docs/operations/document-symbols.md', import.meta.url), 'utf8'),
     readFile(new URL('../docs/product/document-symbol-outline.md', import.meta.url), 'utf8'),
     readFile(new URL('../CHANGELOG.md', import.meta.url), 'utf8'),
+    readFile(new URL('../ARCHITECTURE.md', import.meta.url), 'utf8'),
+    readFile(new URL('../CLAUDE.md', import.meta.url), 'utf8'),
   ]);
 
   assert.match(readme, /textDocument\/documentSymbol/);
@@ -40,6 +44,10 @@ test('document-symbol documentation records LSP, PlantUML, privacy, and modular-
   assert.match(product, /Studio, IDE clients,\n`dweave-lsp`, naruon, and other CWL hosts/);
   assert.match(product, /without an LLM/i);
   assert.match(changelog, /textDocument\/documentSymbol/);
+  assert.match(architecture, /fail\nby omission/i);
+  assert.match(architecture, /NVIDIA_NIM_API_KEY/);
+  assert.match(claude, /Read and follow \[`AGENTS\.md`\]/);
+  assert.doesNotMatch(claude, /COPILOT_GITHUB_TOKEN/);
 });
 
 test('public Language Server entry point composes the symbol session', async () => {
