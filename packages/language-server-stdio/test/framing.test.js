@@ -87,16 +87,16 @@ test('enforces chunk, header, buffered frame, and per-chunk message limits', () 
     (error) => assertError(error, 'header_too_large'),
   );
 
-  const prefix = `Content-Length: ${languageServerStdioLimits.maxMessageBytes}`;
-  const paddedHeader = `${prefix}${' '.repeat(languageServerStdioLimits.maxHeaderBytes - prefix.length)}`;
-  const oversizedIncomplete = Buffer.concat([
-    Buffer.from(`${paddedHeader}\r\n\r\n`, 'ascii'),
-    Buffer.alloc(languageServerStdioLimits.maxMessageBytes - 3),
-  ]);
-  assert.throws(
-    () => createLspFrameReader().push(oversizedIncomplete),
-    (error) => assertError(error, 'buffer_too_large'),
-  );
+  const maximalReader = createLspFrameReader();
+  const maximalPrefix = `Content-Length: ${languageServerStdioLimits.maxMessageBytes}`;
+  const maximalHeader = `${maximalPrefix}${' '.repeat(languageServerStdioLimits.maxHeaderBytes - maximalPrefix.length)}`;
+  assert.deepEqual(maximalReader.push(Buffer.concat([
+    Buffer.from(`${maximalHeader}\r\n\r\n`, 'ascii'),
+    Buffer.alloc(languageServerStdioLimits.maxMessageBytes - 1),
+  ])), []);
+  const maximalFrames = maximalReader.push(Buffer.alloc(1));
+  assert.equal(maximalFrames.length, 1);
+  assert.equal(maximalFrames[0].length, languageServerStdioLimits.maxMessageBytes);
 
   const longHeaderValue = 'a'.repeat(languageServerStdioLimits.maxHeaderBytes - 'Content-Length: 2097152\r\nX: \r\n'.length);
   const incomplete = Buffer.concat([
