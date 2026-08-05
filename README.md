@@ -103,15 +103,57 @@ The CLI discovers `.puml` and `.plantuml` files in stable lexical order, rejects
 
 The package is independently reusable by naruon, CI, and other CWL hosts. See [`packages/cli/README.md`](packages/cli/README.md) for the complete command, diagnostic, exit-code, filesystem, and embedding contracts.
 
+### `@contextualwisdomlab/diagramweave-language-server`
+
+A transport-neutral LSP 3.18 session for local PlantUML diagnostics and explicit document outlines:
+
+```js
+import {
+  createLanguageServerSession,
+} from '@contextualwisdomlab/diagramweave-language-server';
+
+const session = createLanguageServerSession({
+  javaPath: '/absolute/path/to/java',
+  jarPath: '/absolute/path/to/plantuml.jar',
+  publishNotification(method, params) {
+    host.sendNotification(method, params);
+  },
+});
+```
+
+The session uses full-document synchronization, local file-URI identifiers,
+source-free renderer diagnostics, exact version/generation checks, and bounded
+immutable `textDocument/documentSymbol` results. The outline recognizes
+high-signal explicit PlantUML declarations while deliberately ignoring implicit
+or malformed constructs. Studio, IDE extensions, naruon, and other CWL hosts
+reuse this package without importing a process transport.
+
+### `@contextualwisdomlab/diagramweave-language-server-stdio`
+
+A bounded JSON-RPC stdio adapter and `dweave-lsp` executable for standard IDE
+integration:
+
+```bash
+DIAGRAMWEAVE_JAVA_PATH=/absolute/path/to/java \
+DIAGRAMWEAVE_PLANTUML_JAR_PATH=/absolute/path/to/plantuml.jar \
+dweave-lsp
+```
+
+The adapter validates ASCII Content-Length framing and UTF-8 JSON-RPC 2.0,
+serializes input and output, bounds messages and queues, and returns exit code
+zero only after successful shutdown followed by exit. It imports the same
+transport-neutral session, so diagnostics and document symbols do not diverge
+between embedded and process-based hosts.
+
 ## Product direction
 
 The repository is the modular foundation for:
 
-- **DiagramWeave Studio:** manual source editor, preview, diagnostics, Context Inspector, diff review, recovery, and accessible approval flows;
+- **DiagramWeave Studio:** manual source editor, preview, diagnostics, outline, Context Inspector, diff review, recovery, and accessible approval flows;
 - **DiagramWeave Renderer:** implemented local PlantUML package with stdin-only rendering, `SANDBOX`, metadata suppression, bounded resources, safe line diagnostics, and local and remote includes unavailable;
-- **DiagramWeave Language Server:** diagnostics and navigation reusable by Studio and external IDEs, building on the implemented LSP-compatible renderer record;
+- **DiagramWeave Language Server:** implemented diagnostics, document outlines, and bounded stdio integration reusable by Studio and external IDEs;
 - **DiagramWeave CLI:** implemented deterministic validation, rendering, atomic publication, and structured diagnostic foundation, with formatting and policy checks remaining future work;
-- **naruon and CWL integration:** embeddable Core, renderer, diagnostics, CLI, and provider adapters without requiring the Studio application.
+- **naruon and CWL integration:** embeddable Core, renderer, diagnostics, CLI, Language Server, stdio transport, and provider adapters without requiring the Studio application.
 
 The detailed product contract is in [`docs/product/diagramweave-prd.md`](docs/product/diagramweave-prd.md). Component boundaries and trust decisions are in [`docs/architecture.md`](docs/architecture.md) and [`docs/security-model.md`](docs/security-model.md).
 
@@ -124,7 +166,8 @@ The detailed product contract is in [`docs/product/diagramweave-prd.md`](docs/pr
 5. Schema, range, replacement, and scope expansion are validated locally.
 6. Expanded edits require an explicit reason and host approval.
 7. Raw child output remains inside the renderer boundary; hosts receive only bounded, fixed-message diagnostics.
-8. The user remains responsible for accepting, rejecting, saving, and committing changes.
+8. Outline records are derived only from sanitized open-document snapshots and are never inferred from remote content.
+9. The user remains responsible for accepting, rejecting, saving, and committing changes.
 
 ## Development
 
@@ -143,8 +186,12 @@ npm run verify
 - [Architecture](docs/architecture.md)
 - [Security model](docs/security-model.md)
 - [Structured diagnostics research](docs/research/plantuml-structured-diagnostics.md)
+- [PlantUML document-symbol research](docs/research/plantuml-document-symbols.md)
 - [Contextual Orchestrator operations](docs/operations/contextual-orchestrator.md)
 - [PlantUML renderer operations](docs/operations/plantuml-renderer.md)
+- [Document-symbol operations](docs/operations/document-symbols.md)
+- [DiagramWeave Language Server](packages/language-server/README.md)
+- [DiagramWeave stdio Language Server](packages/language-server-stdio/README.md)
 - [DiagramWeave CLI](packages/cli/README.md)
 - [Security reporting](SECURITY.md)
 - [Change history](CHANGELOG.md)
