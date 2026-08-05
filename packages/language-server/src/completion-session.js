@@ -161,15 +161,18 @@ function normalizeCloseParams(params) {
  * @returns {Readonly<object>} Frozen text-document and position records.
  */
 function normalizeCompletionParams(params) {
-  let textDocument;
+  let uri;
   let completionPosition;
   try {
     if (!isPlainRecord(params) || !isPlainRecord(params.textDocument)) {
       throw new Error('invalid completion parameters');
     }
-    textDocument = params.textDocument;
+    uri = normalizeDocumentUri(params.textDocument.uri);
     completionPosition = params.position;
-  } catch {
+  } catch (error) {
+    if (error instanceof LanguageServerError) {
+      throw error;
+    }
     throw new LanguageServerError('invalid_request', 'Completion parameters are invalid.', {
       method: 'textDocument/completion',
     });
@@ -190,9 +193,7 @@ function normalizeCompletionParams(params) {
     );
   }
   return Object.freeze({
-    textDocument: Object.freeze({
-      uri: normalizeDocumentUri(textDocument.uri),
-    }),
+    textDocument: Object.freeze({ uri }),
     position: Object.freeze({ line, character }),
   });
 }
