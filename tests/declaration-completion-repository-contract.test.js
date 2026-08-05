@@ -28,6 +28,7 @@ test('completion documentation records protocol safety product and modular-host 
     research,
     operations,
     product,
+    prd,
     changelog,
     architecture,
     architectureIndex,
@@ -38,6 +39,7 @@ test('completion documentation records protocol safety product and modular-host 
     readFile(new URL('../docs/research/plantuml-declaration-completion.md', import.meta.url), 'utf8'),
     readFile(new URL('../docs/operations/declaration-completion.md', import.meta.url), 'utf8'),
     readFile(new URL('../docs/product/declaration-completion.md', import.meta.url), 'utf8'),
+    readFile(new URL('../docs/product/diagramweave-prd.md', import.meta.url), 'utf8'),
     readFile(new URL('../CHANGELOG.md', import.meta.url), 'utf8'),
     readFile(new URL('../docs/architecture.md', import.meta.url), 'utf8'),
     readFile(new URL('../ARCHITECTURE.md', import.meta.url), 'utf8'),
@@ -56,6 +58,9 @@ test('completion documentation records protocol safety product and modular-host 
   assert.match(operations, /No skipped completion test is accepted/);
   assert.match(product, /Studio, IDE extensions, naruon, and other CWL hosts/);
   assert.match(product, /Figma must define at least/);
+  assert.match(prd, /문서 심볼·개요와 선언 키워드 자동완성 foundation 범위는 구현됐다/);
+  assert.match(prd, /completion resolve, semantic member completion/);
+  assert.doesNotMatch(prd, /자동완성은 후속 범위다/);
   assert.match(changelog, /textDocument\/completion/);
   assert.match(architecture, /diagnostic session\n  -> document-symbol session\n    -> declaration-completion session/);
   assert.match(architectureIndex, /fixed, deterministic, capability-gated local\n   catalog/);
