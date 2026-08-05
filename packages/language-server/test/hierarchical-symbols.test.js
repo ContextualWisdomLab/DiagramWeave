@@ -79,6 +79,7 @@ test('builds a deeply frozen declaration hierarchy from complete matched scopes'
 
 test('uses only complete indentation-matched unquoted declaration scopes', () => {
   const source = [
+    '}',
     'package "Quoted { Label" as Quoted',
     'package "Escaped \\" { label" as Escaped',
     "package Commented ' {",
@@ -120,8 +121,8 @@ test('uses only complete indentation-matched unquoted declaration scopes', () =>
   for (const index of [0, 1, 2, 3, 4, 6, 7, 8, 9, 10]) {
     assert.equal(roots[index].children, undefined);
   }
-  assert.deepEqual(roots[5].range.end, { line: 7, character: 19 });
-  assert.deepEqual(roots[11].range.end, { line: 17, character: 15 });
+  assert.deepEqual(roots[5].range.end, { line: 8, character: 17 });
+  assert.deepEqual(roots[11].range.end, { line: 18, character: 15 });
 });
 
 test('constructs a deep bounded hierarchy without recursive product traversal', () => {
