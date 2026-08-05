@@ -105,7 +105,8 @@ The package is independently reusable by naruon, CI, and other CWL hosts. See [`
 
 ### `@contextualwisdomlab/diagramweave-language-server`
 
-A transport-neutral LSP 3.18 session for local PlantUML diagnostics and explicit document outlines:
+A transport-neutral LSP 3.18 session for local PlantUML diagnostics, explicit
+document outlines, and deterministic declaration completion:
 
 ```js
 import {
@@ -119,14 +120,26 @@ const session = createLanguageServerSession({
     host.sendNotification(method, params);
   },
 });
+
+await session.request('initialize', {
+  capabilities: {
+    textDocument: {
+      completion: {},
+    },
+  },
+});
 ```
 
 The session uses full-document synchronization, local file-URI identifiers,
-source-free renderer diagnostics, exact version/generation checks, and bounded
-immutable `textDocument/documentSymbol` results. The outline recognizes
-high-signal explicit PlantUML declarations while deliberately ignoring implicit
-or malformed constructs. Studio, IDE extensions, naruon, and other CWL hosts
-reuse this package without importing a process transport.
+source-free renderer diagnostics, exact version/generation checks, bounded
+immutable `textDocument/documentSymbol` results, and capability-gated
+`textDocument/completion`. The outline recognizes high-signal explicit
+PlantUML declarations while deliberately ignoring implicit or malformed
+constructs. Completion filters the same declaration families from a fixed local
+catalog and returns exact UTF-16 text edits only at safe line-leading prefixes.
+It performs no LLM, renderer, file, include, macro, workspace, or network work.
+Studio, IDE extensions, naruon, and other CWL hosts reuse this package without
+importing a process transport.
 
 ### `@contextualwisdomlab/diagramweave-language-server-stdio`
 
@@ -142,16 +155,18 @@ dweave-lsp
 The adapter validates ASCII Content-Length framing and UTF-8 JSON-RPC 2.0,
 serializes input and output, bounds messages and queues, and returns exit code
 zero only after successful shutdown followed by exit. It imports the same
-transport-neutral session, so diagnostics and document symbols do not diverge
-between embedded and process-based hosts.
+transport-neutral session, so diagnostics, document symbols, and declaration
+completion do not diverge between embedded and process-based hosts. Invalid
+completion positions are returned as fixed JSON-RPC Invalid params responses
+without source or URI values.
 
 ## Product direction
 
 The repository is the modular foundation for:
 
-- **DiagramWeave Studio:** manual source editor, preview, diagnostics, outline, Context Inspector, diff review, recovery, and accessible approval flows;
+- **DiagramWeave Studio:** manual source editor, preview, diagnostics, outline, completion, Context Inspector, diff review, recovery, and accessible approval flows;
 - **DiagramWeave Renderer:** implemented local PlantUML package with stdin-only rendering, `SANDBOX`, metadata suppression, bounded resources, safe line diagnostics, and local and remote includes unavailable;
-- **DiagramWeave Language Server:** implemented diagnostics, document outlines, and bounded stdio integration reusable by Studio and external IDEs;
+- **DiagramWeave Language Server:** implemented diagnostics, document outlines, deterministic declaration completion, and bounded stdio integration reusable by Studio and external IDEs;
 - **DiagramWeave CLI:** implemented deterministic validation, rendering, atomic publication, and structured diagnostic foundation, with formatting and policy checks remaining future work;
 - **naruon and CWL integration:** embeddable Core, renderer, diagnostics, CLI, Language Server, stdio transport, and provider adapters without requiring the Studio application.
 
@@ -166,8 +181,9 @@ The detailed product contract is in [`docs/product/diagramweave-prd.md`](docs/pr
 5. Schema, range, replacement, and scope expansion are validated locally.
 6. Expanded edits require an explicit reason and host approval.
 7. Raw child output remains inside the renderer boundary; hosts receive only bounded, fixed-message diagnostics.
-8. Outline records are derived only from sanitized open-document snapshots and are never inferred from remote content.
-9. The user remains responsible for accepting, rejecting, saving, and committing changes.
+8. Outline and completion records are derived only from sanitized accepted open-document snapshots and are never inferred from remote content.
+9. Declaration completion fails by omission in comments, strings, relations, directives, completed declarations, and ambiguous cursor positions.
+10. The user remains responsible for accepting, rejecting, saving, and committing changes.
 
 ## Development
 
@@ -183,13 +199,16 @@ npm run verify
 ## Documentation
 
 - [Product requirements](docs/product/diagramweave-prd.md)
+- [Declaration-completion product slice](docs/product/declaration-completion.md)
 - [Architecture](docs/architecture.md)
 - [Security model](docs/security-model.md)
 - [Structured diagnostics research](docs/research/plantuml-structured-diagnostics.md)
 - [PlantUML document-symbol research](docs/research/plantuml-document-symbols.md)
+- [PlantUML declaration-completion research](docs/research/plantuml-declaration-completion.md)
 - [Contextual Orchestrator operations](docs/operations/contextual-orchestrator.md)
 - [PlantUML renderer operations](docs/operations/plantuml-renderer.md)
 - [Document-symbol operations](docs/operations/document-symbols.md)
+- [Declaration-completion operations](docs/operations/declaration-completion.md)
 - [DiagramWeave Language Server](packages/language-server/README.md)
 - [DiagramWeave stdio Language Server](packages/language-server-stdio/README.md)
 - [DiagramWeave CLI](packages/cli/README.md)

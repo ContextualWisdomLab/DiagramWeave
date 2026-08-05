@@ -50,12 +50,12 @@ test('document-symbol documentation records LSP, PlantUML, privacy, and modular-
   assert.match(claude, /never introduce `COPILOT_GITHUB_TOKEN`/);
 });
 
-test('public Language Server entry point composes the symbol session', async () => {
+test('public Language Server entry point composes completion over document symbols', async () => {
   const [indexSource, limitsSource] = await Promise.all([
     readFile(new URL('../packages/language-server/src/index.js', import.meta.url), 'utf8'),
     readFile(new URL('../packages/language-server/src/limits.js', import.meta.url), 'utf8'),
   ]);
-  assert.match(indexSource, /createDocumentSymbolLanguageServerSession as createLanguageServerSession/);
+  assert.match(indexSource, /createCompletionLanguageServerSession as createLanguageServerSession/);
   assert.match(limitsSource, /maxDocumentSymbols: 1024/);
   assert.match(limitsSource, /maxSymbolNameBytes: 1024/);
 });

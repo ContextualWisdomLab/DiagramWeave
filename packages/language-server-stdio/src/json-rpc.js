@@ -206,6 +206,7 @@ export function responseForSessionError(id, error) {
     'incremental_change_unsupported',
     'document_not_open',
     'document_version_out_of_order',
+    'document_position_invalid',
   ]);
   if (invalidParamCodes.has(error.code)) {
     return createErrorResponse(id, -32602, 'Invalid params.', error.code);
