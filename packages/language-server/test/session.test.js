@@ -155,6 +155,7 @@ test('returns immutable LSP 3.18 full-sync capabilities and enforces lifecycle r
     capabilities: {
       positionEncoding: 'utf-16',
       textDocumentSync: { openClose: true, change: 1, save: false },
+      documentSymbolProvider: true,
     },
     serverInfo: { name: 'DiagramWeave Language Server', version: '0.0.0' },
   });
