@@ -62,19 +62,24 @@ test('completion documentation records protocol safety product and modular-host 
   assert.match(prd, /completion resolve, semantic member completion/);
   assert.doesNotMatch(prd, /자동완성은 후속 범위다/);
   assert.match(changelog, /textDocument\/completion/);
-  assert.match(architecture, /diagnostic session\n  -> document-symbol session\n    -> declaration-completion session/);
+  assert.match(
+    architecture,
+    /diagnostic session\n  -> document-symbol session\n    -> declaration-completion session\n      -> folding-range session/,
+  );
   assert.match(architectureIndex, /fixed, deterministic, capability-gated local\n   catalog/);
 });
 
-test('public entry point limits and planning records describe the exact completion layer', async () => {
-  const [indexSource, limitsSource, design, plan] = await Promise.all([
+test('public entry point retains the exact completion layer beneath folding', async () => {
+  const [indexSource, foldingSessionSource, limitsSource, design, plan] = await Promise.all([
     readFile(new URL('../packages/language-server/src/index.js', import.meta.url), 'utf8'),
+    readFile(new URL('../packages/language-server/src/folding-session.js', import.meta.url), 'utf8'),
     readFile(new URL('../packages/language-server/src/limits.js', import.meta.url), 'utf8'),
     readFile(new URL('../docs/superpowers/specs/2026-08-05-declaration-completion-design.md', import.meta.url), 'utf8'),
     readFile(new URL('../docs/superpowers/plans/2026-08-05-declaration-completion.md', import.meta.url), 'utf8'),
   ]);
 
-  assert.match(indexSource, /createCompletionLanguageServerSession as createLanguageServerSession/);
+  assert.match(indexSource, /createFoldingLanguageServerSession as createLanguageServerSession/);
+  assert.match(foldingSessionSource, /createCompletionLanguageServerSession/);
   assert.match(limitsSource, /maxCompletionItems: 64/);
   assert.match(design, /completion performs no LLM call, renderer call, file read/);
   assert.match(design, /production line, branch, and function coverage at 100%/);
