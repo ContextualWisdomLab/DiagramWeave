@@ -48,7 +48,7 @@ test('compatibility records preserve protocol privacy product and modular-host c
     assert.match(text, /SymbolInformation\[\]/);
   }
   assert.match(packageReadme, /1,024 symbols/);
-  assert.match(packageReadme, /immediate.*containerName/is);
+  assert.match(packageReadme, /containerName.*immediate/is);
   assert.match(research, /Language Server Protocol specification, version 3\.18/);
   assert.match(research, /References — APA 7th edition/);
   assert.match(operations, /URI.*identifier.*never dereferenced/is);
