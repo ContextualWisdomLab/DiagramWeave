@@ -1,0 +1,139 @@
+name: Document Symbol Coverage Fix
+
+on:
+  push:
+    branches:
+      - agent/document-symbol-outline
+    paths:
+      - .github/workflows/document-symbol-coverage-fix.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: diagramweave-document-symbol-coverage-fix
+  cancel-in-progress: true
+
+jobs:
+  patch-verify-and-clean:
+    permissions:
+      contents: write
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out exact branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: agent/document-symbol-outline
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Set up Node.js 24
+        uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238
+        with:
+          node-version: 24
+          package-manager-cache: false
+
+      - name: Restore direct diagnostic-session coverage and remove impossible branch
+        shell: python
+        run: |
+          from pathlib import Path
+
+          def replace_once(path: str, old: str, new: str) -> None:
+              target = Path(path)
+              text = target.read_text(encoding="utf-8")
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"{path}: expected one replacement target, found {count}")
+              target.write_text(text.replace(old, new), encoding="utf-8")
+
+          replace_once(
+              "packages/language-server/test/session.test.js",
+              """import {
+            LanguageServerError,
+            createLanguageServerSession,
+            languageServerLimits,
+          } from '../src/index.js';
+          """,
+              """import { LanguageServerError } from '../src/errors.js';
+          import { languageServerLimits } from '../src/limits.js';
+          import { createLanguageServerSession } from '../src/session.js';
+          """,
+          )
+
+          replace_once(
+              "packages/language-server/src/symbol-session.js",
+              """    const active = activeMutations.get(uri);
+              if (active === undefined || !active.has(identity)) {
+                return false;
+              }
+          """,
+              """    const active = activeMutations.get(uri);
+              if (!active.has(identity)) {
+                return false;
+              }
+          """,
+          )
+
+      - name: Install locked workspace
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Verify complete repository
+        run: npm run verify
+
+      - name: Verify package contents
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm pack --workspace packages/language-server --dry-run --json > /tmp/language-server-pack.json
+          npm pack --workspace packages/language-server-stdio --dry-run --json > /tmp/language-server-stdio-pack.json
+          node <<'NODE'
+          const fs = require('node:fs');
+          const checks = [
+            ['/tmp/language-server-pack.json', new Set([
+              'package/LICENSE',
+              'package/README.md',
+              'package/package.json',
+              'package/src/contracts.js',
+              'package/src/diagnostics.js',
+              'package/src/errors.js',
+              'package/src/index.js',
+              'package/src/limits.js',
+              'package/src/session.js',
+              'package/src/symbol-session.js',
+              'package/src/symbols.js',
+            ])],
+            ['/tmp/language-server-stdio-pack.json', new Set([
+              'package/LICENSE',
+              'package/README.md',
+              'package/package.json',
+              'package/bin/dweave-lsp.js',
+              'package/src/connection.js',
+              'package/src/errors.js',
+              'package/src/framing.js',
+              'package/src/index.js',
+              'package/src/json-rpc.js',
+              'package/src/limits.js',
+              'package/src/process.js',
+            ])],
+          ];
+          for (const [path, expected] of checks) {
+            const report = JSON.parse(fs.readFileSync(path, 'utf8'));
+            const actual = new Set(report[0].files.map(({ path: filePath }) => filePath));
+            if (actual.size !== expected.size || [...actual].some((path) => !expected.has(path))) {
+              throw new Error(`${path}: unexpected package contents: ${[...actual].sort().join(', ')}`);
+            }
+          }
+          NODE
+
+      - name: Remove one-shot workflow and push verified tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm .github/workflows/document-symbol-coverage-fix.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add packages/language-server/test/session.test.js packages/language-server/src/symbol-session.js .github/workflows/document-symbol-coverage-fix.yml
+          git diff --cached --check
+          git commit -m "test(language-server): restore exact diagnostic-session coverage"
+          git push origin HEAD:agent/document-symbol-outline
