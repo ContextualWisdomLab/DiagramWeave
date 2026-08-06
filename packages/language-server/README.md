@@ -2,15 +2,16 @@
 
 A transport-neutral Language Server Protocol 3.18 session for PlantUML
 diagnostics, capability-negotiated document outlines, deterministic declaration
-completion, and conservative folding ranges. It is independently reusable by DiagramWeave Studio,
-IDE adapters, naruon, and other CWL hosts without importing a desktop shell or
-JSON-RPC transport.
+completion, conservative folding ranges, and evidence-bounded declaration hover.
+It is independently reusable by DiagramWeave Studio, IDE adapters, naruon, and
+other CWL hosts without importing a desktop shell or JSON-RPC transport.
 
 ## Foundation scope
 
 The package implements protocol-level lifecycle, full-document diagnostic
 synchronization, conservative explicit-declaration hierarchy, legacy outline
-compatibility, local keyword completion, and bounded package/namespace folding:
+compatibility, local keyword completion, bounded package/namespace folding, and
+exact declaration-label hover:
 
 - `initialize`, `initialized`, `shutdown`, and `exit`;
 - `textDocument/didOpen`, `textDocument/didChange`, and
@@ -23,9 +24,11 @@ compatibility, local keyword completion, and bounded package/namespace folding:
   `completionProvider: { resolveProvider: false }`;
 - capability-gated `textDocument/foldingRange` with
   `foldingRangeProvider: true`;
+- capability-gated `textDocument/hover` with `hoverProvider: true`;
 - UTF-16 positions and LSP full-document synchronization;
 - exact document-version and generation binding so stale renderer completions
-  cannot overwrite newer diagnostics, outline source, completion source, or folding source;
+  cannot overwrite newer diagnostics, outline source, completion source,
+  folding source, or hover source;
 - bounded local `file:` URI identifiers for `.puml` and `.plantuml` documents;
 - the existing stdin-only PlantUML `SANDBOX` renderer and shared structured
   diagnostic sanitizer;
@@ -68,6 +71,9 @@ const initializeResult = await session.request('initialize', {
         rangeLimit: 1024,
         lineFoldingOnly: true,
       },
+      hover: {
+        contentFormat: ['markdown', 'plaintext'],
+      },
     },
   },
 });
@@ -94,10 +100,16 @@ const folds = await session.request('textDocument/foldingRange', {
   textDocument: { uri: 'file:///workspace/context.puml' },
 });
 
-console.log(initializeResult.capabilities.completionProvider);
+const declarationHover = await session.request('textDocument/hover', {
+  textDocument: { uri: 'file:///workspace/context.puml' },
+  position: { line: 2, character: 10 },
+});
+
+console.log(initializeResult.capabilities.hoverProvider);
 console.log(symbols[0].children.map(({ name }) => name));
 console.log(completions.map(({ label }) => label));
 console.log(folds);
+console.log(declarationHover?.contents.value);
 ```
 
 `rendererFactory` is an optional deterministic test seam. Production hosts
@@ -192,6 +204,34 @@ already proven. The immutable result contains only zero-based `startLine` and
 `endLine`; it performs no LLM, renderer, filesystem, include, macro, workspace,
 or network work.
 
+## Declaration-hover contract
+
+The hover slice is enabled only when initialize receives a plain
+`capabilities.textDocument.hover` record. The server advertises
+`hoverProvider: true` and accepts `textDocument/hover` for the latest accepted
+local source snapshot.
+
+An absent `contentFormat` selects `plaintext`. A present list must contain 1
+through 16 strings. The server selects the first supported `markdown` or
+`plaintext` value in client preference order. Missing, malformed, array-valued,
+proxied, revoked, throwing, oversized, or unsupported capability data fails
+closed and does not advertise the provider.
+
+`declarationHoverForSource` iteratively walks the same authoritative symbol tree
+used by outlines and folding. It returns a hover only when the requested UTF-16
+position lies inside an explicit declaration's exact `selectionRange`, with an
+inclusive start and exclusive end. The response contains the fixed PlantUML
+declaration detail, displayed name, and immediate proven package or namespace
+container when present. The authoritative frozen selection range is returned
+unchanged.
+
+A valid non-matching position returns `null`. Relations, members, directives,
+comments, malformed declarations, implicit syntax, keywords, braces, and
+ordinary whitespace are intentionally omitted. Markdown places the same text in
+a dynamically sized fenced `text` block whose delimiter is longer than every
+backtick run in source-derived labels. The feature performs no LLM, renderer,
+filesystem, include, macro, workspace, shell, or network work.
+
 ## Safety and limits
 
 - The session never dereferences, reads, or writes a URI and accepts only local
@@ -204,13 +244,14 @@ or network work.
 - One document may expose at most 1,024 symbols across roots and descendants;
   each symbol name is limited to 1,024 UTF-8 bytes.
 - One completion request may return at most 64 items.
+- A hover `contentFormat` preference list may contain at most 16 entries.
 - Only monotonically increasing nonnegative safe-integer versions are accepted.
 - Incremental range edits are rejected; this foundation uses full-document
   synchronization.
 - Public diagnostics, symbol trees, symbol information, completion results,
-  folding results, locations, child arrays, positions, ranges, and edits are deeply frozen and
-  contain no source excerpt, raw stderr, raw PlantUML label, Java/JAR path, host
-  error, or credential.
+  folding results, hover results, markup records, locations, child arrays,
+  positions, ranges, and edits are deeply frozen and contain no source excerpt,
+  raw stderr, Java/JAR path, host error, or credential.
 - Hostile getters, proxies, arrays, renderer contracts, rejected mutations, and
   stale concurrent completions fail closed with stable `LanguageServerError`
   codes.
@@ -218,5 +259,6 @@ or network work.
 ## Release status
 
 Version `0.0.0` is an unreleased foundation. Completion resolve, snippets,
-hover, definition, references, rename, arbitrary region folding, workspace
-indexing, cancellation, and Studio integration remain later bounded slices.
+relation and member hover, definition, references, rename, arbitrary region
+folding, workspace indexing, cancellation, and Studio integration remain later
+bounded slices.
