@@ -69,10 +69,11 @@ test('folding records preserve LSP PlantUML privacy product and modular-host con
   assert.match(architectureIndex, /conservative folding ranges/is);
 });
 
-test('implementation and package contracts expose the bounded iterative layer', async () => {
+test('implementation and package contracts expose the bounded iterative layer beneath hover', async () => {
   const [
     engineSource,
     sessionSource,
+    hoverSessionSource,
     indexSource,
     packageCheck,
     design,
@@ -80,6 +81,7 @@ test('implementation and package contracts expose the bounded iterative layer', 
   ] = await Promise.all([
     readFile(new URL('../packages/language-server/src/folding-ranges.js', import.meta.url), 'utf8'),
     readFile(new URL('../packages/language-server/src/folding-session.js', import.meta.url), 'utf8'),
+    readFile(new URL('../packages/language-server/src/hover-session.js', import.meta.url), 'utf8'),
     readFile(new URL('../packages/language-server/src/index.js', import.meta.url), 'utf8'),
     readFile(new URL('../scripts/check-package-contents.mjs', import.meta.url), 'utf8'),
     readFile(new URL('../docs/superpowers/specs/2026-08-05-conservative-folding-ranges-design.md', import.meta.url), 'utf8'),
@@ -96,7 +98,8 @@ test('implementation and package contracts expose the bounded iterative layer', 
   assert.match(sessionSource, /foldingRangeProvider: true/);
   assert.match(sessionSource, /textDocument\/foldingRange/);
   assert.match(sessionSource, /foldingRangesForSource\(record\.text, foldingOptions\.rangeLimit\)/);
-  assert.match(indexSource, /createFoldingLanguageServerSession as createLanguageServerSession/);
+  assert.match(hoverSessionSource, /createFoldingLanguageServerSession/);
+  assert.match(indexSource, /createHoverLanguageServerSession as createLanguageServerSession/);
   assert.match(packageCheck, /package\/src\/folding-ranges\.js/);
   assert.match(packageCheck, /package\/src\/folding-session\.js/);
   assert.match(design, /without recursive product traversal/);
