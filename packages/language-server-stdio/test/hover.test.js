@@ -161,7 +161,6 @@ test('maps invalid hover positions to fixed invalid-params responses', async () 
       message: 'Invalid params.',
       data: {
         diagramweaveCode: 'document_position_invalid',
-        field: 'position',
       },
     },
   });
