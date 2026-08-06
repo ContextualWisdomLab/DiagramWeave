@@ -20,6 +20,8 @@ const packageContracts = Object.freeze([
       'package/src/contracts.js',
       'package/src/diagnostics.js',
       'package/src/errors.js',
+      'package/src/folding-ranges.js',
+      'package/src/folding-session.js',
       'package/src/index.js',
       'package/src/limits.js',
       'package/src/session.js',
