@@ -2,7 +2,7 @@
 
 ## Purpose
 
-DiagramWeave is a source-first editor platform for PlantUML and future text diagram languages. The architecture protects manual editing as the authoritative workflow while making LLM output reviewable, revision-bound, and replaceable. The implemented foundation contains a portable trust kernel, a Contextual Orchestrator adapter, an isolated local PlantUML renderer, safe structured diagnostics, a deterministic CLI, a transport-neutral Language Server, bounded JSON-RPC stdio integration, capability-negotiated hierarchical or legacy-flat document symbols, and deterministic declaration completion. It still contains no database, desktop shell, or hidden document store; future surfaces must reuse these boundaries rather than reimplement them.
+DiagramWeave is a source-first editor platform for PlantUML and future text diagram languages. The architecture protects manual editing as the authoritative workflow while making LLM output reviewable, revision-bound, and replaceable. The implemented foundation contains a portable trust kernel, a Contextual Orchestrator adapter, an isolated local PlantUML renderer, safe structured diagnostics, a deterministic CLI, a transport-neutral Language Server, bounded JSON-RPC stdio integration, capability-negotiated hierarchical or legacy-flat document symbols, deterministic declaration completion, and conservative folding ranges. It still contains no database, desktop shell, or hidden document store; future surfaces must reuse these boundaries rather than reimplement them.
 
 ## Architectural principles
 
@@ -14,10 +14,10 @@ DiagramWeave is a source-first editor platform for PlantUML and future text diag
 6. **Modules compose without becoming inseparable.** Each package has one purpose and can run inside DiagramWeave Studio, naruon, an IDE extension, a CLI, or another CWL service.
 7. **Provider and renderer boundaries are adapters.** Core never imports a network client, renderer process, UI framework, or persistence implementation.
 8. **Diagnostics are safe data contracts.** Raw child output stays inside the renderer boundary; reusable hosts receive only bounded, fixed-message, deeply frozen records.
-9. **Editor intelligence fails by omission.** Document symbols and declaration completion recognize only explicit high-signal syntax and do not invent semantics from relations, includes, macros, malformed source, or remote content.
+9. **Editor intelligence fails by omission.** Document symbols, declaration completion, and folding ranges recognize only explicit high-signal syntax and do not invent semantics from relations, includes, macros, malformed source, or remote content.
 10. **Hierarchy requires complete structural evidence.** Only stack-ordered package or namespace declaration braces with identical opening and closing indentation create children; ambiguous or incomplete source remains flat.
 11. **Protocol compatibility is presentation, not parsing.** `symbolInformationForDocument` iteratively derives immutable `SymbolInformation[]` from the same authoritative tree when a client does not advertise hierarchical support.
-12. **Composed layers retain independent evidence.** Diagnostics, document symbols, compatibility adaptation, and completion own separate state and tests so an outer feature cannot hide regressions in an inner layer.
+12. **Composed layers retain independent evidence.** Diagnostics, document symbols, compatibility adaptation, completion, and folding own separate state and tests so an outer feature cannot hide regressions in an inner layer.
 
 ## System context
 
@@ -42,7 +42,7 @@ Studio --> Core : validate, preview, apply
 Studio --> Adapter : request proposal
 Adapter --> Orchestrator : POST /v1/chat/completions
 Studio --> Renderer : render accepted source
-Studio --> LSP : snapshots / diagnostics / outline / completion
+Studio --> LSP : snapshots / diagnostics / outline / completion / folding
 CLI --> Renderer : bounded local render
 Renderer --> Diagnostics : bounded stdrpt bytes
 Diagnostics --> CLI : safe line diagnostics
@@ -120,7 +120,7 @@ Non-responsibilities:
 
 Status: future product surface.
 
-Studio will own file tabs, manual source editing, preview layout, diagnostics, outline, completion presentation, Context Inspector, diff review, keyboard interaction, recovery, and user approval. It must consume Core rather than reimplement revision or scope checks, consume the shared renderer diagnostic record rather than parse stderr, and apply Language Server text edits rather than reconstruct completion ranges. UI work requires Figma/Product Design state coverage before implementation because source, preview, completion, outline, diff, diagnostics, offline, timeout, conflict, and scope-expansion states interact visibly.
+Studio will own file tabs, manual source editing, preview layout, diagnostics, outline, completion and folding presentation, Context Inspector, diff review, keyboard interaction, recovery, and user approval. It must consume Core rather than reimplement revision or scope checks, consume the shared renderer diagnostic record rather than parse stderr, and apply Language Server text edits rather than reconstruct completion ranges. UI work requires Figma/Product Design state coverage before implementation because source, preview, completion, outline, diff, diagnostics, offline, timeout, conflict, and scope-expansion states interact visibly.
 
 ### PlantUML renderer
 
@@ -192,6 +192,7 @@ Responsibilities:
 - publish safe diagnostics from the shared renderer boundary;
 - provide conservative source-order `textDocument/documentSymbol` results, returning `DocumentSymbol[]` only to clients that explicitly advertise `hierarchicalDocumentSymbolSupport: true` and otherwise returning legacy-compatible `SymbolInformation[]`;
 - advertise and serve deterministic `textDocument/completion` only to clients that declare completion support;
+- advertise and serve conservative `textDocument/foldingRange` only to clients that declare a valid folding capability;
 - preserve UTF-16 positions across multilingual source and emoji;
 - normalize caller-owned records into frozen snapshots;
 - prevent stale concurrent open, change, and close completions from restoring old state;
@@ -203,9 +204,10 @@ The implementation is layered:
 diagnostic session
   -> document-symbol session
     -> declaration-completion session
+      -> folding-range session
 ```
 
-Each wrapper delegates lifecycle and inner features while owning only the source required by its feature. Direct unit tests cover every layer independently, even though the public entry point exposes the outer completion session.
+Each wrapper delegates lifecycle and inner features while owning only the source required by its feature. Direct unit tests cover every layer independently, even though the public entry point exposes the outer folding session.
 
 Document-symbol hierarchy is computed locally after explicit declaration parsing. One unmatched unquoted package or namespace declaration brace may become a parent only when it is closed in stack order by a standalone brace with identical indentation. Quoted, commented, balanced one-line, unmatched, multi-open, cross-indented, and crossed structure remains flat. Parent ranges extend through proven close lines, roots and siblings preserve source order, and the frozen tree is constructed bottom-up without recursive product traversal.
 
@@ -213,12 +215,14 @@ Initialize-time capability negotiation changes only presentation. Exact boolean 
 
 Declaration completion uses a fixed catalog, LSP keyword CompletionItems, plain-text insertion, stable order, and explicit text edits. It returns no result in comments, quoted labels, relations, directives, completed declarations, or the middle of an existing identifier. It does not call an LLM, renderer, filesystem, workspace index, include processor, macro processor, or network service.
 
+`createFoldingLanguageServerSession` wraps the completion session and stores only successful accepted source snapshots. `foldingRangesForSource` walks the same authoritative symbol tree iteratively, emitting immutable zero-based line ranges only for complete nonempty package and namespace scopes. Initialize-time `rangeLimit` and `lineFoldingOnly` values are validated under hostile boundaries; unsupported or malformed capabilities do not advertise `foldingRangeProvider`. Folding performs no renderer, LLM, filesystem, include, macro, workspace, or network work.
+
 Non-responsibilities:
 
 - opening, saving, or watching source files;
 - parsing the complete PlantUML grammar;
 - evaluating includes, macros, relations, or renderer output for editor intelligence;
-- implementing completion resolve, snippets, semantic member completion, hover, definition, references, or rename;
+- implementing completion resolve, snippets, semantic member completion, hover, definition, references, rename, or arbitrary region folding;
 - owning UI focus, selection, acceptance, or accessibility state;
 - persisting source or telemetry.
 
@@ -238,7 +242,7 @@ Responsibilities:
 
 Non-responsibilities:
 
-- duplicating diagnostics, document symbols, completion, or source snapshots;
+- duplicating diagnostics, document symbols, completion, folding, or source snapshots;
 - reading source URIs;
 - applying returned completion edits;
 - exposing source, paths, child stderr, or host exception values.
@@ -298,6 +302,16 @@ Non-responsibilities:
 6. The stdio package serializes the same result without reimplementing completion.
 7. The host decides whether to display and apply the text edit; the server never mutates a file.
 
+### Folding ranges
+
+1. During initialize, the folding layer accepts only a plain `textDocument.foldingRange` capability with valid optional `rangeLimit` and `lineFoldingOnly` values.
+2. A supported client receives `foldingRangeProvider: true`; every unsupported or hostile capability state fails closed without advertising it.
+3. Successful open and full-document change notifications are copied into the folding snapshot only after all inner layers accept them.
+4. A `textDocument/foldingRange` request validates the local open-document URI and reads the latest accepted source.
+5. `foldingRangesForSource` obtains the same authoritative document-symbol tree and walks it iteratively in source preorder.
+6. Only proven nonempty package or namespace scopes emit immutable `{ startLine, endLine }` records, bounded by the client preference and 1,024-symbol ceiling.
+7. The stdio adapter serializes the same transport-neutral result; the host owns display, collapse state, and keyboard interaction.
+
 ## Error model
 
 Core errors have stable `code` fields:
@@ -342,7 +356,7 @@ DiagramWeave uses package boundaries first and service boundaries only where the
 - The PlantUML renderer is an isolated local process adapter and can later be wrapped by a versioned service without changing its artifact, error, or diagnostic contracts.
 - The CLI is an independent batch host that composes the renderer with deterministic path and report contracts for CI and naruon.
 - The Language Server is independently embeddable; the stdio package is a replaceable process transport.
-- Diagnostics, capability-negotiated hierarchical or legacy-flat document symbols, and completion remain transport-neutral contracts reusable by CLI, Studio, IDEs, naruon, and service wrappers.
+- Diagnostics, capability-negotiated hierarchical or legacy-flat document symbols, completion, and folding ranges remain transport-neutral contracts reusable by CLI, Studio, IDEs, naruon, and service wrappers.
 - Collaboration, policy, indexing, and persistence can become local processes or services behind versioned contracts.
 - naruon can invoke Core, the renderer, CLI, the Language Server, and the Contextual Orchestrator adapter without embedding Studio.
 - organization-central `.github` workflows govern PRs without copying policy logic into production packages.
@@ -356,8 +370,9 @@ The foundation introduces no database. If persistence is added, source files rem
 
 - Node.js 22 and 24 are supported foundation runtimes.
 - Packages use ECMAScript modules.
-- Public error codes, diagnostic fields, proposal schema version, Language Server capabilities, negotiated `DocumentSymbol[]` and `SymbolInformation[]` shapes, completion item shape, and package exports are compatibility contracts.
-- A breaking proposal, diagnostic, symbol-tree, symbol-information, or completion schema requires an explicit version and migration guidance.
+- Public error codes, diagnostic fields, proposal schema version, Language Server capabilities, negotiated `DocumentSymbol[]` and `SymbolInformation[]` shapes, completion item shape, folding range shape, and package exports are compatibility contracts.
+- A breaking proposal, diagnostic, symbol-tree, symbol-information, completion, or folding schema requires an explicit version and migration guidance.
 - Compatible completion catalog additions must remain documented, deterministic, bounded, and covered by exact-prefix tests.
+- Compatible folding behavior must remain sourced from the authoritative symbol tree, deterministic, bounded, and covered by capability and lifecycle tests.
 - Package releases follow Semantic Versioning after an integrated release candidate is ready.
 - `CHANGELOG.md` remains the user-facing history of contract changes.

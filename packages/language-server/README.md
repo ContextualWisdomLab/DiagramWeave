@@ -1,8 +1,8 @@
 # `@contextualwisdomlab/diagramweave-language-server`
 
 A transport-neutral Language Server Protocol 3.18 session for PlantUML
-diagnostics, capability-negotiated document outlines, and deterministic
-declaration completion. It is independently reusable by DiagramWeave Studio,
+diagnostics, capability-negotiated document outlines, deterministic declaration
+completion, and conservative folding ranges. It is independently reusable by DiagramWeave Studio,
 IDE adapters, naruon, and other CWL hosts without importing a desktop shell or
 JSON-RPC transport.
 
@@ -10,7 +10,7 @@ JSON-RPC transport.
 
 The package implements protocol-level lifecycle, full-document diagnostic
 synchronization, conservative explicit-declaration hierarchy, legacy outline
-compatibility, and local keyword completion:
+compatibility, local keyword completion, and bounded package/namespace folding:
 
 - `initialize`, `initialized`, `shutdown`, and `exit`;
 - `textDocument/didOpen`, `textDocument/didChange`, and
@@ -21,9 +21,11 @@ compatibility, and local keyword completion:
   `hierarchicalDocumentSymbolSupport` capability;
 - capability-gated `textDocument/completion` with
   `completionProvider: { resolveProvider: false }`;
+- capability-gated `textDocument/foldingRange` with
+  `foldingRangeProvider: true`;
 - UTF-16 positions and LSP full-document synchronization;
 - exact document-version and generation binding so stale renderer completions
-  cannot overwrite newer diagnostics, outline source, or completion source;
+  cannot overwrite newer diagnostics, outline source, completion source, or folding source;
 - bounded local `file:` URI identifiers for `.puml` and `.plantuml` documents;
 - the existing stdin-only PlantUML `SANDBOX` renderer and shared structured
   diagnostic sanitizer;
@@ -62,6 +64,10 @@ const initializeResult = await session.request('initialize', {
         hierarchicalDocumentSymbolSupport: true,
       },
       completion: {},
+      foldingRange: {
+        rangeLimit: 1024,
+        lineFoldingOnly: true,
+      },
     },
   },
 });
@@ -84,9 +90,14 @@ const completions = await session.request('textDocument/completion', {
   position: { line: 3, character: 5 },
 });
 
+const folds = await session.request('textDocument/foldingRange', {
+  textDocument: { uri: 'file:///workspace/context.puml' },
+});
+
 console.log(initializeResult.capabilities.completionProvider);
 console.log(symbols[0].children.map(({ name }) => name));
 console.log(completions.map(({ label }) => label));
+console.log(folds);
 ```
 
 `rendererFactory` is an optional deterministic test seam. Production hosts
@@ -160,6 +171,27 @@ prefixes with no catalog match. It never calls an LLM, reads a URI, evaluates
 includes or macros, starts the renderer, scans a workspace, or contacts the
 network.
 
+## Folding-range contract
+
+The folding slice is enabled only when initialize receives a plain
+`capabilities.textDocument.foldingRange` record. The server then advertises
+`foldingRangeProvider: true` and accepts `textDocument/foldingRange` for the
+latest accepted local document snapshot.
+
+The optional `rangeLimit` must be an LSP unsigned integer. When absent, the
+server returns at most 1,024 source-order ranges; `0` returns the shared frozen
+empty result, and larger valid values remain capped by the 1,024-symbol ceiling.
+The optional `lineFoldingOnly` value may be absent or boolean. Malformed, array,
+proxied, revoked, or throwing capability data fails closed and does not advertise
+the provider.
+
+`foldingRangesForSource` iteratively walks the same authoritative symbol tree
+used by `textDocument/documentSymbol`. It emits only nonempty package and
+namespace scopes whose stack-ordered closing brace and matching indentation were
+already proven. The immutable result contains only zero-based `startLine` and
+`endLine`; it performs no LLM, renderer, filesystem, include, macro, workspace,
+or network work.
+
 ## Safety and limits
 
 - The session never dereferences, reads, or writes a URI and accepts only local
@@ -176,7 +208,7 @@ network.
 - Incremental range edits are rejected; this foundation uses full-document
   synchronization.
 - Public diagnostics, symbol trees, symbol information, completion results,
-  locations, child arrays, positions, ranges, and edits are deeply frozen and
+  folding results, locations, child arrays, positions, ranges, and edits are deeply frozen and
   contain no source excerpt, raw stderr, raw PlantUML label, Java/JAR path, host
   error, or credential.
 - Hostile getters, proxies, arrays, renderer contracts, rejected mutations, and
@@ -186,5 +218,5 @@ network.
 ## Release status
 
 Version `0.0.0` is an unreleased foundation. Completion resolve, snippets,
-hover, definition, references, rename, workspace indexing, cancellation, and
-Studio integration remain later bounded slices.
+hover, definition, references, rename, arbitrary region folding, workspace
+indexing, cancellation, and Studio integration remain later bounded slices.

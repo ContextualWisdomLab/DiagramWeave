@@ -106,8 +106,8 @@ The package is independently reusable by naruon, CI, and other CWL hosts. See [`
 ### `@contextualwisdomlab/diagramweave-language-server`
 
 A transport-neutral LSP 3.18 session for local PlantUML diagnostics,
-capability-negotiated document outlines, and deterministic declaration
-completion:
+capability-negotiated document outlines, deterministic declaration completion,
+and conservative folding ranges:
 
 ```js
 import {
@@ -129,6 +129,10 @@ await session.request('initialize', {
         hierarchicalDocumentSymbolSupport: true,
       },
       completion: {},
+      foldingRange: {
+        rangeLimit: 1024,
+        lineFoldingOnly: true,
+      },
     },
   },
 });
@@ -136,8 +140,8 @@ await session.request('initialize', {
 
 The session uses full-document synchronization, local file-URI identifiers,
 source-free renderer diagnostics, exact version/generation checks,
-capability-negotiated `textDocument/documentSymbol`, and capability-gated
-`textDocument/completion`. Clients that explicitly advertise
+capability-negotiated `textDocument/documentSymbol`, capability-gated
+`textDocument/completion`, and capability-gated `textDocument/foldingRange`. Clients that explicitly advertise
 `hierarchicalDocumentSymbolSupport: true` receive the bounded immutable
 `DocumentSymbol[]` tree. Other clients receive source-order
 `SymbolInformation[]` from the same authoritative tree, with the validated local
@@ -150,6 +154,12 @@ quoted, commented, macro, include, and renderer-dependent structure remains
 flat. Completion filters the same declaration families from a fixed local
 catalog and returns exact UTF-16 text edits only at safe line-leading prefixes.
 It performs no LLM, renderer, file, include, macro, workspace, or network work.
+
+Folding advertises `foldingRangeProvider: true` only when the client supplies a
+valid plain `textDocument.foldingRange` capability. It reuses the same
+authoritative document-symbol tree, honors `rangeLimit` up to the 1,024-symbol
+ceiling, accepts boolean `lineFoldingOnly`, and returns immutable source-order
+package and namespace ranges without a second parser.
 Studio, IDE extensions, naruon, and other CWL hosts reuse this package without
 importing a process transport.
 
@@ -167,8 +177,9 @@ dweave-lsp
 The adapter validates ASCII Content-Length framing and UTF-8 JSON-RPC 2.0,
 serializes input and output, bounds messages and queues, and returns exit code
 zero only after successful shutdown followed by exit. It imports the same
-transport-neutral session, so diagnostics, negotiated document symbols, and
-declaration completion do not diverge between embedded and process-based hosts.
+transport-neutral session, so diagnostics, negotiated document symbols,
+declaration completion, and conservative folding ranges do not diverge between
+embedded and process-based hosts.
 Invalid completion positions are returned as fixed JSON-RPC Invalid params
 responses without source or URI values.
 
@@ -178,7 +189,7 @@ The repository is the modular foundation for:
 
 - **DiagramWeave Studio:** manual source editor, preview, diagnostics, hierarchical outline, completion, Context Inspector, diff review, recovery, and accessible approval flows;
 - **DiagramWeave Renderer:** implemented local PlantUML package with stdin-only rendering, `SANDBOX`, metadata suppression, bounded resources, safe line diagnostics, and local and remote includes unavailable;
-- **DiagramWeave Language Server:** implemented diagnostics, capability-negotiated hierarchical or legacy-flat document outlines, deterministic declaration completion, and bounded stdio integration reusable by Studio and external IDEs;
+- **DiagramWeave Language Server:** implemented diagnostics, capability-negotiated hierarchical or legacy-flat document outlines, deterministic declaration completion, conservative package and namespace folding ranges, and bounded stdio integration reusable by Studio and external IDEs;
 - **DiagramWeave CLI:** implemented deterministic validation, rendering, atomic publication, and structured diagnostic foundation, with formatting and policy checks remaining future work;
 - **naruon and CWL integration:** embeddable Core, renderer, diagnostics, CLI, Language Server, stdio transport, and provider adapters without requiring the Studio application.
 
@@ -197,7 +208,8 @@ The detailed product contract is in [`docs/product/diagramweave-prd.md`](docs/pr
 9. Outline hierarchy requires complete stack-ordered package or namespace braces with matching indentation; ambiguous or malformed structure remains flat.
 10. Non-hierarchical clients receive immutable `SymbolInformation[]` from the same authoritative symbol tree rather than a second parser.
 11. Declaration completion fails by omission in comments, strings, relations, directives, completed declarations, and ambiguous cursor positions.
-12. The user remains responsible for accepting, rejecting, saving, and committing changes.
+12. Folding ranges are derived only from complete nonempty package or namespace scopes in the same authoritative symbol tree; ambiguous structure produces no fold.
+13. The user remains responsible for accepting, rejecting, saving, and committing changes.
 
 ## Development
 
@@ -216,6 +228,7 @@ npm run verify
 - [Declaration-completion product slice](docs/product/declaration-completion.md)
 - [Hierarchical-outline product slice](docs/product/hierarchical-document-outline.md)
 - [Document-symbol compatibility product slice](docs/product/document-symbol-compatibility.md)
+- [Conservative folding-ranges product slice](docs/product/folding-ranges.md)
 - [Architecture](docs/architecture.md)
 - [Security model](docs/security-model.md)
 - [Structured diagnostics research](docs/research/plantuml-structured-diagnostics.md)
@@ -223,12 +236,14 @@ npm run verify
 - [PlantUML declaration-completion research](docs/research/plantuml-declaration-completion.md)
 - [PlantUML hierarchical-symbol research](docs/research/plantuml-hierarchical-document-symbols.md)
 - [LSP document-symbol compatibility research](docs/research/lsp-document-symbol-compatibility.md)
+- [PlantUML folding-ranges research](docs/research/plantuml-folding-ranges.md)
 - [Contextual Orchestrator operations](docs/operations/contextual-orchestrator.md)
 - [PlantUML renderer operations](docs/operations/plantuml-renderer.md)
 - [Document-symbol operations](docs/operations/document-symbols.md)
 - [Declaration-completion operations](docs/operations/declaration-completion.md)
 - [Hierarchical document-symbol operations](docs/operations/hierarchical-document-symbols.md)
 - [Document-symbol compatibility operations](docs/operations/document-symbol-compatibility.md)
+- [Folding-ranges operations](docs/operations/folding-ranges.md)
 - [DiagramWeave Language Server](packages/language-server/README.md)
 - [DiagramWeave stdio Language Server](packages/language-server-stdio/README.md)
 - [DiagramWeave CLI](packages/cli/README.md)

@@ -1,6 +1,6 @@
 # DiagramWeave 제품 요구사항 문서(PRD)
 
-- **문서 버전:** 0.3
+- **문서 버전:** 0.4
 - **작성일:** 2026-08-05
 - **제품명:** DiagramWeave
 - **애플리케이션명:** DiagramWeave Studio
@@ -154,8 +154,11 @@ DiagramWeave Studio는 **데스크톱·로컬 우선**으로 출시한다. 웹 S
 | FR-010 | Must | 구문 강조, 검색·바꾸기, 괄호 매칭, 줄 번호, undo/redo를 제공한다. |
 | FR-011 | Must | 자동완성, 진단, 문서 심볼과 개요를 제공한다. |
 | FR-012 | Should | 정의 이동, 참조 찾기, 안전한 이름 변경을 제공한다. |
+| FR-013 | Must | 대규모 소스를 위해 검증된 package·namespace 범위의 접기를 제공한다. |
 
 FR-011의 capability-negotiated 문서 심볼·개요와 선언 키워드 자동완성 foundation 범위는 구현됐다. LSP 3.18 `textDocument/documentSymbol`은 `hierarchicalDocumentSymbolSupport: true`를 명시한 클라이언트에는 명시적 PlantUML 선언의 source-order immutable UTF-16 `DocumentSymbol[]` tree를 반환하고, 그 밖의 클라이언트에는 같은 authoritative tree를 반복 순회해 만든 immutable `SymbolInformation[]`을 반환한다. flat child는 입증된 immediate parent의 `containerName`과 validated local URI·enclosing range를 보존한다. 완전한 unquoted package 또는 namespace brace scope와 동일 indentation의 standalone close가 입증된 경우에만 hierarchy의 `children`과 enclosing parent range를 제공한다. capability-gated `textDocument/completion`은 안전한 줄 선두 접두사에 결정론적 UTF-16 `textEdit`를 제공한다. Studio·IDE·`dweave-lsp`·naruon에서 동일한 세션을 재사용하며 implicit participant, 관계 endpoint, member, macro, include, renderer-dependent syntax, malformed 선언, 불완전 hierarchy와 모호한 자동완성 문맥은 추측하지 않는다.
+
+LSP 3.18 `textDocument/foldingRange` 구현도 완료됐다. 클라이언트가 plain `textDocument.foldingRange` capability를 제공한 경우에만 `foldingRangeProvider: true`를 광고하고, 같은 authoritative symbol tree에서 완전하고 비어 있지 않은 package·namespace scope만 source-order `FoldingRange[]`로 반환한다. 유효한 `rangeLimit`과 boolean `lineFoldingOnly`를 fail-closed로 협상하며, 결과는 최대 1,024개로 제한되고 renderer·LLM·파일·네트워크를 호출하지 않는다.
 
 ### 렌더와 진단
 
@@ -195,7 +198,7 @@ FR-023의 foundation 범위는 구현됐다. PlantUML `-stdrpt:1`의 one-based l
 
 FR-070과 FR-071의 foundation 범위는 구현됐다. CLI는 safe relative path, 상태, 오류 코드, revision hash와 구조화 진단만 보고하며 source, raw renderer diagnostic, raw label, Java/JAR 경로와 environment 값은 보고하지 않는다.
 
-FR-072의 진단·capability-negotiated 문서 심볼·선언 키워드 자동완성·stdio foundation 범위도 구현됐다. bounded JSON-RPC transport와 transport-neutral session이 같은 UTF-16 진단과 completion 계약을 제공하며, modern client에는 conservative `DocumentSymbol[]` tree를, legacy client에는 같은 tree에서 파생한 `SymbolInformation[]`을 제공한다. legacy `SymbolInformation[]` compatibility 구현은 완료됐고, completion resolve, semantic member completion, hover, definition, references, rename과 workspace indexing은 아직 구현되지 않았다.
+FR-072의 진단·capability-negotiated 문서 심볼·선언 키워드 자동완성·conservative folding range·stdio foundation 범위도 구현됐다. bounded JSON-RPC transport와 transport-neutral session이 같은 UTF-16 진단과 completion 계약을 제공하며, modern client에는 conservative `DocumentSymbol[]` tree를, legacy client에는 같은 tree에서 파생한 `SymbolInformation[]`을 제공한다. legacy `SymbolInformation[]` compatibility 구현은 완료됐고, `textDocument/foldingRange` 구현도 완료됐다. completion resolve, semantic member completion, hover, definition, references, rename, arbitrary region folding과 workspace indexing은 아직 구현되지 않았다.
 
 ### 접근성
 

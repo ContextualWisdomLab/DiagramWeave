@@ -12,7 +12,7 @@ architecture filenames.
 | `@contextualwisdomlab/diagramweave-contextual-orchestrator` | Provider-neutral, bounded, strict LLM proposal adapter |
 | `@contextualwisdomlab/diagramweave-plantuml-renderer` | Sandboxed stdin-only local SVG/PNG rendering and safe diagnostics |
 | `@contextualwisdomlab/diagramweave-cli` | Deterministic manual/CI validation and rendering |
-| `@contextualwisdomlab/diagramweave-language-server` | Transport-neutral LSP lifecycle, diagnostics, capability-negotiated hierarchical or legacy-flat document symbols, and deterministic declaration completion |
+| `@contextualwisdomlab/diagramweave-language-server` | Transport-neutral LSP lifecycle, diagnostics, capability-negotiated hierarchical or legacy-flat document symbols, deterministic declaration completion, and conservative folding ranges |
 | `@contextualwisdomlab/diagramweave-language-server-stdio` | Bounded JSON-RPC stdio process and `dweave-lsp` executable |
 
 Studio, naruon, IDE extensions, and other CWL hosts compose these packages but
@@ -45,14 +45,17 @@ the trust kernel.
    catalog. It replaces only a line-leading prefix and returns no candidates in
    comments, quotes, relations, directives, completed declarations, or the
    middle of an identifier.
-10. Diagnostics, outlines, compatibility adaptation, and completion are composed
-    layers with independent tests and source ownership; a rejected or late
-    mutation cannot restore stale state in an outer layer.
-11. LSP positions use UTF-16 code units; multilingual and emoji ranges are
+10. Conservative folding ranges reuse the authoritative document-symbol tree,
+    expose only proven nonempty package and namespace scopes, and walk source
+    preorder without recursive product traversal or a second parser.
+11. Diagnostics, outlines, compatibility adaptation, completion, and folding are
+    composed layers with independent tests and source ownership; a rejected or
+    late mutation cannot restore stale state in an outer layer.
+12. LSP positions use UTF-16 code units; multilingual and emoji ranges are
     regression-tested across LF, CRLF, and CR source.
-12. Organization-central `.github` workflows own merge governance. Scheduled
+13. Organization-central `.github` workflows own merge governance. Scheduled
     product development uses OpenCode with `NVIDIA_NIM_API_KEY`, not Copilot.
-13. No release occurs while packages remain `0.0.0` under `Unreleased` or while
+14. No release occurs while packages remain `0.0.0` under `Unreleased` or while
     Studio, cross-platform runtime evidence, signing, SBOM/provenance, and
     rollback evidence remain incomplete.
 
@@ -63,6 +66,7 @@ the trust kernel.
 - [`docs/product/declaration-completion.md`](docs/product/declaration-completion.md)
 - [`docs/product/hierarchical-document-outline.md`](docs/product/hierarchical-document-outline.md)
 - [`docs/product/document-symbol-compatibility.md`](docs/product/document-symbol-compatibility.md)
+- [`docs/product/folding-ranges.md`](docs/product/folding-ranges.md)
 - [`docs/research/plantuml-structured-diagnostics.md`](docs/research/plantuml-structured-diagnostics.md)
 - [`docs/research/language-server-foundation.md`](docs/research/language-server-foundation.md)
 - [`docs/research/language-server-stdio.md`](docs/research/language-server-stdio.md)
@@ -70,10 +74,12 @@ the trust kernel.
 - [`docs/research/plantuml-declaration-completion.md`](docs/research/plantuml-declaration-completion.md)
 - [`docs/research/plantuml-hierarchical-document-symbols.md`](docs/research/plantuml-hierarchical-document-symbols.md)
 - [`docs/research/lsp-document-symbol-compatibility.md`](docs/research/lsp-document-symbol-compatibility.md)
+- [`docs/research/plantuml-folding-ranges.md`](docs/research/plantuml-folding-ranges.md)
 - [`docs/operations/document-symbols.md`](docs/operations/document-symbols.md)
 - [`docs/operations/declaration-completion.md`](docs/operations/declaration-completion.md)
 - [`docs/operations/hierarchical-document-symbols.md`](docs/operations/hierarchical-document-symbols.md)
 - [`docs/operations/document-symbol-compatibility.md`](docs/operations/document-symbol-compatibility.md)
+- [`docs/operations/folding-ranges.md`](docs/operations/folding-ranges.md)
 - [`docs/operations/hourly-development.md`](docs/operations/hourly-development.md)
 - [`docs/superpowers/specs/2026-08-05-declaration-completion-design.md`](docs/superpowers/specs/2026-08-05-declaration-completion-design.md)
 - [`docs/superpowers/plans/2026-08-05-declaration-completion.md`](docs/superpowers/plans/2026-08-05-declaration-completion.md)
@@ -81,3 +87,5 @@ the trust kernel.
 - [`docs/superpowers/plans/2026-08-05-hierarchical-document-symbols.md`](docs/superpowers/plans/2026-08-05-hierarchical-document-symbols.md)
 - [`docs/superpowers/specs/2026-08-05-legacy-document-symbol-fallback-design.md`](docs/superpowers/specs/2026-08-05-legacy-document-symbol-fallback-design.md)
 - [`docs/superpowers/plans/2026-08-05-legacy-document-symbol-fallback.md`](docs/superpowers/plans/2026-08-05-legacy-document-symbol-fallback.md)
+- [`docs/superpowers/specs/2026-08-05-conservative-folding-ranges-design.md`](docs/superpowers/specs/2026-08-05-conservative-folding-ranges-design.md)
+- [`docs/superpowers/plans/2026-08-05-conservative-folding-ranges.md`](docs/superpowers/plans/2026-08-05-conservative-folding-ranges.md)

@@ -37,9 +37,9 @@ A successful initialize result then includes:
 }
 ```
 
-A missing, malformed, array-valued, proxied, revoked, or throwing capability
-path does not advertise the provider. A request in that session returns the
-fixed `method_not_found` Language Server error.
+A missing or hostile capability path—including malformed, array-valued,
+proxied, revoked, or throwing records—does not advertise the provider. A request
+in that session returns the fixed `method_not_found` Language Server error.
 
 ## Request
 

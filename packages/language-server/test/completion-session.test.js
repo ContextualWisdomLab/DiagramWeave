@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
+import { createCompletionLanguageServerSession } from '../src/completion-session.js';
 import {
   LanguageServerError,
   createLanguageServerSession,
@@ -284,5 +285,99 @@ test('a close completed during validation prevents completion-source resurrectio
   await assert.rejects(
     session.request('textDocument/completion', completionParams(0, 2)),
     (error) => assertError(error, 'document_not_open'),
+  );
+});
+
+test('completion layer normalizes hostile document mutation boundaries', async () => {
+  const session = createCompletionLanguageServerSession({
+    javaPath,
+    jarPath,
+    rendererFactory: () => Object.freeze({
+      async render() {
+        return Object.freeze({});
+      },
+    }),
+    async publishNotification() {},
+  });
+  await initialize(session);
+
+  const hostileOpen = Object.defineProperty({}, 'textDocument', {
+    get() {
+      throw new Error('secret open getter');
+    },
+  });
+  for (const params of [null, {}, { textDocument: null }, hostileOpen]) {
+    await assert.rejects(
+      session.notify('textDocument/didOpen', params),
+      (error) => assertError(error, 'invalid_request'),
+    );
+  }
+  await assert.rejects(
+    session.notify(
+      'textDocument/didOpen',
+      openParams('class Remote', 1, 'https://example.com/remote.puml'),
+    ),
+    (error) => assertError(error, 'document_uri_invalid'),
+  );
+  await session.notify('textDocument/didOpen', openParams('class Accepted'));
+
+  const hostileChanges = new Proxy([], {
+    get(target, property, receiver) {
+      if (property === 'length') {
+        throw new Error('secret change length');
+      }
+      return Reflect.get(target, property, receiver);
+    },
+  });
+  const hostileChange = new Proxy({}, {
+    get(target, property, receiver) {
+      if (property === 'range') {
+        throw new Error('secret change range');
+      }
+      return Reflect.get(target, property, receiver);
+    },
+  });
+  for (const params of [
+    null,
+    {},
+    { textDocument: { uri, version: 2 }, contentChanges: hostileChanges },
+    { textDocument: { uri, version: 2 }, contentChanges: [hostileChange] },
+  ]) {
+    await assert.rejects(
+      session.notify('textDocument/didChange', params),
+      (error) => assertError(error, 'invalid_request'),
+    );
+  }
+  await assert.rejects(
+    session.notify(
+      'textDocument/didChange',
+      changeParams('class Remote', 2, 'https://example.com/remote.puml'),
+    ),
+    (error) => assertError(error, 'document_uri_invalid'),
+  );
+  await assert.rejects(
+    session.notify('textDocument/didChange', {
+      textDocument: { uri, version: 2 },
+      contentChanges: [{ text: 'class Incremental', range: {} }],
+    }),
+    (error) => assertError(error, 'incremental_change_unsupported'),
+  );
+
+  const hostileClose = Object.defineProperty({}, 'textDocument', {
+    get() {
+      throw new Error('secret close getter');
+    },
+  });
+  for (const params of [null, {}, { textDocument: null }, hostileClose]) {
+    await assert.rejects(
+      session.notify('textDocument/didClose', params),
+      (error) => assertError(error, 'invalid_request'),
+    );
+  }
+  await assert.rejects(
+    session.notify('textDocument/didClose', {
+      textDocument: { uri: 'https://example.com/remote.puml' },
+    }),
+    (error) => assertError(error, 'document_uri_invalid'),
   );
 });

@@ -13,9 +13,10 @@ brace logic that can disagree on malformed or ambiguous source.
 
 ## Product outcome
 
-A client that negotiates the LSP 3.18 `textDocument.foldingRange` capability
-receives deterministic, source-order package and namespace folds from the same
-authoritative scanner used by document outlines.
+A client that negotiates the LSP 3.18 `textDocument.foldingRange` capability can
+request `textDocument/foldingRange` and receive deterministic, source-order
+package and namespace folds from the same authoritative scanner used by document
+outlines.
 
 ```text
 package Platform {          visible declaration line
@@ -141,8 +142,8 @@ rank blocks by size, depth, popularity, or inferred importance.
 ## Product Design and Figma boundary
 
 This backend slice exposes a standard LSP capability and does not add a
-DiagramWeave Studio visual component, so it does not require a new Figma
-artifact. Product Design and Figma become mandatory when Studio adds explicit
+DiagramWeave Studio visual component, so it does not require a new Figma artifact.
+Product Design and Figma become mandatory when Studio adds explicit
 fold gutters, persistence, animations, command-palette states, minimap
 indicators, or custom accessible interactions.
 

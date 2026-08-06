@@ -136,8 +136,7 @@ scope and the fold hides meaningful vertical space.
 
 ## Ordering and client limits
 
-A reverse stack walks the authoritative tree in source preorder without
-recursive product traversal. Parents precede descendants and siblings retain
+A reverse stack walks the authoritative tree in source preorder without recursive product traversal. Parents precede descendants and siblings retain
 source order. The engine stops once `rangeLimit` records have been emitted. A
 zero limit returns one shared frozen empty collection.
 
