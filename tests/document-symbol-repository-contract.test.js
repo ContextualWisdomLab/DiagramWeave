@@ -50,14 +50,22 @@ test('document-symbol documentation records LSP, PlantUML, privacy, and modular-
   assert.match(claude, /never introduce `COPILOT_GITHUB_TOKEN`/);
 });
 
-test('public Language Server composes folding over completion and document symbols', async () => {
-  const [indexSource, foldingSessionSource, completionSessionSource, limitsSource] = await Promise.all([
+test('public Language Server composes hover over folding completion and document symbols', async () => {
+  const [
+    indexSource,
+    hoverSessionSource,
+    foldingSessionSource,
+    completionSessionSource,
+    limitsSource,
+  ] = await Promise.all([
     readFile(new URL('../packages/language-server/src/index.js', import.meta.url), 'utf8'),
+    readFile(new URL('../packages/language-server/src/hover-session.js', import.meta.url), 'utf8'),
     readFile(new URL('../packages/language-server/src/folding-session.js', import.meta.url), 'utf8'),
     readFile(new URL('../packages/language-server/src/completion-session.js', import.meta.url), 'utf8'),
     readFile(new URL('../packages/language-server/src/limits.js', import.meta.url), 'utf8'),
   ]);
-  assert.match(indexSource, /createFoldingLanguageServerSession as createLanguageServerSession/);
+  assert.match(indexSource, /createHoverLanguageServerSession as createLanguageServerSession/);
+  assert.match(hoverSessionSource, /createFoldingLanguageServerSession/);
   assert.match(foldingSessionSource, /createCompletionLanguageServerSession/);
   assert.match(completionSessionSource, /createDocumentSymbolLanguageServerSession/);
   assert.match(limitsSource, /maxDocumentSymbols: 1024/);

@@ -2,9 +2,9 @@
 
 A bounded JSON-RPC 2.0 stdio transport for the transport-neutral DiagramWeave
 Language Server session. It makes the reusable session launchable from IDEs and
-Studio while keeping document state, diagnostics, document symbols, declaration completion, and
-conservative folding ranges in the existing
-`@contextualwisdomlab/diagramweave-language-server` package.
+Studio while keeping document state, diagnostics, document symbols, declaration
+completion, conservative folding ranges, and evidence-bounded declaration hover
+in the existing `@contextualwisdomlab/diagramweave-language-server` package.
 
 ## Launch
 
@@ -48,8 +48,9 @@ same accepted-source state for:
 
 - `textDocument/publishDiagnostics`;
 - `textDocument/documentSymbol`;
-- capability-gated `textDocument/completion`.
-- capability-gated `textDocument/foldingRange`.
+- capability-gated `textDocument/completion`;
+- capability-gated `textDocument/foldingRange`;
+- capability-gated `textDocument/hover`.
 
 A completion-capable client must send a plain
 `capabilities.textDocument.completion` object during initialize. The server
@@ -69,6 +70,24 @@ honors valid `rangeLimit` and boolean `lineFoldingOnly` options, and serializes
 the same immutable `textDocument/foldingRange` result as an embedded host. A
 non-negotiated request maps to the fixed method-not-found response without
 echoing source or URI values.
+
+A hover-capable client sends a plain `capabilities.textDocument.hover` record.
+An absent `contentFormat` selects `plaintext`; a present bounded ordered list
+selects the first supported `markdown` or `plaintext` entry. The server
+advertises `hoverProvider: true` and serializes the same immutable
+`textDocument/hover` result as an embedded host.
+
+Hover matches only the exact UTF-16 selection range of an explicit declaration
+already proven by the authoritative document-symbol tree. It returns fixed
+declaration detail, displayed name, immediate proven package or namespace
+container, and the exact authoritative range. Valid non-label positions return
+JSON `null`. Malformed positions map to fixed JSON-RPC invalid params, while a
+non-negotiated request maps to method not found. No response echoes source, URI,
+capability data, or host exceptions.
+
+Markdown hover content is placed in a dynamically sized fenced `text` block
+whose delimiter is longer than every backtick run in source-derived labels. The
+stdio adapter does not reinterpret that content or convert it to trusted HTML.
 
 ## Resource limits
 
@@ -107,20 +126,21 @@ hosts and the `dweave-lsp` executable should omit them.
 
 ## Security and privacy
 
-The transport never logs source, JSON bodies, raw parser exceptions, raw
-renderer output, Java/JAR paths, environment values, stack traces, or
-credentials. Session failures map to fixed JSON-RPC messages plus one stable
-DiagramWeave code. Notification failures receive no JSON-RPC response and emit
-only a fixed `window/logMessage` notification. Output writes are serialized;
-a write failure closes the connection without retrying or reordering messages.
+The transport never logs source, JSON bodies, declaration labels, hover content,
+raw parser exceptions, raw renderer output, Java/JAR paths, environment values,
+stack traces, or credentials. Session failures map to fixed JSON-RPC messages
+plus one stable DiagramWeave code. Notification failures receive no JSON-RPC
+response and emit only a fixed `window/logMessage` notification. Output writes
+are serialized; a write failure closes the connection without retrying or
+reordering messages.
 
-The stdio layer does not duplicate completion, folding, or document snapshots. It cannot
-weaken the Language Server's local-URI, source-size, lifecycle, capability,
-immutability, or stale-mutation contracts.
+The stdio layer does not duplicate completion, folding, hover, or document
+snapshots. It cannot weaken the Language Server's local-URI, source-size,
+lifecycle, capability, immutability, or stale-mutation contracts.
 
 ## Release status
 
-Version `0.0.0` is unreleased. TCP/WebSocket transports, cancellation,
-parallel request execution, Studio packaging, completion resolve, arbitrary
-region folding, semantic navigation, workspace indexing, and signed binaries
-remain separate bounded slices.
+Version `0.0.0` is unreleased. TCP/WebSocket transports, cancellation, parallel
+request execution, Studio packaging, completion resolve, relation and member
+hover, arbitrary region folding, semantic navigation, workspace indexing, and
+signed binaries remain separate bounded slices.
