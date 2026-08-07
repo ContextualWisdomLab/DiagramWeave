@@ -15,9 +15,10 @@ concurrency:
   group: hourly-pr-maintenance-${{ github.repository }}
   cancel-in-progress: false
 
-# The local dispatch step needs only read access. The pinned reusable merge
-# scheduler receives the exact permissions it needs from this caller and then
-# narrows them again at its own job boundary.
+# Repository-local orchestration is read-only by default. The review-fix
+# dispatch job requests an OIDC token only long enough to mint a short-lived
+# OpenCode GitHub App installation token; no stored cross-repository token is
+# required. The pinned merge scheduler narrows its own elevated permissions.
 permissions:
   contents: read
 
@@ -26,21 +27,16 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      id-token: write
     env:
-      CENTRAL_DISPATCH_TOKEN: ${{ secrets.CWL_AUTOMATION_TOKEN }}
       DRY_RUN: ${{ inputs.dry_run || false }}
+      OIDC_AUDIENCE: opencode-github-action
+      OPENCODE_API_BASE_URL: https://api.opencode.ai
     steps:
       - name: Dispatch bounded review-feedback repair
         shell: bash
         run: |
           set -euo pipefail
-
-          if [ -z "$CENTRAL_DISPATCH_TOKEN" ]; then
-            echo "reason=central_dispatch_token_unavailable" >>"$GITHUB_STEP_SUMMARY"
-            echo "CWL_AUTOMATION_TOKEN is required to dispatch the central review-fix scheduler." >&2
-            exit 1
-          fi
-          echo "::add-mask::$CENTRAL_DISPATCH_TOKEN"
 
           payload="$(jq -cn \
             --arg event_type "pr-review-fix-scheduler" \
@@ -68,10 +64,59 @@ jobs:
             exit 0
           fi
 
+          mark_token_unavailable() {
+            echo "reason=opencode_app_token_unavailable" >>"$GITHUB_STEP_SUMMARY"
+            echo "::error::OpenCode GitHub App token exchange is unavailable; refusing an unauthenticated central repair dispatch."
+          }
+
+          if [ -z "${ACTIONS_ID_TOKEN_REQUEST_TOKEN:-}" ] || [ -z "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" ]; then
+            mark_token_unavailable
+            exit 1
+          fi
+
+          request_url="${ACTIONS_ID_TOKEN_REQUEST_URL}"
+          separator="&"
+          case "$request_url" in
+            *\?*) ;;
+            *) separator="?" ;;
+          esac
+
+          if ! oidc_response="$(
+            curl -fsS \
+              -H "Authorization: Bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
+              "${request_url}${separator}audience=${OIDC_AUDIENCE}"
+          )"; then
+            mark_token_unavailable
+            exit 1
+          fi
+
+          oidc_token="$(jq -r '.value // empty' <<<"$oidc_response")"
+          if [ -z "$oidc_token" ]; then
+            mark_token_unavailable
+            exit 1
+          fi
+
+          if ! token_response="$(
+            curl -fsS \
+              -X POST \
+              -H "Authorization: Bearer ${oidc_token}" \
+              "${OPENCODE_API_BASE_URL}/exchange_github_app_token"
+          )"; then
+            mark_token_unavailable
+            exit 1
+          fi
+
+          central_dispatch_token="$(jq -r '.token // empty' <<<"$token_response")"
+          if [ -z "$central_dispatch_token" ]; then
+            mark_token_unavailable
+            exit 1
+          fi
+          echo "::add-mask::$central_dispatch_token"
+
           curl --fail-with-body --silent --show-error \
             --request POST \
             --header "Accept: application/vnd.github+json" \
-            --header "Authorization: Bearer ${CENTRAL_DISPATCH_TOKEN}" \
+            --header "Authorization: Bearer ${central_dispatch_token}" \
             --header "X-GitHub-Api-Version: 2022-11-28" \
             --data "$payload" \
             "https://api.github.com/repos/ContextualWisdomLab/.github/dispatches"
