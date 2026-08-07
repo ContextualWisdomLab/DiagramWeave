@@ -2,16 +2,17 @@
 
 A transport-neutral Language Server Protocol 3.18 session for PlantUML
 diagnostics, capability-negotiated document outlines, deterministic declaration
-completion, conservative folding ranges, and evidence-bounded declaration hover.
-It is independently reusable by DiagramWeave Studio, IDE adapters, naruon, and
-other CWL hosts without importing a desktop shell or JSON-RPC transport.
+completion, conservative folding ranges, evidence-bounded declaration hover,
+and conservative same-document definition navigation. It is independently
+reusable by DiagramWeave Studio, IDE adapters, naruon, and other CWL hosts
+without importing a desktop shell or JSON-RPC transport.
 
 ## Foundation scope
 
 The package implements protocol-level lifecycle, full-document diagnostic
-synchronization, conservative explicit-declaration hierarchy, legacy outline
-compatibility, local keyword completion, bounded package/namespace folding, and
-exact declaration-label hover:
+synchronization, a conservative explicit-declaration hierarchy, legacy outline
+compatibility, local keyword completion, bounded package/namespace folding,
+exact declaration-label hover, and same-document Go to Definition:
 
 - `initialize`, `initialized`, `shutdown`, and `exit`;
 - `textDocument/didOpen`, `textDocument/didChange`, and
@@ -25,10 +26,12 @@ exact declaration-label hover:
 - capability-gated `textDocument/foldingRange` with
   `foldingRangeProvider: true`;
 - capability-gated `textDocument/hover` with `hoverProvider: true`;
+- capability-gated `textDocument/definition` with
+  `definitionProvider: true`;
 - UTF-16 positions and LSP full-document synchronization;
 - exact document-version and generation binding so stale renderer completions
   cannot overwrite newer diagnostics, outline source, completion source,
-  folding source, or hover source;
+  folding source, hover source, or definition source;
 - bounded local `file:` URI identifiers for `.puml` and `.plantuml` documents;
 - the existing stdin-only PlantUML `SANDBOX` renderer and shared structured
   diagnostic sanitizer;
@@ -60,6 +63,7 @@ const session = createLanguageServerSession({
   },
 });
 
+const documentUri = 'file:///workspace/context.puml';
 const initializeResult = await session.request('initialize', {
   capabilities: {
     textDocument: {
@@ -74,42 +78,52 @@ const initializeResult = await session.request('initialize', {
       hover: {
         contentFormat: ['markdown', 'plaintext'],
       },
+      definition: {},
     },
   },
 });
 await session.notify('initialized', {});
 await session.notify('textDocument/didOpen', {
   textDocument: {
-    uri: 'file:///workspace/context.puml',
+    uri: documentUri,
     languageId: 'plantuml',
     version: 1,
-    text: '@startuml\npackage Context {\n  class Model\n  com\n}\n@enduml\n',
+    text: [
+      '@startuml',
+      'package Context {',
+      '  class "Domain Model" as Model',
+      '  Model --> Model',
+      '}',
+      '@enduml',
+    ].join('\n'),
   },
 });
 
 const symbols = await session.request('textDocument/documentSymbol', {
-  textDocument: { uri: 'file:///workspace/context.puml' },
+  textDocument: { uri: documentUri },
 });
-
 const completions = await session.request('textDocument/completion', {
-  textDocument: { uri: 'file:///workspace/context.puml' },
-  position: { line: 3, character: 5 },
+  textDocument: { uri: documentUri },
+  position: { line: 3, character: 2 },
 });
-
 const folds = await session.request('textDocument/foldingRange', {
-  textDocument: { uri: 'file:///workspace/context.puml' },
+  textDocument: { uri: documentUri },
 });
-
 const declarationHover = await session.request('textDocument/hover', {
-  textDocument: { uri: 'file:///workspace/context.puml' },
-  position: { line: 2, character: 10 },
+  textDocument: { uri: documentUri },
+  position: { line: 2, character: 12 },
+});
+const declarationDefinition = await session.request('textDocument/definition', {
+  textDocument: { uri: documentUri },
+  position: { line: 3, character: 3 },
 });
 
-console.log(initializeResult.capabilities.hoverProvider);
+console.log(initializeResult.capabilities.definitionProvider);
 console.log(symbols[0].children.map(({ name }) => name));
 console.log(completions.map(({ label }) => label));
 console.log(folds);
 console.log(declarationHover?.contents.value);
+console.log(declarationDefinition?.range);
 ```
 
 `rendererFactory` is an optional deterministic test seam. Production hosts
@@ -117,7 +131,7 @@ should omit it and use the shared DiagramWeave renderer.
 
 ## Document-symbol contract
 
-The scanner creates source-order `DocumentSymbol[]` roots for explicit
+The scanner creates source-order `DocumentSymbol[]` roots for explicit,
 high-signal declarations in common class, sequence, component, deployment,
 use-case, and state diagrams. Supported declarations include package,
 namespace, class, abstract class, interface, enum, annotation, entity, object,
@@ -174,7 +188,8 @@ The catalog contains `@startuml`, `@enduml`, and the same high-signal explicit
 PlantUML declaration families used by the outline, including `abstract class`.
 Matching is case-insensitive and candidates remain in stable catalog order.
 Each item is an LSP keyword with plain-text insertion and an explicit UTF-16
-`textEdit` that replaces only the line-leading typed prefix.
+`textEdit` that replaces only the line-leading typed prefix. One request returns
+at most 64 items.
 
 Completion intentionally returns an empty immutable collection inside or after
 comments, inside quoted labels, after relation or directive syntax, after a
@@ -232,6 +247,31 @@ a dynamically sized fenced `text` block whose delimiter is longer than every
 backtick run in source-derived labels. The feature performs no LLM, renderer,
 filesystem, include, macro, workspace, shell, or network work.
 
+## Same-document definition contract
+
+The definition slice is enabled only when initialize receives a plain
+`capabilities.textDocument.definition` record. The server advertises
+`definitionProvider: true` and accepts `textDocument/definition` for the latest
+accepted local full-document snapshot.
+
+`definitionForSource` returns exactly one deeply frozen `Location` when the
+requested UTF-16 position proves a unique explicit identifier in the same
+PlantUML document. The target range comes from the existing authoritative
+`DocumentSymbol.selectionRange`; the definition layer never creates a second
+source of declaration truth.
+
+The bounded resolver supports conservative bare declaration identifiers and
+one-delimited/one-bare `as` declarations in either orientation. It recognizes
+exact identifier tokens on explicit declaration labels and aliases, relation
+endpoints, and member-owner shorthand. Starts are inclusive and ends are
+exclusive. The resolver masks comments and quoted narrative, excludes relation
+labels and directives, and returns `null` for duplicates, malformed aliases,
+implicit declarations, unknown identifiers, or structurally ambiguous text.
+
+Definition performs no LLM call, renderer call, file read, URI dereference,
+include or macro expansion, workspace scan, shell execution, or network access.
+Cross-document definitions, references, and rename remain later bounded slices.
+
 ## Safety and limits
 
 - The session never dereferences, reads, or writes a URI and accepts only local
@@ -249,9 +289,9 @@ filesystem, include, macro, workspace, shell, or network work.
 - Incremental range edits are rejected; this foundation uses full-document
   synchronization.
 - Public diagnostics, symbol trees, symbol information, completion results,
-  folding results, hover results, markup records, locations, child arrays,
-  positions, ranges, and edits are deeply frozen and contain no source excerpt,
-  raw stderr, Java/JAR path, host error, or credential.
+  folding results, hover results, definition locations, markup records, child
+  arrays, positions, ranges, and edits are deeply frozen and contain no source
+  excerpt, raw stderr, Java/JAR path, host error, or credential.
 - Hostile getters, proxies, arrays, renderer contracts, rejected mutations, and
   stale concurrent completions fail closed with stable `LanguageServerError`
   codes.
@@ -259,6 +299,6 @@ filesystem, include, macro, workspace, shell, or network work.
 ## Release status
 
 Version `0.0.0` is an unreleased foundation. Completion resolve, snippets,
-relation and member hover, definition, references, rename, arbitrary region
-folding, workspace indexing, cancellation, and Studio integration remain later
-bounded slices.
+relation and member hover, cross-document definition, references, rename,
+arbitrary region folding, workspace indexing, cancellation, and Studio
+integration remain later bounded slices.
