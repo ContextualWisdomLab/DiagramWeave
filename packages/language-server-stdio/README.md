@@ -3,8 +3,9 @@
 A bounded JSON-RPC 2.0 stdio transport for the transport-neutral DiagramWeave
 Language Server session. It makes the reusable session launchable from IDEs and
 Studio while keeping document state, diagnostics, document symbols, declaration
-completion, conservative folding ranges, and evidence-bounded declaration hover
-in the existing `@contextualwisdomlab/diagramweave-language-server` package.
+completion, conservative folding ranges, evidence-bounded declaration hover,
+same-document definition, and same-document references in the existing
+`@contextualwisdomlab/diagramweave-language-server` package.
 
 ## Launch
 
@@ -50,7 +51,9 @@ same accepted-source state for:
 - `textDocument/documentSymbol`;
 - capability-gated `textDocument/completion`;
 - capability-gated `textDocument/foldingRange`;
-- capability-gated `textDocument/hover`.
+- capability-gated `textDocument/hover`;
+- capability-gated `textDocument/definition`;
+- capability-gated `textDocument/references`.
 
 A completion-capable client must send a plain
 `capabilities.textDocument.completion` object during initialize. The server
@@ -88,6 +91,31 @@ capability data, or host exceptions.
 Markdown hover content is placed in a dynamically sized fenced `text` block
 whose delimiter is longer than every backtick run in source-derived labels. The
 stdio adapter does not reinterpret that content or convert it to trusted HTML.
+
+A definition-capable client sends a plain
+`capabilities.textDocument.definition` record. The server advertises
+`definitionProvider: true` and serializes the same deeply frozen
+`textDocument/definition` `Location | null` produced by the embedded session.
+Only uniquely proven explicit same-document identities resolve; ambiguity,
+unsupported syntax, comments, presentation labels, and implicit declarations
+fail by omission.
+
+A references-capable client sends a plain
+`capabilities.textDocument.references` record. The server advertises
+`referencesProvider: true` and accepts standard LSP 3.18
+`textDocument/references`. Every request must provide boolean
+`context.includeDeclaration`. Results are deeply frozen, remain in source order,
+and reuse the same authoritative declaration identity as Go to Definition. The
+reference set is bounded to 4,096 locations; overflow maps to a fixed invalid-
+params response instead of silently truncating evidence. A valid ambiguous or
+unsupported request returns an empty array.
+
+Definition and reference requests never invoke an LLM, renderer, filesystem,
+URI dereference, include or macro expansion, workspace scan, shell, or network
+service. Malformed positions and reference contexts map to fixed JSON-RPC
+`-32602`; a non-negotiated request maps to method not found. Responses do not
+echo source text, identifier values, URI values, capability data, or host
+exceptions.
 
 ## Resource limits
 
@@ -127,20 +155,21 @@ hosts and the `dweave-lsp` executable should omit them.
 ## Security and privacy
 
 The transport never logs source, JSON bodies, declaration labels, hover content,
-raw parser exceptions, raw renderer output, Java/JAR paths, environment values,
-stack traces, or credentials. Session failures map to fixed JSON-RPC messages
-plus one stable DiagramWeave code. Notification failures receive no JSON-RPC
-response and emit only a fixed `window/logMessage` notification. Output writes
-are serialized; a write failure closes the connection without retrying or
-reordering messages.
+definition identifiers, reference identifiers, raw parser exceptions, raw
+renderer output, Java/JAR paths, environment values, stack traces, or
+credentials. Session failures map to fixed JSON-RPC messages plus one stable
+DiagramWeave code. Notification failures receive no JSON-RPC response and emit
+only a fixed `window/logMessage` notification. Output writes are serialized; a
+write failure closes the connection without retrying or reordering messages.
 
-The stdio layer does not duplicate completion, folding, hover, or document
-snapshots. It cannot weaken the Language Server's local-URI, source-size,
-lifecycle, capability, immutability, or stale-mutation contracts.
+The stdio layer does not duplicate completion, folding, hover, definition,
+references, or document snapshots. It cannot weaken the Language Server's
+local-URI, source-size, lifecycle, capability, immutability, bounded-evidence,
+or stale-mutation contracts.
 
 ## Release status
 
 Version `0.0.0` is unreleased. TCP/WebSocket transports, cancellation, parallel
 request execution, Studio packaging, completion resolve, relation and member
-hover, arbitrary region folding, semantic navigation, workspace indexing, and
-signed binaries remain separate bounded slices.
+hover, arbitrary region folding, workspace indexing, cross-document navigation,
+rename, and signed binaries remain separate bounded slices.
