@@ -66,7 +66,7 @@ test('public Language Server composes definitions over hover folding completion 
     readFile(new URL('../packages/language-server/src/completion-session.js', import.meta.url), 'utf8'),
     readFile(new URL('../packages/language-server/src/limits.js', import.meta.url), 'utf8'),
   ]);
-  assert.match(indexSource, /createDefinitionLanguageServerSession as createLanguageServerSession/);
+  assert.match(indexSource, /createReferenceLanguageServerSession as createLanguageServerSession/);
   assert.match(definitionSessionSource, /createHoverLanguageServerSession/);
   assert.match(hoverSessionSource, /createFoldingLanguageServerSession/);
   assert.match(foldingSessionSource, /createCompletionLanguageServerSession/);

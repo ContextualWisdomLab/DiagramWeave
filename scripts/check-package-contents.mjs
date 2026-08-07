@@ -28,6 +28,7 @@ const packageContracts = Object.freeze([
       'package/src/hover-session.js',
       'package/src/index.js',
       'package/src/limits.js',
+      'package/src/reference-session.js',
       'package/src/session.js',
       'package/src/symbol-information.js',
       'package/src/symbol-session.js',
