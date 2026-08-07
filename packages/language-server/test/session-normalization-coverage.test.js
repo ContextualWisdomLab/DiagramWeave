@@ -58,6 +58,13 @@ test('definition composition rejects malformed mutation envelopes before delegat
       (error) => assertError(error, 'invalid_request'),
     );
   }
+
+  await assert.rejects(
+    session.notify('textDocument/didClose', {
+      textDocument: { uri: 'https://example.com/remote.puml' },
+    }),
+    (error) => assertError(error, 'document_uri_invalid'),
+  );
 });
 
 test('reference composition rejects a non-record position at its own boundary', async () => {
