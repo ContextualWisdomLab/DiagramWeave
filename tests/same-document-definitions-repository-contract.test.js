@@ -35,6 +35,8 @@ test('definition records preserve protocol privacy product and modular-host cont
 
   for (const text of [packageReadme, research, operations, product, design, plan]) {
     assert.match(text, /textDocument\/definition/);
+  }
+  for (const text of [packageReadme, research, operations, design, plan]) {
     assert.match(text, /definitionProvider/);
   }
   assert.match(packageReadme, /one deeply frozen `Location`/);
@@ -77,7 +79,7 @@ test('implementation exposes exact bounded definition composition and verificati
   assert.match(indexSource, /createDefinitionLanguageServerSession as createLanguageServerSession/);
   assert.match(packageCheck, /package\/src\/definitions\.js/);
   assert.match(packageCheck, /package\/src\/definition-session\.js/);
-  assert.match(design, /(?:exactly 100% production|production).*line, branch, function, and JSDoc coverage.*100%/i);
+  assert.match(design, /production line, branch, function, and JSDoc coverage at exactly 100%/i);
   assert.match(plan, /Task 8: Run exact-head verification and prepare the pull request/);
   assert.match(plan, /npm pack --workspace packages\/language-server-stdio --dry-run --json/);
   assert.doesNotMatch(design, /\b(?:TBD|TODO)\b/);
