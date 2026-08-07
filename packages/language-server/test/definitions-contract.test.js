@@ -68,7 +68,7 @@ test('resolves bare identifiers and both delimited alias orientations', () => {
   );
   assert.deepEqual(
     definitionForSource(source, uri, positionOf(source, 'UserActor', 2, 1)),
-    expectedLocation(source, 'User'),
+    expectedLocation(source, 'User', 1),
   );
 });
 
