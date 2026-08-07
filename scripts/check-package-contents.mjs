@@ -19,6 +19,8 @@ const packageContracts = Object.freeze([
       'package/src/completions.js',
       'package/src/contracts.js',
       'package/src/declaration-hover.js',
+      'package/src/definition-session.js',
+      'package/src/definitions.js',
       'package/src/diagnostics.js',
       'package/src/errors.js',
       'package/src/folding-ranges.js',
