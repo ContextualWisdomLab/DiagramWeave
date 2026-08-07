@@ -81,7 +81,7 @@ test('implementation exposes exact bounded definition composition and verificati
   assert.match(packageCheck, /package\/src\/definition-session\.js/);
   assert.match(design, /production line, branch, and function.*JSDoc must reach 100%/is);
   assert.match(plan, /Task 8 — Complete exact verification and PR lifecycle/);
-  assert.match(plan, /npm pack --workspace packages\/language-server-stdio --dry-run --json/);
+  assert.match(plan, /Exact workspace package dry runs through the repository package-content gate/);
   assert.doesNotMatch(design, /\b(?:TBD|TODO)\b/);
   assert.doesNotMatch(plan, /\b(?:TBD|TODO)\b/);
 });
