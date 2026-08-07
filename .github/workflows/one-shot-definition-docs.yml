@@ -1,0 +1,147 @@
+name: One-shot definition documentation repair
+
+on:
+  push:
+    branches:
+      - agent/conservative-same-document-definitions
+    paths:
+      - .github/workflows/one-shot-definition-docs.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: one-shot-definition-docs-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out exact branch head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: agent/conservative-same-document-definitions
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238
+        with:
+          node-version: 24
+          package-manager-cache: false
+
+      - name: Append durable definition records
+        shell: python
+        run: |
+          from pathlib import Path
+
+          records = {
+              "README.md": r'''
+
+          ## Conservative same-document Go to Definition
+
+          DiagramWeave now composes capability-gated LSP 3.18
+          `textDocument/definition` over its authoritative PlantUML document-symbol tree.
+          A client that supplies a plain `textDocument.definition` capability receives
+          `definitionProvider: true`. A valid request returns one deeply frozen
+          same-document `Location` or `null` for ambiguity or unsupported syntax.
+          Exact UTF-16 declaration labels, safe aliases, bounded relation endpoints, and
+          member-owner shorthand are supported. Duplicate identifiers, comments, quoted
+          narrative, directives, relation labels, malformed aliases, implicit declarations,
+          includes, macros, and workspace identity fail by omission. The request path performs
+          no LLM, renderer, filesystem, URI dereference, shell, or network operation and is
+          reusable by Studio, IDE adapters, `dweave-lsp`, naruon, and other CWL hosts.
+          ''',
+              "packages/language-server-stdio/README.md": r'''
+
+          ## Same-document definition transport
+
+          When the client negotiates a plain `textDocument.definition` capability, the
+          composed session advertises `definitionProvider: true` and the bounded stdio
+          transport accepts `textDocument/definition`. Successful results are one standard
+          same-document `Location` or `null`. The transport does not inspect or alter the
+          semantic result.
+
+          A malformed or out-of-snapshot position is the stable
+          `document_position_invalid` error and is serialized as JSON-RPC `-32602` without
+          source, URI, renderer, host-error, or credential content. A client that did not
+          negotiate the capability receives fixed `method_not_found` JSON-RPC `-32601`.
+          ''',
+              "docs/product/diagramweave-prd.md": r'''
+
+          ## FR-012 implementation note — same-document definition foundation
+
+          FR-012 now includes the first bounded same-document definition slice. A client that
+          negotiates LSP 3.18 `textDocument/definition` receives `definitionProvider: true`.
+          DiagramWeave resolves a unique explicit PlantUML declaration, supported alias,
+          relation endpoint, or member-owner token to the authoritative document-symbol
+          selection range and otherwise returns `null`. The slice is local, immutable,
+          revision-safe, UTF-16 exact, renderer-free, model-free, and reusable by Studio,
+          IDEs, `dweave-lsp`, naruon, and other CWL hosts. Cross-document definitions,
+          references, safe rename, includes, macros, scope shadowing, and workspace indexing
+          remain separate FR-012 increments.
+          ''',
+              "docs/architecture.md": r'''
+
+          ## Definition navigation composition
+
+          ```text
+          definition session
+            -> hover session
+              -> folding-range session
+                -> completion session
+                  -> document-symbol session
+                    -> diagnostic session
+          ```
+
+          The definition session is the outermost transport-neutral feature layer. It stores
+          only source snapshots accepted by every inner layer and uses mutation sequences plus
+          a session epoch to prevent rejected, stale, closed, or superseded work from restoring
+          obsolete identity evidence. `definitionForSource` derives safe identifiers from the
+          authoritative symbol tree and returns that tree's frozen selection range; it does not
+          create a second declaration source of truth.
+          ''',
+              "ARCHITECTURE.md": r'''
+
+          ## Same-document definition navigation
+
+          The public Language Server entry point is `createDefinitionLanguageServerSession`.
+          It composes same-document definition navigation over hover, folding, completion,
+          document symbols, and diagnostics while preserving each independently reusable
+          package boundary. Target ranges remain owned by the authoritative symbol tree.
+          Cross-document indexing, includes, references, and rename are not part of this
+          foundation and require separate ADR-backed increments.
+          ''',
+          }
+
+          for path_string, block in records.items():
+              path = Path(path_string)
+              text = path.read_text(encoding="utf-8")
+              marker = block.strip().splitlines()[0]
+              if marker not in text:
+                  path.write_text(text.rstrip() + "\n" + block.lstrip(), encoding="utf-8")
+
+      - name: Remove one-shot workflow
+        shell: bash
+        run: rm .github/workflows/one-shot-definition-docs.yml
+
+      - name: Install locked workspace
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Verify repository
+        run: npm run verify
+
+      - name: Verify package contents
+        run: npm run package:check
+
+      - name: Commit verified records
+        shell: bash
+        run: |
+          git config user.name "DiagramWeave one-shot repair"
+          git config user.email "actions@users.noreply.github.com"
+          git add README.md packages/language-server-stdio/README.md \
+            docs/product/diagramweave-prd.md docs/architecture.md ARCHITECTURE.md \
+            .github/workflows/one-shot-definition-docs.yml
+          git diff --cached --check
+          git commit -m "docs: integrate same-document definitions"
+          git push origin HEAD:agent/conservative-same-document-definitions
