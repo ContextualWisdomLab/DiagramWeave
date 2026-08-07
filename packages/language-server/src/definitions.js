@@ -161,35 +161,26 @@ function displayToken(first, second) {
 }
 
 /**
- * Derive one conservative reference identifier from an authoritative declaration line.
+ * Derive one conservative reference identifier from an authoritative declaration.
  *
- * @param {string} line - Complete source line.
+ * The line and symbol are produced by the same document-symbol scanner and therefore
+ * share its declaration pattern, first-token, single-line selection, and exact range
+ * invariants. This layer derives an identifier only; it does not revalidate or create
+ * a second declaration source of truth.
+ *
+ * @param {string} line - Complete authoritative declaration line.
  * @param {Readonly<object>} symbol - Authoritative symbol on this line.
  * @returns {{identifier: string, identifierRange: Readonly<object>, target: Readonly<object>}|null} Identifier record.
  */
 function identifierForSymbol(line, symbol) {
   const match = declarationPattern.exec(line);
-  if (match === null) {
-    return null;
-  }
   const remainder = match[4];
   const remainderStart = match.indices[4][0];
   const first = parseLabelToken(remainder);
-  if (first === null) {
-    return null;
-  }
   const aliasMatch = /^\s+as\s+/diu.exec(remainder.slice(first.tokenEnd));
   const second = aliasMatch === null
     ? null
     : parseLabelToken(remainder, first.tokenEnd + aliasMatch[0].length);
-  const display = displayToken(first, second);
-  if (
-    symbol.selectionRange.start.line !== symbol.selectionRange.end.line ||
-    symbol.selectionRange.start.character !== remainderStart + display.selectionStart ||
-    symbol.selectionRange.end.character !== remainderStart + display.selectionEnd
-  ) {
-    return null;
-  }
 
   let identifier = null;
   if (aliasMatch === null && isSafeIdentifierToken(first)) {
