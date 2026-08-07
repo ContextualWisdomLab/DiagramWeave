@@ -593,8 +593,6 @@ export function referencesForSource(source, uri, position, includeDeclaration) {
 
   locations.sort((left, right) =>
     left.range.start.line - right.range.start.line ||
-    left.range.start.character - right.range.start.character ||
-    left.range.end.line - right.range.end.line ||
-    left.range.end.character - right.range.end.character);
+    left.range.start.character - right.range.start.character);
   return Object.freeze(locations);
 }
