@@ -12,6 +12,8 @@ const declarationPattern = /^(\s*)(?:(abstract)\s+)?(package|namespace|class|int
 const safeIdentifierPattern = /^[\p{L}_][\p{L}\p{N}_.$-]*$/u;
 const identifierTokenPattern = /[\p{L}_][\p{L}\p{N}_.$-]*/gu;
 const relationOperatorPattern = /(?:<\|--|--\|>|<\|\.\.|\.\.\|>|<--|-->|<-|->|--|\.\.)/u;
+const maximumReferenceLocations = 4_096;
+const emptyReferenceLocations = Object.freeze([]);
 
 /**
  * Create the stable error used for malformed or out-of-document definition positions.
@@ -23,6 +25,19 @@ function invalidPositionError() {
     'document_position_invalid',
     'The document position is invalid.',
     { field: 'position', method: 'textDocument/definition' },
+  );
+}
+
+/**
+ * Create the stable error used when a reference result would exceed its hard limit.
+ *
+ * @returns {LanguageServerError} Source-free reference-capacity error.
+ */
+function referenceLimitError() {
+  return new LanguageServerError(
+    'reference_limit_exceeded',
+    'The document contains too many reference locations.',
+    { method: 'textDocument/references' },
   );
 }
 
@@ -310,6 +325,17 @@ function maskedTargetLine(lines, targetLine) {
 }
 
 /**
+ * Mask every line once while carrying block-comment state forward.
+ *
+ * @param {string[]} lines - Complete source lines.
+ * @returns {string[]} Same-length structural lines in source order.
+ */
+function maskedLinesForSource(lines) {
+  const state = { inBlockComment: false };
+  return lines.map((line) => maskUntrustedText(line, state));
+}
+
+/**
  * Return the structural portion before a relation or member label separator.
  *
  * @param {string} line - Comment- and quote-masked line.
@@ -338,6 +364,29 @@ function structuralSegmentForLine(line) {
  */
 function locationForSymbol(uri, symbol) {
   return Object.freeze({ uri, range: symbol.selectionRange });
+}
+
+/**
+ * Build one deeply immutable same-document reference location.
+ *
+ * @param {string} uri - Validated local document URI.
+ * @param {Readonly<object>} range - Source range to copy.
+ * @returns {Readonly<object>} Deeply frozen LSP Location.
+ */
+function referenceLocation(uri, range) {
+  return Object.freeze({
+    uri,
+    range: Object.freeze({
+      start: Object.freeze({
+        line: range.start.line,
+        character: range.start.character,
+      }),
+      end: Object.freeze({
+        line: range.end.line,
+        character: range.end.character,
+      }),
+    }),
+  });
 }
 
 /**
@@ -413,4 +462,139 @@ export function definitionForSource(source, uri, position) {
     }
   }
   return null;
+}
+
+/**
+ * Return every structurally proven same-document use of one explicit PlantUML identifier.
+ *
+ * References reuse the authoritative document-symbol declaration tree and the exact
+ * conservative identifier grammar used by Go to Definition. Comments, quoted text,
+ * directives, relation labels, implicit identities, malformed aliases, and duplicate
+ * declaration identities fail by omission. The function performs no renderer, file,
+ * workspace, shell, include, macro, model, or network operation.
+ *
+ * @param {unknown} source - Complete PlantUML source snapshot.
+ * @param {unknown} uri - Local PlantUML document URI.
+ * @param {unknown} position - Candidate zero-based UTF-16 LSP position.
+ * @param {unknown} includeDeclaration - Whether the declaration location is included.
+ * @returns {readonly Readonly<object>[]} Deeply frozen source-order LSP locations.
+ * @throws {LanguageServerError} When request contracts or the reference limit fail.
+ */
+export function referencesForSource(source, uri, position, includeDeclaration) {
+  if (typeof includeDeclaration !== 'boolean') {
+    throw new LanguageServerError(
+      'invalid_request',
+      'The reference request is invalid.',
+      { method: 'textDocument/references' },
+    );
+  }
+
+  const roots = documentSymbolsForSource(source);
+  const normalizedUri = normalizeDocumentUri(uri);
+  const normalizedPosition = normalizePosition(source, position);
+  const lines = source.split(/\r\n|\n|\r/u);
+  const symbols = flattenSymbols(roots);
+  const identifierRecords = [];
+  const targetsByIdentifier = new Map();
+  const declarationLines = new Set();
+  let selectedIdentifier = null;
+  let selectedTarget = null;
+
+  for (const symbol of symbols) {
+    declarationLines.add(symbol.selectionRange.start.line);
+    const identifierRecord = identifierForSymbol(
+      lines[symbol.selectionRange.start.line],
+      symbol,
+    );
+    if (identifierRecord === null) {
+      continue;
+    }
+    identifierRecords.push(identifierRecord);
+    if (!targetsByIdentifier.has(identifierRecord.identifier)) {
+      targetsByIdentifier.set(identifierRecord.identifier, identifierRecord.target);
+    } else {
+      targetsByIdentifier.set(identifierRecord.identifier, null);
+    }
+    if (
+      selectedIdentifier === null &&
+      (
+        rangeContains(symbol.selectionRange, normalizedPosition) ||
+        rangeContains(identifierRecord.identifierRange, normalizedPosition)
+      )
+    ) {
+      selectedIdentifier = identifierRecord.identifier;
+      selectedTarget = identifierRecord.target;
+    }
+  }
+
+  if (selectedIdentifier === null) {
+    const { segment, navigable } = structuralSegmentForLine(
+      maskedTargetLine(lines, normalizedPosition.line),
+    );
+    if (navigable && normalizedPosition.character < segment.length) {
+      identifierTokenPattern.lastIndex = 0;
+      let selectedMatch;
+      while ((selectedMatch = identifierTokenPattern.exec(segment)) !== null) {
+        const start = selectedMatch.index;
+        const end = start + selectedMatch[0].length;
+        if (
+          normalizedPosition.character >= start &&
+          normalizedPosition.character < end
+        ) {
+          selectedIdentifier = selectedMatch[0];
+          selectedTarget = targetsByIdentifier.get(selectedIdentifier) ?? null;
+          break;
+        }
+      }
+    }
+  }
+
+  if (
+    selectedIdentifier === null ||
+    selectedTarget === null ||
+    targetsByIdentifier.get(selectedIdentifier) !== selectedTarget
+  ) {
+    return emptyReferenceLocations;
+  }
+
+  const locations = [];
+  if (includeDeclaration) {
+    locations.push(referenceLocation(normalizedUri, selectedTarget.selectionRange));
+  }
+
+  const maskedLines = maskedLinesForSource(lines);
+  for (let lineIndex = 0; lineIndex < maskedLines.length; lineIndex += 1) {
+    if (declarationLines.has(lineIndex)) {
+      continue;
+    }
+    const { segment, navigable } = structuralSegmentForLine(maskedLines[lineIndex]);
+    if (!navigable) {
+      continue;
+    }
+    identifierTokenPattern.lastIndex = 0;
+    let match;
+    while ((match = identifierTokenPattern.exec(segment)) !== null) {
+      if (match[0] !== selectedIdentifier) {
+        continue;
+      }
+      const range = Object.freeze({
+        start: Object.freeze({ line: lineIndex, character: match.index }),
+        end: Object.freeze({
+          line: lineIndex,
+          character: match.index + match[0].length,
+        }),
+      });
+      locations.push(referenceLocation(normalizedUri, range));
+      if (locations.length > maximumReferenceLocations) {
+        throw referenceLimitError();
+      }
+    }
+  }
+
+  locations.sort((left, right) =>
+    left.range.start.line - right.range.start.line ||
+    left.range.start.character - right.range.start.character ||
+    left.range.end.line - right.range.end.line ||
+    left.range.end.character - right.range.end.character);
+  return Object.freeze(locations);
 }
