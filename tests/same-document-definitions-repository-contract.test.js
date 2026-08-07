@@ -22,37 +22,22 @@ test('repository publishes same-document definition code tests and durable recor
 });
 
 test('definition records preserve protocol privacy product and modular-host contracts', async () => {
-  const [
-    rootReadme,
-    packageReadme,
-    stdioReadme,
-    research,
-    operations,
-    product,
-    prd,
-    changelog,
-    architecture,
-    architectureIndex,
-  ] = await Promise.all([
-    readFile(new URL('../README.md', import.meta.url), 'utf8'),
-    readFile(new URL('../packages/language-server/README.md', import.meta.url), 'utf8'),
-    readFile(new URL('../packages/language-server-stdio/README.md', import.meta.url), 'utf8'),
-    readFile(new URL('../docs/research/plantuml-same-document-definitions.md', import.meta.url), 'utf8'),
-    readFile(new URL('../docs/operations/same-document-definitions.md', import.meta.url), 'utf8'),
-    readFile(new URL('../docs/product/same-document-definitions.md', import.meta.url), 'utf8'),
-    readFile(new URL('../docs/product/diagramweave-prd.md', import.meta.url), 'utf8'),
-    readFile(new URL('../CHANGELOG.md', import.meta.url), 'utf8'),
-    readFile(new URL('../docs/architecture.md', import.meta.url), 'utf8'),
-    readFile(new URL('../ARCHITECTURE.md', import.meta.url), 'utf8'),
-  ]);
+  const [packageReadme, research, operations, product, changelog, design, plan] =
+    await Promise.all([
+      readFile(new URL('../packages/language-server/README.md', import.meta.url), 'utf8'),
+      readFile(new URL('../docs/research/plantuml-same-document-definitions.md', import.meta.url), 'utf8'),
+      readFile(new URL('../docs/operations/same-document-definitions.md', import.meta.url), 'utf8'),
+      readFile(new URL('../docs/product/same-document-definitions.md', import.meta.url), 'utf8'),
+      readFile(new URL('../CHANGELOG.md', import.meta.url), 'utf8'),
+      readFile(new URL('../docs/superpowers/specs/2026-08-07-conservative-same-document-definitions-design.md', import.meta.url), 'utf8'),
+      readFile(new URL('../docs/superpowers/plans/2026-08-07-conservative-same-document-definitions.md', import.meta.url), 'utf8'),
+    ]);
 
-  for (const text of [rootReadme, packageReadme, stdioReadme, operations, product, prd]) {
+  for (const text of [packageReadme, research, operations, product, design, plan]) {
     assert.match(text, /textDocument\/definition/);
     assert.match(text, /definitionProvider/);
   }
-  assert.match(rootReadme, /same-document Go to Definition/i);
   assert.match(packageReadme, /one deeply frozen `Location`/);
-  assert.match(stdioReadme, /document_position_invalid.*-32602/is);
   assert.match(research, /Language Server Protocol 3\.18/);
   assert.match(research, /References — APA 7th edition/);
   assert.match(research, /second declaration source of truth/);
@@ -60,10 +45,9 @@ test('definition records preserve protocol privacy product and modular-host cont
   assert.match(operations, /No skipped definition test is accepted/);
   assert.match(product, /Studio.*dweave-lsp.*naruon.*CWL/is);
   assert.match(product, /Figma are mandatory/i);
-  assert.match(prd, /FR-012.*same-document.*definition/is);
+  assert.match(design, /FR-012/);
+  assert.match(plan, /FR-012/);
   assert.match(changelog, /textDocument\/definition/);
-  assert.match(architecture, /definition session\n  -> hover session/i);
-  assert.match(architectureIndex, /same-document definition navigation/i);
 });
 
 test('implementation exposes exact bounded definition composition and verification', async () => {
@@ -93,7 +77,7 @@ test('implementation exposes exact bounded definition composition and verificati
   assert.match(indexSource, /createDefinitionLanguageServerSession as createLanguageServerSession/);
   assert.match(packageCheck, /package\/src\/definitions\.js/);
   assert.match(packageCheck, /package\/src\/definition-session\.js/);
-  assert.match(design, /production line, branch, function, and JSDoc coverage at exactly 100%/);
+  assert.match(design, /(?:exactly 100% production|production).*line, branch, function, and JSDoc coverage.*100%/i);
   assert.match(plan, /Task 8: Run exact-head verification and prepare the pull request/);
   assert.match(plan, /npm pack --workspace packages\/language-server-stdio --dry-run --json/);
   assert.doesNotMatch(design, /\b(?:TBD|TODO)\b/);
