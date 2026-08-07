@@ -59,7 +59,7 @@ test('preserves UTF-16 ranges across newline conventions and multilingual identi
 test('accepts the exact reference ceiling and rejects overflow without truncation', () => {
   const supportedLines = ['@startuml', 'class Target'];
   for (let index = 0; index < 4_095; index += 1) {
-    supportedLines.push('Target --> Target');
+    supportedLines.push('Target : run()');
   }
   supportedLines.push('@enduml', '');
   const supportedSource = supportedLines.join('\n');
@@ -76,13 +76,13 @@ test('accepts the exact reference ceiling and rejects overflow without truncatio
     end: { line: 1, character: 12 },
   });
   assert.deepEqual(references.at(-1).range, {
-    start: { line: 4_096, character: 10 },
-    end: { line: 4_096, character: 16 },
+    start: { line: 4_096, character: 0 },
+    end: { line: 4_096, character: 6 },
   });
 
   const overflowLines = ['@startuml', 'class Target'];
   for (let index = 0; index < 4_096; index += 1) {
-    overflowLines.push('Target --> Target');
+    overflowLines.push('Target : run()');
   }
   overflowLines.push('@enduml', '');
   assert.throws(
