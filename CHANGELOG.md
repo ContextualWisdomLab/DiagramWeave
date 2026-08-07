@@ -8,6 +8,7 @@ The project follows Semantic Versioning after the first release.
 
 ### Changed
 
+- Hourly PR maintenance no longer assumes a stored `CWL_AUTOMATION_TOKEN`; the bounded central review-fix dispatch now exchanges GitHub Actions OIDC for a short-lived OpenCode GitHub App installation token and fails closed if that existing authentication path is unavailable.
 - Hourly product development now runs an in-workflow OpenCode agent against
   NVIDIA NIM (`NVIDIA_NIM_API_KEY` organization secret) and opens the bounded
   pull request itself; the workflow no longer assumes `COPILOT_GITHUB_TOKEN`
