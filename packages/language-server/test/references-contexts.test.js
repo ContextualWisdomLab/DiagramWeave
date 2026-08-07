@@ -96,3 +96,28 @@ test('fails by omission for implicit malformed and duplicate identities', () => 
     assert.deepEqual(result, []);
   }
 });
+
+test('orders predeclaration and same-line references and omits relation operators', () => {
+  const source = [
+    '@startuml',
+    'Target --> Target',
+    'class Target',
+    'Target : run()',
+    '@enduml',
+    '',
+  ].join('\n');
+
+  assert.deepEqual(
+    referencesForSource(source, uri, { line: 1, character: 1 }, true),
+    [
+      location(1, 0, 6),
+      location(1, 11, 17),
+      location(2, 6, 12),
+      location(3, 0, 6),
+    ],
+  );
+  assert.deepEqual(
+    referencesForSource(source, uri, { line: 1, character: 8 }, true),
+    [],
+  );
+});
