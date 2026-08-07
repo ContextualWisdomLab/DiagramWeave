@@ -150,17 +150,6 @@ function isSafeIdentifierToken(token) {
 }
 
 /**
- * Select the authoritative display token using the document-symbol scanner contract.
- *
- * @param {{delimited: boolean}} first - First parsed token.
- * @param {{delimited: boolean}|null} second - Optional token after `as`.
- * @returns {object} Display token.
- */
-function displayToken(first, second) {
-  return first.delimited === false && second?.delimited === true ? second : first;
-}
-
-/**
  * Derive one conservative reference identifier from an authoritative declaration.
  *
  * The line and symbol are produced by the same document-symbol scanner and therefore
