@@ -98,17 +98,20 @@ test('navigates declaration display and alias ranges directly', () => {
   );
 });
 
-test('fails closed for duplicate and unsupported alias forms', () => {
+test('fails closed for duplicate malformed and unsupported alias forms', () => {
   const oversizedAlias = `Alias${'x'.repeat(languageServerLimits.maxSymbolNameBytes)}`;
   const source = [
     'class First',
     'class "Second" as First',
     'class BareDisplay as BareAlias',
     'class MissingAlias as ',
+    'class "Unterminated Alias" as "unterminated',
+    'class "Angle Alias" as <invalid',
     'class "Unsafe" as 9unsafe',
     `class "Oversized" as ${oversizedAlias}`,
     'First --> First',
     'BareAlias --> MissingAlias',
+    'unterminated --> invalid',
     'unsafe --> Missing',
     `${oversizedAlias} --> Missing`,
   ].join('\n');
@@ -116,6 +119,8 @@ test('fails closed for duplicate and unsupported alias forms', () => {
   assert.equal(definitionForSource(source, uri, position(source, 'First', 2)), null);
   assert.equal(definitionForSource(source, uri, position(source, 'BareAlias', 1)), null);
   assert.equal(definitionForSource(source, uri, position(source, 'MissingAlias', 1)), null);
+  assert.equal(definitionForSource(source, uri, position(source, 'unterminated', 1)), null);
+  assert.equal(definitionForSource(source, uri, position(source, 'invalid', 1)), null);
   assert.equal(definitionForSource(source, uri, position(source, 'unsafe', 1)), null);
   assert.equal(definitionForSource(source, uri, position(source, oversizedAlias, 1)), null);
 });
