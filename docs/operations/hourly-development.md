@@ -17,6 +17,8 @@ It uses two organization-central control paths:
 
 The repair path deliberately dispatches the central repository's default-branch workflow instead of calling the older reusable repair workflow. That keeps privileged scheduler code under the central repository's protected default branch and avoids a caller believing it pinned the implementation while the called workflow checks out a mutable ref internally. DiagramWeave does not copy central repair code.
 
+The repository does **not** require or invent a stored cross-repository automation secret for this dispatch. The job requests GitHub Actions OIDC permission, exchanges the short-lived OIDC assertion with the existing OpenCode GitHub App service, masks the returned installation token, uses it only for the static central repository-dispatch request, and discards it with the runner. The exchange follows the same OpenCode App authentication path already used by central PR governance; it does not alter the reviewer agent's existing credential chain.
+
 To adopt a later merge-scheduler revision, review the `.github` repository change, replace the pinned revision in the workflow and this guide together, run the workflow contract tests, and submit the update through a normal pull request.
 
 ## Product-development loop
@@ -31,9 +33,9 @@ The delegated agent is forbidden from merging, publishing, releasing, weakening 
 
 ### Central PR repair dispatch
 
-Configure an organization or repository secret named `CWL_AUTOMATION_TOKEN` with a credential that can create repository-dispatch events in `ContextualWisdomLab/.github`. Limit the credential to that repository and the minimum permission required by GitHub for repository dispatch. The workflow uses it only for the static `pr-review-fix-scheduler` event; it never passes user-supplied repository or workflow names.
+No repository or organization secret is required solely for the central repair dispatch. The workflow uses GitHub Actions OIDC with audience `opencode-github-action` to obtain a short-lived OpenCode GitHub App installation token from the existing OpenCode exchange service. The token is masked immediately, is not written to repository state, and is used only to create the static `pr-review-fix-scheduler` repository-dispatch event in `ContextualWisdomLab/.github`.
 
-If this secret is absent, the repair-dispatch job fails closed and emits `central_dispatch_token_unavailable`. The pinned review-and-merge scheduler still runs through `if: always()`, so missing repair credentials cannot disable exact-head review, branch-update, or policy-compliant merge evaluation.
+If GitHub does not provide the OIDC request environment, the exchange fails, or the exchange returns no installation token, the repair-dispatch job fails closed and emits `opencode_app_token_unavailable`. The pinned review-and-merge scheduler still runs through `if: always()`, so an authentication failure cannot disable exact-head review, branch-update, or policy-compliant merge evaluation.
 
 ### Product-development agent credential
 
@@ -45,10 +47,10 @@ If the secret is missing, pull-request inventory fails, or an open pull request 
 
 Use the Actions interface to run either workflow with `dry_run: true`.
 
-- PR maintenance prints the static central repair-dispatch payload and asks the pinned merge scheduler to run in dry-run mode.
+- PR maintenance prints the static central repair-dispatch payload without requesting an OIDC or OpenCode App token, and asks the pinned merge scheduler to run in dry-run mode.
 - Product development evaluates all gates and prints the exact bounded agent prompt without starting an agent session.
 
-A dry run still requires readable pull-request inventory and the configured `NVIDIA_NIM_API_KEY`, because the gate proves the session could actually start.
+A product-development dry run still requires readable pull-request inventory and the configured `NVIDIA_NIM_API_KEY`, because the gate proves the session could actually start. A PR-maintenance dry run intentionally requires no mutation credential because it performs no central mutation.
 
 ## Contextual Orchestrator boundary
 
@@ -61,7 +63,8 @@ All product LLM functionality must use or improve `ContextualWisdomLab/contextua
 - Open pull request: allow PR maintenance to finish before new development starts.
 - Required Check or independent review failure: do not merge or release.
 - Delayed schedule: rely on the next scheduled run or use a manual dry run; do not add a duplicate scheduler.
-- Central repair dispatch is unauthorized: verify `CWL_AUTOMATION_TOKEN` scope and the central repository allowlist; do not fall back to a mutable reusable workflow.
+- OpenCode App exchange unavailable: emit `opencode_app_token_unavailable`; do not invent a replacement secret or send an unauthenticated central dispatch.
+- Central repair dispatch is unauthorized after a successful exchange: verify the OpenCode GitHub App installation and repository permissions; do not introduce a new personal access token or mutable workflow workaround.
 - Central merge workflow pin becomes stale: update the immutable pin through a reviewed pull request.
 
 ## Disablement
