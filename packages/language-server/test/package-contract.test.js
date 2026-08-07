@@ -16,11 +16,13 @@ test('publishes an independently reusable transport-neutral package', () => {
   assert.deepEqual(manifest.dependencies, {
     '@contextualwisdomlab/diagramweave-plantuml-renderer': '0.0.0',
   });
-  assert.match(manifest.description, /declaration hover/i);
+  assert.match(manifest.description, /definition navigation/i);
   assert.match(
     indexSource,
-    /createHoverLanguageServerSession as createLanguageServerSession/,
+    /createDefinitionLanguageServerSession as createLanguageServerSession/,
   );
+  assert.match(indexSource, /createDefinitionLanguageServerSession/);
+  assert.match(indexSource, /definitionForSource/);
   assert.match(indexSource, /LanguageServerError/);
   assert.match(indexSource, /languageServerLimits/);
   assert.doesNotMatch(
@@ -28,8 +30,9 @@ test('publishes an independently reusable transport-neutral package', () => {
     /normalizeDocumentUri|diagnosticsForRendererOutcome|declarationHoverForSource/,
   );
   assert.match(readme, /Language Server Protocol 3\.18/);
+  assert.match(readme, /textDocument\/definition/);
+  assert.match(readme, /definitionProvider/);
   assert.match(readme, /textDocument\/hover/);
-  assert.match(readme, /hoverProvider/);
   assert.match(readme, /naruon/i);
   assert.match(readme, /never dereferences/i);
   assert.match(readme, /256 open documents/);

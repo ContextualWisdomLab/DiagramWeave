@@ -1,7 +1,7 @@
 {
   "name": "@contextualwisdomlab/diagramweave-language-server",
   "version": "0.0.0",
-  "description": "Transport-neutral PlantUML diagnostics, negotiated outlines, declaration completion, folding, and declaration hover for DiagramWeave Studio, IDEs, naruon, and CWL hosts.",
+  "description": "Transport-neutral PlantUML diagnostics, negotiated outlines, completion, folding, hover, and conservative definition navigation for DiagramWeave Studio, IDEs, naruon, and CWL hosts.",
   "license": "MIT",
   "type": "module",
   "exports": "./src/index.js",

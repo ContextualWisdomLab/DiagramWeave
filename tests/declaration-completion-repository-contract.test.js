@@ -69,9 +69,10 @@ test('completion documentation records protocol safety product and modular-host 
   assert.match(architectureIndex, /fixed, deterministic, capability-gated local\n   catalog/);
 });
 
-test('public entry point retains the exact completion layer beneath hover and folding', async () => {
+test('public entry point retains completion beneath definition hover and folding', async () => {
   const [
     indexSource,
+    definitionSessionSource,
     hoverSessionSource,
     foldingSessionSource,
     limitsSource,
@@ -79,6 +80,7 @@ test('public entry point retains the exact completion layer beneath hover and fo
     plan,
   ] = await Promise.all([
     readFile(new URL('../packages/language-server/src/index.js', import.meta.url), 'utf8'),
+    readFile(new URL('../packages/language-server/src/definition-session.js', import.meta.url), 'utf8'),
     readFile(new URL('../packages/language-server/src/hover-session.js', import.meta.url), 'utf8'),
     readFile(new URL('../packages/language-server/src/folding-session.js', import.meta.url), 'utf8'),
     readFile(new URL('../packages/language-server/src/limits.js', import.meta.url), 'utf8'),
@@ -86,7 +88,8 @@ test('public entry point retains the exact completion layer beneath hover and fo
     readFile(new URL('../docs/superpowers/plans/2026-08-05-declaration-completion.md', import.meta.url), 'utf8'),
   ]);
 
-  assert.match(indexSource, /createHoverLanguageServerSession as createLanguageServerSession/);
+  assert.match(indexSource, /createDefinitionLanguageServerSession as createLanguageServerSession/);
+  assert.match(definitionSessionSource, /createHoverLanguageServerSession/);
   assert.match(hoverSessionSource, /createFoldingLanguageServerSession/);
   assert.match(foldingSessionSource, /createCompletionLanguageServerSession/);
   assert.match(limitsSource, /maxCompletionItems: 64/);

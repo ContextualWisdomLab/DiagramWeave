@@ -69,10 +69,11 @@ test('folding records preserve LSP PlantUML privacy product and modular-host con
   assert.match(architectureIndex, /conservative folding ranges/is);
 });
 
-test('implementation and package contracts expose the bounded iterative layer beneath hover', async () => {
+test('implementation and package contracts expose folding beneath definitions and hover', async () => {
   const [
     engineSource,
     sessionSource,
+    definitionSessionSource,
     hoverSessionSource,
     indexSource,
     packageCheck,
@@ -81,6 +82,7 @@ test('implementation and package contracts expose the bounded iterative layer be
   ] = await Promise.all([
     readFile(new URL('../packages/language-server/src/folding-ranges.js', import.meta.url), 'utf8'),
     readFile(new URL('../packages/language-server/src/folding-session.js', import.meta.url), 'utf8'),
+    readFile(new URL('../packages/language-server/src/definition-session.js', import.meta.url), 'utf8'),
     readFile(new URL('../packages/language-server/src/hover-session.js', import.meta.url), 'utf8'),
     readFile(new URL('../packages/language-server/src/index.js', import.meta.url), 'utf8'),
     readFile(new URL('../scripts/check-package-contents.mjs', import.meta.url), 'utf8'),
@@ -98,8 +100,9 @@ test('implementation and package contracts expose the bounded iterative layer be
   assert.match(sessionSource, /foldingRangeProvider: true/);
   assert.match(sessionSource, /textDocument\/foldingRange/);
   assert.match(sessionSource, /foldingRangesForSource\(record\.text, foldingOptions\.rangeLimit\)/);
+  assert.match(definitionSessionSource, /createHoverLanguageServerSession/);
   assert.match(hoverSessionSource, /createFoldingLanguageServerSession/);
-  assert.match(indexSource, /createHoverLanguageServerSession as createLanguageServerSession/);
+  assert.match(indexSource, /createDefinitionLanguageServerSession as createLanguageServerSession/);
   assert.match(packageCheck, /package\/src\/folding-ranges\.js/);
   assert.match(packageCheck, /package\/src\/folding-session\.js/);
   assert.match(design, /without recursive product traversal/);
