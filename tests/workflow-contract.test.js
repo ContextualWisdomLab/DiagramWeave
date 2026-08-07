@@ -9,7 +9,7 @@ async function readRepositoryFile(path) {
   return readFile(new URL(`../${path}`, import.meta.url), 'utf8');
 }
 
-test('hourly PR maintenance securely dispatches repair and pins merge governance', async () => {
+test('hourly PR maintenance uses keyless OpenCode auth and pins merge governance', async () => {
   const workflow = await readRepositoryFile(
     '.github/workflows/hourly-pr-maintenance.yml',
   );
@@ -18,8 +18,12 @@ test('hourly PR maintenance securely dispatches repair and pins merge governance
   assert.match(workflow, /cron: ["']13 \* \* \* \*['"]/);
   assert.match(workflow, /group: hourly-pr-maintenance-\$\{\{ github\.repository \}\}/);
   assert.match(workflow, /cancel-in-progress: false/);
-  assert.match(workflow, /CWL_AUTOMATION_TOKEN/);
-  assert.match(workflow, /reason=central_dispatch_token_unavailable/);
+  assert.doesNotMatch(workflow, /CWL_AUTOMATION_TOKEN/);
+  assert.match(workflow, /id-token: write/);
+  assert.match(workflow, /OIDC_AUDIENCE: opencode-github-action/);
+  assert.match(workflow, /OPENCODE_API_BASE_URL: https:\/\/api\.opencode\.ai/);
+  assert.match(workflow, /exchange_github_app_token/);
+  assert.match(workflow, /reason=opencode_app_token_unavailable/);
   assert.match(
     workflow,
     /api\.github\.com\/repos\/ContextualWisdomLab\/\.github\/dispatches/,
