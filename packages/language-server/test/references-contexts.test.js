@@ -86,6 +86,7 @@ test('fails by omission for implicit malformed and duplicate identities', () => 
   ].join('\n');
 
   const results = [
+    referencesForSource(source, uri, { line: 3, character: 7 }, true),
     referencesForSource(source, uri, { line: 5, character: 1 }, true),
     referencesForSource(source, uri, { line: 5, character: 13 }, true),
     referencesForSource(source, uri, { line: 6, character: 1 }, true),
