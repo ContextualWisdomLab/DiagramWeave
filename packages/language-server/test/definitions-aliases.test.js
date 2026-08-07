@@ -90,11 +90,11 @@ test('navigates declaration display and alias ranges directly', () => {
   );
   assert.deepEqual(
     definitionForSource(source, uri, position(source, 'UserActor')),
-    location(source, 'User'),
+    location(source, 'User', 1),
   );
   assert.deepEqual(
-    definitionForSource(source, uri, position(source, 'User')),
-    location(source, 'User'),
+    definitionForSource(source, uri, position(source, 'User', 1)),
+    location(source, 'User', 1),
   );
 });
 
