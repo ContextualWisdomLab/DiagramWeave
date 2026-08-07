@@ -89,7 +89,8 @@ test('hourly operations guide documents activation, credentials, and disablement
   const guide = await readRepositoryFile('docs/operations/hourly-development.md');
 
   assert.match(guide, /default branch/i);
-  assert.doesNotMatch(guide, /CWL_AUTOMATION_TOKEN/);
+  assert.match(guide, /No repository-specific secret is required/i);
+  assert.match(guide, /does not require a separate repository-dispatch credential/i);
   assert.match(guide, /NVIDIA_NIM_API_KEY/);
   assert.match(guide, /OpenCode/);
   assert.match(guide, /dry run/i);
