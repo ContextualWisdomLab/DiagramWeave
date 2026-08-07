@@ -102,7 +102,7 @@ test('implementation and package contracts expose folding beneath definitions an
   assert.match(sessionSource, /foldingRangesForSource\(record\.text, foldingOptions\.rangeLimit\)/);
   assert.match(definitionSessionSource, /createHoverLanguageServerSession/);
   assert.match(hoverSessionSource, /createFoldingLanguageServerSession/);
-  assert.match(indexSource, /createDefinitionLanguageServerSession as createLanguageServerSession/);
+  assert.match(indexSource, /createReferenceLanguageServerSession as createLanguageServerSession/);
   assert.match(packageCheck, /package\/src\/folding-ranges\.js/);
   assert.match(packageCheck, /package\/src\/folding-session\.js/);
   assert.match(design, /without recursive product traversal/);
