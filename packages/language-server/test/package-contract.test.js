@@ -19,9 +19,11 @@ test('publishes an independently reusable transport-neutral package', () => {
   assert.match(manifest.description, /definition navigation/i);
   assert.match(
     indexSource,
-    /createDefinitionLanguageServerSession as createLanguageServerSession/,
+    /createReferenceLanguageServerSession as createLanguageServerSession/,
   );
+  assert.match(indexSource, /createReferenceLanguageServerSession/);
   assert.match(indexSource, /createDefinitionLanguageServerSession/);
+  assert.match(indexSource, /referencesForSource/);
   assert.match(indexSource, /definitionForSource/);
   assert.match(indexSource, /LanguageServerError/);
   assert.match(indexSource, /languageServerLimits/);
