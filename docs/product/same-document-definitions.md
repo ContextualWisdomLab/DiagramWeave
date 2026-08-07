@@ -8,6 +8,8 @@ DiagramWeave already provides diagnostics, document outline, declaration complet
 
 DiagramWeave provides standard LSP 3.18 `textDocument/definition` for uniquely proven identifiers inside the currently open PlantUML document.
 
+Clients that advertise a valid plain `textDocument.definition` capability receive `definitionProvider: true`; clients that omit or provide a malformed capability receive no definition provider.
+
 A successful action moves the editor to the authoritative declaration label. A valid but ambiguous or unsupported action does nothing and returns `null`; the product never selects an arbitrary target.
 
 ## Supported user journeys
