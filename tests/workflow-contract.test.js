@@ -9,7 +9,7 @@ async function readRepositoryFile(path) {
   return readFile(new URL(`../${path}`, import.meta.url), 'utf8');
 }
 
-test('hourly PR maintenance securely dispatches repair and pins merge governance', async () => {
+test('hourly PR maintenance uses only the pinned reusable governance workflow', async () => {
   const workflow = await readRepositoryFile(
     '.github/workflows/hourly-pr-maintenance.yml',
   );
@@ -18,22 +18,10 @@ test('hourly PR maintenance securely dispatches repair and pins merge governance
   assert.match(workflow, /cron: ["']13 \* \* \* \*['"]/);
   assert.match(workflow, /group: hourly-pr-maintenance-\$\{\{ github\.repository \}\}/);
   assert.match(workflow, /cancel-in-progress: false/);
-  assert.match(workflow, /CWL_AUTOMATION_TOKEN/);
-  assert.match(workflow, /reason=central_dispatch_token_unavailable/);
-  assert.match(
-    workflow,
-    /api\.github\.com\/repos\/ContextualWisdomLab\/\.github\/dispatches/,
-  );
-  assert.match(workflow, /pr-review-fix-scheduler/);
-  assert.match(workflow, new RegExp(`target_repository.*${repositoryName}`, 's'));
-  assert.match(workflow, /base_branch.*main/s);
-  assert.match(workflow, /retry_hours.*1/s);
-  assert.match(workflow, /max_dispatches.*1/s);
-  assert.match(workflow, /X-GitHub-Api-Version: 2022-11-28/);
-  assert.doesNotMatch(
-    workflow,
-    /uses: ContextualWisdomLab\/\.github\/\.github\/workflows\/pr-review-fix-scheduler/,
-  );
+  assert.doesNotMatch(workflow, /CWL_AUTOMATION_TOKEN/);
+  assert.doesNotMatch(workflow, /central_dispatch_token_unavailable/);
+  assert.doesNotMatch(workflow, /repos\/ContextualWisdomLab\/\.github\/dispatches/);
+  assert.doesNotMatch(workflow, /dispatch-review-fix:/);
   assert.match(
     workflow,
     new RegExp(
@@ -46,6 +34,7 @@ test('hourly PR maintenance securely dispatches repair and pins merge governance
   assert.match(workflow, /merge_mode: ["']direct_or_auto["']/);
   assert.match(workflow, /enable_auto_merge: true/);
   assert.match(workflow, /update_branches: true/);
+  assert.match(workflow, /trigger_reviews: true/);
   assert.match(workflow, /pull-requests: write/);
   assert.match(workflow, /^permissions:\n  contents: read$/m);
   assert.match(
@@ -100,6 +89,7 @@ test('hourly operations guide documents activation, credentials, and disablement
   const guide = await readRepositoryFile('docs/operations/hourly-development.md');
 
   assert.match(guide, /default branch/i);
+  assert.doesNotMatch(guide, /CWL_AUTOMATION_TOKEN/);
   assert.match(guide, /NVIDIA_NIM_API_KEY/);
   assert.match(guide, /OpenCode/);
   assert.match(guide, /dry run/i);
