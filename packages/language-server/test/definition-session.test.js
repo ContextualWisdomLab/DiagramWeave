@@ -19,6 +19,14 @@ function assertError(error, code) {
   return true;
 }
 
+function deferred() {
+  let resolve;
+  const promise = new Promise((resolvePromise) => {
+    resolve = resolvePromise;
+  });
+  return { promise, resolve };
+}
+
 function setup(renderer = Object.freeze({
   async render() {
     return Object.freeze({});
@@ -67,8 +75,11 @@ function definitionParams(line = 2, character = 16, documentUri = uri) {
   };
 }
 
-async function initialize(session, definition = {}) {
-  const result = await session.request('initialize', initializeParams(definition));
+async function initialize(session, definitionCapability = {}) {
+  const result = await session.request(
+    'initialize',
+    initializeParams(definitionCapability),
+  );
   await session.notify('initialized', {});
   return result;
 }
@@ -110,6 +121,7 @@ test('advertises definition and serves the latest accepted source snapshot', asy
       end: { line: 0, character: 20 },
     },
   });
+  assert.equal(await definition(session, 2, 8), null);
 
   await session.notify('textDocument/didChange', changeParams([
     'component "API Gateway" as ApiGateway',
@@ -130,8 +142,8 @@ test('advertises definition and serves the latest accepted source snapshot', asy
   );
 });
 
-test('does not advertise or serve definition without a valid negotiated capability', async () => {
-  for (const params of [
+test('does not advertise or serve definition for absent malformed or hostile capabilities', async () => {
+  const unsupported = [
     {},
     { capabilities: [] },
     { capabilities: {} },
@@ -139,7 +151,9 @@ test('does not advertise or serve definition without a valid negotiated capabili
     { capabilities: { textDocument: {} } },
     { capabilities: { textDocument: { definition: [] } } },
     { capabilities: { textDocument: { definition: 'yes' } } },
-  ]) {
+  ];
+
+  for (const params of unsupported) {
     const session = setup();
     const result = await session.request('initialize', params);
     assert.equal(result.capabilities.definitionProvider, undefined);
@@ -149,4 +163,265 @@ test('does not advertise or serve definition without a valid negotiated capabili
       (error) => assertError(error, 'method_not_found'),
     );
   }
+
+  const revoked = Proxy.revocable({}, {});
+  revoked.revoke();
+  const hostile = [
+    Object.defineProperty({}, 'capabilities', {
+      get() {
+        throw new Error('capability getter failed');
+      },
+    }),
+    {
+      capabilities: Object.defineProperty({}, 'textDocument', {
+        get() {
+          throw new Error('text document getter failed');
+        },
+      }),
+    },
+    {
+      capabilities: {
+        textDocument: Object.defineProperty({}, 'definition', {
+          get() {
+            throw new Error('definition getter failed');
+          },
+        }),
+      },
+    },
+    {
+      capabilities: {
+        textDocument: { definition: revoked.proxy },
+      },
+    },
+  ];
+
+  for (const params of hostile) {
+    const session = setup();
+    const result = await session.request('initialize', params);
+    assert.equal(result.capabilities.definitionProvider, undefined);
+  }
+});
+
+test('rejects malformed definition params hostile positions remote URIs and positions outside source', async () => {
+  const session = setup();
+  await initialize(session);
+  await session.notify('textDocument/didOpen', openParams());
+
+  for (const params of [null, {}, { textDocument: null }]) {
+    await assert.rejects(
+      session.request('textDocument/definition', params),
+      (error) => assertError(error, 'invalid_request'),
+    );
+  }
+  for (const params of [
+    { textDocument: { uri } },
+    { textDocument: { uri }, position: null },
+    { textDocument: { uri }, position: {} },
+    definitionParams(99, 0),
+    definitionParams(0, 99),
+  ]) {
+    await assert.rejects(
+      session.request('textDocument/definition', params),
+      (error) => assertError(error, 'document_position_invalid'),
+    );
+  }
+  await assert.rejects(
+    definition(session, 0, 0, 'https://example.com/model.puml'),
+    (error) => assertError(error, 'document_uri_invalid'),
+  );
+
+  const hostileUri = {
+    textDocument: Object.defineProperty({}, 'uri', {
+      get() {
+        throw new Error('uri getter failed');
+      },
+    }),
+    position: { line: 0, character: 0 },
+  };
+  await assert.rejects(
+    session.request('textDocument/definition', hostileUri),
+    (error) => assertError(error, 'invalid_request'),
+  );
+
+  const hostilePosition = {
+    textDocument: { uri },
+    position: Object.defineProperty({}, 'line', {
+      get() {
+        throw new Error('position getter failed');
+      },
+    }),
+  };
+  await assert.rejects(
+    session.request('textDocument/definition', hostilePosition),
+    (error) => assertError(error, 'document_position_invalid'),
+  );
+});
+
+test('definition requests fail with lifecycle codes after shutdown exit and disposal', async () => {
+  for (const action of ['shutdown', 'exit', 'dispose']) {
+    const session = setup();
+    await initialize(session);
+    await session.notify('textDocument/didOpen', openParams());
+    if (action === 'shutdown') {
+      await session.request('shutdown');
+    } else if (action === 'exit') {
+      await session.notify('exit');
+    } else {
+      session.dispose();
+    }
+    await assert.rejects(
+      definition(session),
+      (error) => assertError(error, 'server_shutting_down'),
+    );
+  }
+});
+
+test('rejected mutations preserve the last accepted definition snapshot', async () => {
+  const session = setup();
+  await initialize(session);
+  await session.notify('textDocument/didOpen', openParams());
+
+  await assert.rejects(
+    session.notify('textDocument/didOpen', openParams('class Duplicate', 2)),
+    (error) => assertError(error, 'document_already_open'),
+  );
+  await assert.rejects(
+    session.notify('textDocument/didChange', changeParams('class Old', 1)),
+    (error) => assertError(error, 'document_version_out_of_order'),
+  );
+  await assert.rejects(
+    session.notify('textDocument/didChange', {
+      textDocument: { uri, version: 2 },
+      contentChanges: [{ text: 'class X', range: {} }],
+    }),
+    (error) => assertError(error, 'incremental_change_unsupported'),
+  );
+  await assert.rejects(
+    session.notify('textDocument/didClose', {
+      textDocument: { uri: 'file:///workspace/missing.puml' },
+    }),
+    (error) => assertError(error, 'document_not_open'),
+  );
+
+  assert.deepEqual(await definition(session), {
+    uri,
+    range: {
+      start: { line: 0, character: 7 },
+      end: { line: 0, character: 20 },
+    },
+  });
+});
+
+test('a rejected newer open does not suppress an earlier pending definition source', async () => {
+  const first = deferred();
+  let renderCalls = 0;
+  const session = setup(Object.freeze({
+    render() {
+      renderCalls += 1;
+      return renderCalls === 1 ? first.promise : Promise.resolve(Object.freeze({}));
+    },
+  }));
+  await initialize(session);
+
+  const opening = session.notify('textDocument/didOpen', openParams());
+  await assert.rejects(
+    session.notify('textDocument/didOpen', openParams('class Duplicate', 2)),
+    (error) => assertError(error, 'document_already_open'),
+  );
+  first.resolve(Object.freeze({}));
+  await opening;
+
+  assert.deepEqual(await definition(session), {
+    uri,
+    range: {
+      start: { line: 0, character: 7 },
+      end: { line: 0, character: 20 },
+    },
+  });
+});
+
+test('a newer accepted change supersedes an older renderer completion', async () => {
+  const first = deferred();
+  let renderCalls = 0;
+  const session = setup(Object.freeze({
+    render() {
+      renderCalls += 1;
+      return renderCalls === 1 ? first.promise : Promise.resolve(Object.freeze({}));
+    },
+  }));
+  await initialize(session);
+
+  const opening = session.notify('textDocument/didOpen', openParams());
+  await session.notify('textDocument/didChange', changeParams([
+    'class "New Service" as NewService',
+    'NewService --> NewService',
+  ].join('\n')));
+  first.resolve(Object.freeze({}));
+  await opening;
+
+  assert.deepEqual(await definition(session, 1, 2), {
+    uri,
+    range: {
+      start: { line: 0, character: 7 },
+      end: { line: 0, character: 18 },
+    },
+  });
+});
+
+test('a close completed during validation prevents definition-source resurrection', async () => {
+  const pending = deferred();
+  const session = setup(Object.freeze({ render: () => pending.promise }));
+  await initialize(session);
+
+  const opening = session.notify('textDocument/didOpen', openParams());
+  await session.notify('textDocument/didClose', { textDocument: { uri } });
+  pending.resolve(Object.freeze({}));
+  await opening;
+
+  await assert.rejects(
+    definition(session),
+    (error) => assertError(error, 'document_not_open'),
+  );
+});
+
+test('definition layer normalizes hostile document mutation boundaries directly', async () => {
+  const session = setup();
+  await initialize(session);
+
+  const hostileOpen = Object.defineProperty({}, 'textDocument', {
+    get() {
+      throw new Error('open getter failed');
+    },
+  });
+  await assert.rejects(
+    session.notify('textDocument/didOpen', hostileOpen),
+    (error) => assertError(error, 'invalid_request'),
+  );
+
+  await session.notify('textDocument/didOpen', openParams());
+  const hostileChanges = new Proxy([], {
+    get(target, property, receiver) {
+      if (property === 'length') {
+        throw new Error('change length failed');
+      }
+      return Reflect.get(target, property, receiver);
+    },
+  });
+  await assert.rejects(
+    session.notify('textDocument/didChange', {
+      textDocument: { uri, version: 2 },
+      contentChanges: hostileChanges,
+    }),
+    (error) => assertError(error, 'invalid_request'),
+  );
+
+  const hostileClose = Object.defineProperty({}, 'textDocument', {
+    get() {
+      throw new Error('close getter failed');
+    },
+  });
+  await assert.rejects(
+    session.notify('textDocument/didClose', hostileClose),
+    (error) => assertError(error, 'invalid_request'),
+  );
 });
