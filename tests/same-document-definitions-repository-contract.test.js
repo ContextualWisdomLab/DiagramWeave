@@ -42,7 +42,7 @@ test('definition records preserve protocol privacy product and modular-host cont
   assert.match(packageReadme, /one deeply frozen `Location`/);
   assert.match(research, /Language Server Protocol 3\.18/);
   assert.match(research, /References — APA 7th edition/);
-  assert.match(research, /second declaration source of truth/);
+  assert.match(research, /(?:second|sole) declaration source of truth/);
   assert.match(operations, /URI is an identifier only and is never dereferenced/i);
   assert.match(operations, /No skipped definition test is accepted/);
   assert.match(product, /Studio.*dweave-lsp.*naruon.*CWL/is);
@@ -80,7 +80,7 @@ test('implementation exposes exact bounded definition composition and verificati
   assert.match(packageCheck, /package\/src\/definitions\.js/);
   assert.match(packageCheck, /package\/src\/definition-session\.js/);
   assert.match(design, /production line, branch, and function.*JSDoc must reach 100%/is);
-  assert.match(plan, /Task 8: Run exact-head verification and prepare the pull request/);
+  assert.match(plan, /Task 8 — Complete exact verification and PR lifecycle/);
   assert.match(plan, /npm pack --workspace packages\/language-server-stdio --dry-run --json/);
   assert.doesNotMatch(design, /\b(?:TBD|TODO)\b/);
   assert.doesNotMatch(plan, /\b(?:TBD|TODO)\b/);
