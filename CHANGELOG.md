@@ -17,6 +17,12 @@ The project follows Semantic Versioning after the first release.
   pull request; it no longer assumes `COPILOT_GITHUB_TOKEN` or the Copilot
   Agent Tasks API and rechecks the queue immediately before creation.
 
+### Security
+
+- Hourly remediation and product-branch pushes now use a masked,
+  command-scoped HTTP authorization header. Repository tokens are no longer
+  embedded in Git remote URLs or persisted in repository configuration.
+
 ### Added
 
 - Conservative same-document LSP 3.18 `textDocument/definition` navigation for uniquely proven explicit PlantUML identifiers, with `definitionProvider` capability negotiation, authoritative document-symbol target ranges, exact UTF-16 declaration, alias, relation-endpoint, and member-owner tokens, duplicate and malformed ambiguity omission, immutable `Location | null` results, accepted-snapshot race protection, and shared Studio, IDE, stdio, naruon, and CWL host behavior without an LLM, renderer, file read, URI dereference, include, macro, workspace scan, shell, or network request.
