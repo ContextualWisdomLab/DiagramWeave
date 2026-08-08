@@ -24,6 +24,22 @@ The workflow first inventories open pull requests. An inventory transport or res
 
 When the repository has no open pull request and no dry run was requested, it runs exactly one bounded in-workflow OpenCode agent session against NVIDIA NIM and packages the resulting working tree as one pull request. The delegated session must preserve DiagramWeave's source-first manual editing mode, use or improve Contextual Orchestrator for product LLM work, retain modular MSA compatibility with central `.github`, naruon, and other CWL services, and satisfy the repository's test, coverage, docstring, security, documentation, and design rules.
 
+### RCA-to-action discipline
+
+A root-cause analysis is an intermediate decision artifact, not a terminal deliverable. When the delegated session encounters a failure, blocker, anomaly, or unexpected state, it must continue through the following bounded loop in the same run:
+
+1. reproduce or otherwise establish the failure with current evidence;
+2. identify the root cause and distinguish it from symptoms;
+3. generate concrete corrective-action candidates;
+4. test each candidate's feasibility against live repository state, current permissions, configured credentials, supported APIs, available tools, remaining execution time, and the one-PR scope;
+5. execute the highest-value feasible candidate immediately;
+6. if that candidate is disproved or infeasible, retain the evidence and attempt the next feasible candidate;
+7. rerun focused verification and the complete applicable quality gates after mutation.
+
+The session must not infer that a credential, permission, service, API, runner, branch, or other repository capability exists merely because a proposed design would need it. Live evidence is required. In particular, a missing capability is not repaired by inventing a new secret name and making operators provision it when an existing GitHub-native or central workflow path already solves the problem.
+
+Stopping without a code or configuration change is permitted only when the session has tested the bounded candidates and no feasible action remains. The resulting pull-request evidence must then name the failed feasibility checks and the smallest genuinely external prerequisite. “RCA complete” by itself is not a completion condition.
+
 The delegated agent is forbidden from merging, publishing, releasing, weakening gates, or bypassing branch protection. The pull-request maintenance loop owns review, repair, exact-head revalidation, and merge.
 
 ## Credentials
@@ -62,6 +78,8 @@ All product LLM functionality must use or improve `ContextualWisdomLab/contextua
 - Open pull request: stop successfully and allow PR maintenance to finish before new development starts.
 - Dry run: print the bounded task contract without reading or requiring the NVIDIA model credential.
 - Selected model path lacks `NVIDIA_NIM_API_KEY`: fail the workflow visibly before installing or invoking OpenCode.
+- Product or CI failure: perform RCA, test corrective-action feasibility against live capabilities, execute the best bounded feasible remediation, and reverify; do not end at an RCA-only report.
+- Preferred remediation is infeasible: preserve the disconfirming evidence and try the next feasible candidate rather than assuming a missing capability.
 - Every NVIDIA NIM model candidate fails: discard partial work, fail the run visibly, and propose nothing.
 - Required Check or independent review failure: do not merge or release.
 - Delayed schedule: rely on the next scheduled run or use a manual dry run; do not add a duplicate scheduler.
