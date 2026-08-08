@@ -106,6 +106,8 @@ jobs:
           interoperability, security, evaluation, accessibility, or operations gap that
           can be completed as exactly one bounded pull request. Do not create another repository.
 
+          When you encounter a failure, anomaly, blocker, or unexpected state, perform root-cause analysis. Do not stop at diagnosis or an RCA-only report. Generate concrete corrective-action candidates, then verify each candidate against the live repository state, available permissions, configured credentials, supported APIs, available tools, time, and bounded scope. Do not invent secrets, permissions, services, APIs, runners, or repository state. Execute the highest-value feasible remediation immediately. If the preferred remediation is infeasible, record the evidence that disproves it and try the next feasible candidate. Rerun the relevant focused and complete verification after each mutation. Only stop without a code or configuration change when no bounded feasible action remains; in that case, leave precise evidence and the smallest actionable external prerequisite.
+
           Keep DiagramWeave source-first. Manual editing, validation, and safe local workflows
           must remain usable without an account, internet connection, or LLM. PlantUML is the
           first language, but new boundaries must preserve diagram-language adapters. AI output
