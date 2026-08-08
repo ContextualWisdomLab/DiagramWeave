@@ -97,6 +97,39 @@ test('hourly product development fails closed and proposes one bounded NIM incre
   assert.doesNotMatch(workflow, /gh pr merge/);
 });
 
+test('hourly product prompt turns RCA into feasible remediation and verification', async () => {
+  const workflow = await readRepositoryFile(
+    '.github/workflows/hourly-product-development.yml',
+  );
+  const prepare = workflowStep(
+    workflow,
+    'Prepare bounded commercial-quality task',
+    'Record dry-run decision',
+  );
+
+  assert.match(prepare, /root-cause analysis/i);
+  assert.match(prepare, /Do not stop at diagnosis or an RCA-only report/i);
+  assert.match(prepare, /corrective-action candidates/i);
+  assert.match(
+    prepare,
+    /live repository state, available permissions, configured credentials, supported APIs, available tools, time, and bounded scope/i,
+  );
+  assert.match(
+    prepare,
+    /Do not invent secrets, permissions, services, APIs, runners, or repository state/i,
+  );
+  assert.match(prepare, /execute the highest-value feasible remediation/i);
+  assert.match(
+    prepare,
+    /If the preferred remediation is infeasible[\s\S]*try the next feasible candidate/i,
+  );
+  assert.match(prepare, /rerun the relevant focused and complete verification/i);
+  assert.match(
+    prepare,
+    /Only stop without a code or configuration change when no bounded feasible action remains/i,
+  );
+});
+
 test('hourly product gate fails inventory errors and keeps dry runs credential-free', async () => {
   const workflow = await readRepositoryFile(
     '.github/workflows/hourly-product-development.yml',
