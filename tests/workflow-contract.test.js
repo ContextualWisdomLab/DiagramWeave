@@ -1,23 +1,14 @@
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
 import test from 'node:test';
+
+import {
+  finalWorkflowStep,
+  readRepositoryFile,
+  workflowStep,
+} from './helpers/repository-contract.js';
 
 const repositoryName = 'ContextualWisdomLab/DiagramWeave';
 const centralWorkflowRevision = '3f65dbee6672b78802e7d71d49c390f3817bb03b';
-
-async function readRepositoryFile(path) {
-  return readFile(new URL(`../${path}`, import.meta.url), 'utf8');
-}
-
-function workflowStep(workflow, name, nextName) {
-  const marker = `      - name: ${name}\n`;
-  const start = workflow.indexOf(marker);
-  assert.notEqual(start, -1, `${name} step must exist`);
-  const nextMarker = `      - name: ${nextName}\n`;
-  const end = workflow.indexOf(nextMarker, start + marker.length);
-  assert.notEqual(end, -1, `${nextName} step must follow ${name}`);
-  return workflow.slice(start, end);
-}
 
 test('hourly PR maintenance uses only the pinned reusable governance workflow', async () => {
   const workflow = await readRepositoryFile(
@@ -98,6 +89,19 @@ test('hourly development performs RCA remediation or one bounded NIM product inc
   assert.doesNotMatch(workflow, /\/agents\/repos\//);
   assert.doesNotMatch(workflow, /gh pr merge/);
   assert.doesNotMatch(workflow, /--force(?:-with-lease)?/);
+  assert.doesNotMatch(
+    workflow,
+    /https:\/\/x-access-token:\$\{GH_TOKEN\}@github\.com/,
+  );
+  assert.equal((workflow.match(/GIT_CONFIG_COUNT=1/g) ?? []).length, 2);
+  assert.equal(
+    (
+      workflow.match(
+        /GIT_CONFIG_KEY_0=http\.https:\/\/github\.com\/\.extraheader/g,
+      ) ?? []
+    ).length,
+    2,
+  );
 });
 
 test('hourly gate fails closed, preserves dry-run isolation, and selects exact-head work', async () => {
@@ -207,12 +211,14 @@ test('hourly gate fails closed, preserves dry-run isolation, and selects exact-h
     /NVIDIA_API_KEY: \$\{\{ secrets\.NVIDIA_NIM_API_KEY \}\}/,
   );
 
-  const publish = workflow.slice(
-    workflow.indexOf('      - name: Publish one bounded mutation\n'),
-  );
+  const publish = finalWorkflowStep(workflow, 'Publish one bounded mutation');
   assert.match(publish, /remote_head_sha/);
   assert.match(publish, /HEAD:refs\/heads\/\$\{target_head_branch\}/);
   assert.match(publish, /A pull request appeared after the gate/);
+  assert.match(publish, /git_auth_header/);
+  assert.match(publish, /GIT_CONFIG_VALUE_0="\$git_auth_header"/);
+  assert.doesNotMatch(publish, /x-access-token/);
+  assert.doesNotMatch(publish, /Only PR metadata was produced/);
   assert.doesNotMatch(publish, /--force(?:-with-lease)?/);
 });
 
