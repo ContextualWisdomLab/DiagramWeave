@@ -20,7 +20,9 @@ To adopt a later merge-scheduler revision, review the `.github` repository chang
 
 `.github/workflows/hourly-product-development.yml` runs at minute 47 of each hour. It creates no work while any pull request is open, and its single concurrency group keeps agent sessions single-flight.
 
-When the repository has no open pull request, it runs exactly one bounded in-workflow OpenCode agent session against NVIDIA NIM and packages the resulting working tree as one pull request. The delegated session must preserve DiagramWeave's source-first manual editing mode, use or improve Contextual Orchestrator for product LLM work, retain modular MSA compatibility with central `.github`, naruon, and other CWL services, and satisfy the repository's test, coverage, docstring, security, documentation, and design rules.
+The workflow first inventories open pull requests. An inventory transport or response failure is a workflow failure because no safe queue decision can be proved. An existing pull request is a successful deterministic stop owned by PR governance. A requested dry run is then a successful credential-free stop that prints the bounded task contract. Only the remaining ready path can require NVIDIA credentials and start one bounded OpenCode agent session.
+
+When the repository has no open pull request and no dry run was requested, it runs exactly one bounded in-workflow OpenCode agent session against NVIDIA NIM and packages the resulting working tree as one pull request. The delegated session must preserve DiagramWeave's source-first manual editing mode, use or improve Contextual Orchestrator for product LLM work, retain modular MSA compatibility with central `.github`, naruon, and other CWL services, and satisfy the repository's test, coverage, docstring, security, documentation, and design rules.
 
 The delegated agent is forbidden from merging, publishing, releasing, weakening gates, or bypassing branch protection. The pull-request maintenance loop owns review, repair, exact-head revalidation, and merge.
 
@@ -34,18 +36,20 @@ Do not add a personal access token merely to dispatch another central scheduler 
 
 ### Product-development agent credential
 
-The product-development agent authenticates to NVIDIA NIM with the `NVIDIA_NIM_API_KEY` organization secret, bound inside that workflow to `NVIDIA_API_KEY` for the pinned, SHA256-verified OpenCode CLI. This replaces the retired Copilot Agent Tasks integration and its `COPILOT_GITHUB_TOKEN` user token: no Copilot subscription is required, and the Agent Tasks public preview API is no longer called. The built-in token handles pull-request inventory, the branch push, and pull-request creation; the OpenCode agent process runs with every GitHub credential stripped from its environment.
+The product-development agent authenticates to NVIDIA NIM with the `NVIDIA_NIM_API_KEY` organization secret. The workflow injects that value as `NVIDIA_API_KEY` only after open-pull-request and dry-run decisions select the actual model-backed path, and again only into the OpenCode model-execution step. Pull-request inventory, open-PR stops, dry runs, checkout, task preparation, and PR governance do not receive the model credential.
 
-If the NIM secret is missing, pull-request inventory fails, or an open pull request exists, the product-development workflow fails closed and creates nothing. Missing product-development credentials are not repaired by inventing new secret names.
+This replaces the retired Copilot Agent Tasks integration and its `COPILOT_GITHUB_TOKEN` user token: no Copilot subscription is required, and the Agent Tasks public preview API is no longer called. The built-in token handles pull-request inventory, the branch push, and pull-request creation; the OpenCode agent process runs with every GitHub credential stripped from its environment.
+
+If the ready model path is selected and the NIM secret is missing, the workflow fails visibly and creates nothing. Missing product-development credentials are not repaired by inventing new secret names.
 
 ## Dry run
 
 Use the Actions interface to run either workflow with `dry_run: true`.
 
 - PR maintenance invokes the pinned central scheduler in dry-run mode; it does not require a separate repository-dispatch credential.
-- Product development evaluates all gates and prints the exact bounded agent prompt without starting an agent session.
+- Product development performs readable pull-request inventory, selects `reason=dry_run`, and prints the exact bounded agent prompt without starting an agent session.
 
-A product-development dry run still requires readable pull-request inventory and the configured `NVIDIA_NIM_API_KEY`, because that gate proves the delegated session could actually start.
+A product-development dry run does not require `NVIDIA_NIM_API_KEY`, because no NVIDIA model call occurs. It still requires successful pull-request inventory so the workflow does not disguise a GitHub API failure as a dry-run success.
 
 ## Contextual Orchestrator boundary
 
@@ -54,8 +58,11 @@ All product LLM functionality must use or improve `ContextualWisdomLab/contextua
 ## Failure handling
 
 - Central reusable scheduler cannot authenticate or inspect the repository: fail closed in that scheduler and do not add a new repository-local credential assumption as a workaround.
+- Pull-request inventory cannot be read: fail the workflow visibly. Inventory failure is a workflow failure, not a successful skip.
+- Open pull request: stop successfully and allow PR maintenance to finish before new development starts.
+- Dry run: print the bounded task contract without reading or requiring the NVIDIA model credential.
+- Selected model path lacks `NVIDIA_NIM_API_KEY`: fail the workflow visibly before installing or invoking OpenCode.
 - Every NVIDIA NIM model candidate fails: discard partial work, fail the run visibly, and propose nothing.
-- Open pull request: allow PR maintenance to finish before new development starts.
 - Required Check or independent review failure: do not merge or release.
 - Delayed schedule: rely on the next scheduled run or use a manual dry run; do not add a duplicate scheduler.
 - Central merge workflow pin becomes stale: update the immutable pin through a reviewed pull request.
@@ -64,4 +71,4 @@ All product LLM functionality must use or improve `ContextualWisdomLab/contextua
 
 To disable only autonomous product creation, disable `Hourly Product Development` in GitHub Actions or remove its `schedule` event through a pull request. To disable repository-local hourly PR maintenance, disable `Hourly PR Maintenance`; the organization-central event and sweep policies may still process pull requests according to organization policy.
 
-Removing this repository's access to `NVIDIA_NIM_API_KEY` also disables product development safely, but workflow disablement is preferable when the pause is intentional because the workflow summary then avoids recurring credential warnings.
+Do not remove `NVIDIA_NIM_API_KEY` as an intentional disablement mechanism. Once deterministic gates select the model path, a missing required credential is an operational failure and remains visible rather than producing a false-green skip.
