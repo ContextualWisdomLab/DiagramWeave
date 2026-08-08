@@ -44,4 +44,3 @@ jobs:
       stale_opencode_minutes: "60"
       trigger_reviews: true
       update_branches: true
-    secrets: inherit
