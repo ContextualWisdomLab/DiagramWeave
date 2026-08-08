@@ -29,6 +29,7 @@ test('hourly PR maintenance uses only the pinned reusable governance workflow', 
   assert.match(workflow, /group: hourly-pr-maintenance-\$\{\{ github\.repository \}\}/);
   assert.match(workflow, /cancel-in-progress: false/);
   assert.doesNotMatch(workflow, /CWL_AUTOMATION_TOKEN/);
+  assert.doesNotMatch(workflow, /CENTRAL_DISPATCH_TOKEN/);
   assert.doesNotMatch(workflow, /central_dispatch_token_unavailable/);
   assert.doesNotMatch(workflow, /repos\/ContextualWisdomLab\/\.github\/dispatches/);
   assert.doesNotMatch(workflow, /dispatch-review-fix:/);
