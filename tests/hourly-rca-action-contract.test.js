@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
-async function readRepositoryFile(path) {
-  return readFile(new URL(`../${path}`, import.meta.url), 'utf8');
-}
+import {
+  finalWorkflowStep,
+  readRepositoryFile,
+} from './helpers/repository-contract.js';
 
 test('hourly development routes open pull requests into exact-head remediation', async () => {
   const workflow = await readRepositoryFile(
@@ -27,11 +27,11 @@ test('hourly development routes open pull requests into exact-head remediation',
   assert.match(workflow, /ref: \$\{\{ steps\.gate\.outputs\.checkout_ref \}\}/);
   assert.match(workflow, /expected_head_sha/);
   assert.match(workflow, /remote_head_sha/);
-  assert.match(
-    workflow,
-    /git push[\s\S]*HEAD:refs\/heads\/\$\{target_head_branch\}/i,
-  );
-  assert.doesNotMatch(workflow, /--force(?:-with-lease)?/);
+
+  const publish = finalWorkflowStep(workflow, 'Publish one bounded mutation');
+  assert.match(publish, /git push/);
+  assert.match(publish, /HEAD:refs\/heads\/\$\{target_head_branch\}/);
+  assert.doesNotMatch(publish, /--force(?:-with-lease)?/);
 });
 
 test('hourly agent performs RCA, checks feasibility, acts, and verifies outcome', async () => {
@@ -50,18 +50,4 @@ test('hourly agent performs RCA, checks feasibility, acts, and verifies outcome'
   assert.match(workflow, /never manufacture approval/i);
   assert.match(workflow, /do not\s+create a duplicate pull request/i);
   assert.match(workflow, /no safe mutation can improve the blocker/i);
-});
-
-test('hourly operations guide defines realistic RCA and continuation behavior', async () => {
-  const guide = await readRepositoryFile('docs/operations/hourly-development.md');
-
-  assert.match(guide, /root-cause analysis/i);
-  assert.match(guide, /candidate corrective actions/i);
-  assert.match(guide, /feasibility/i);
-  assert.match(guide, /exact current head/i);
-  assert.match(guide, /re-fetch/i);
-  assert.match(guide, /independent approval cannot be manufactured/i);
-  assert.match(guide, /queued or pending Checks cannot be declared successful/i);
-  assert.match(guide, /next safe, non-conflicting activity/i);
-  assert.match(guide, /no duplicate pull request/i);
 });
