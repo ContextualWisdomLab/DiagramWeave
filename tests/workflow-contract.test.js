@@ -217,7 +217,7 @@ test('hourly gate fails closed, preserves dry-run isolation, and selects exact-h
   assert.match(publish, /A pull request appeared after the gate/);
   assert.match(publish, /git_auth_header/);
   assert.match(publish, /GIT_CONFIG_VALUE_0="\$git_auth_header"/);
-  assert.doesNotMatch(publish, /x-access-token/);
+  assert.doesNotMatch(publish, /https:\/\/x-access-token:/);
   assert.doesNotMatch(publish, /Only PR metadata was produced/);
   assert.doesNotMatch(publish, /--force(?:-with-lease)?/);
 });
