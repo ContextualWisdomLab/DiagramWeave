@@ -22,6 +22,7 @@ test('hourly PR maintenance uses only the pinned reusable governance workflow', 
   assert.doesNotMatch(workflow, /central_dispatch_token_unavailable/);
   assert.doesNotMatch(workflow, /repos\/ContextualWisdomLab\/\.github\/dispatches/);
   assert.doesNotMatch(workflow, /dispatch-review-fix:/);
+  assert.doesNotMatch(workflow, /secrets:\s*inherit/);
   assert.match(
     workflow,
     new RegExp(
@@ -39,7 +40,7 @@ test('hourly PR maintenance uses only the pinned reusable governance workflow', 
   assert.match(workflow, /^permissions:\n  contents: read$/m);
   assert.match(
     workflow,
-    /review-merge:[\s\S]*?permissions:[\s\S]*?actions: write[\s\S]*?contents: write/,
+    /review-merge:[\s\S]*?permissions:\n      actions: write\n      checks: read\n      contents: write\n      id-token: write\n      pull-requests: write\n      statuses: read/,
   );
 });
 
