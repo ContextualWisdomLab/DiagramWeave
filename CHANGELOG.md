@@ -8,6 +8,12 @@ The project follows Semantic Versioning after the first release.
 
 ### Changed
 
+- Hourly product development now treats root-cause analysis as an intermediate
+  step: it must generate corrective-action candidates, validate their
+  feasibility against live permissions, configured credentials, supported
+  APIs, available tools, execution time, and bounded scope, execute the best
+  feasible remediation, try the next candidate when disproved, and rerun
+  focused and complete verification without inventing repository capabilities.
 - Hourly product development now runs an in-workflow OpenCode agent against
   NVIDIA NIM (`NVIDIA_NIM_API_KEY` organization secret) and opens the bounded
   pull request itself; the workflow no longer assumes `COPILOT_GITHUB_TOKEN`
