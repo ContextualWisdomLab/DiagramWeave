@@ -32,10 +32,6 @@ jobs:
       contents: write
       pull-requests: write
     env:
-      # The scoped NVIDIA_NIM_API_KEY organization secret is the only NIM
-      # credential source. opencode.json expects that same value in
-      # NVIDIA_API_KEY.
-      NVIDIA_API_KEY: ${{ secrets.NVIDIA_NIM_API_KEY }}
       DEFAULT_BRANCH: main
       DRY_RUN: ${{ inputs.dry_run || false }}
       REPOSITORY_TOKEN: ${{ github.token }}
@@ -64,9 +60,10 @@ jobs:
               echo "dispatch=false"
               echo "reason=pull_request_inventory_unavailable"
             } >>"$GITHUB_OUTPUT"
-            echo "Pull-request inventory was unavailable; failing closed." \
+            echo "::error::Pull-request inventory was unavailable; no safe decision can be made."
+            echo "Inventory failure is a workflow failure, not a successful skip." \
               >>"$GITHUB_STEP_SUMMARY"
-            exit 0
+            exit 1
           fi
 
           if [ "$(jq 'length' <<<"$open_prs")" -gt 0 ]; then
@@ -79,16 +76,13 @@ jobs:
             exit 0
           fi
 
-          if [ -z "${NVIDIA_API_KEY:-}" ]; then
+          if [ "$DRY_RUN" = "true" ]; then
             {
               echo "dispatch=false"
-              echo "reason=nim_api_key_unavailable"
+              echo "reason=dry_run"
             } >>"$GITHUB_OUTPUT"
-            cat >>"$GITHUB_STEP_SUMMARY" <<'SUMMARY'
-          Autonomous development is disabled because `NVIDIA_NIM_API_KEY` is not configured.
-          Configure the organization secret so the in-workflow OpenCode agent can reach
-          NVIDIA NIM. No Copilot subscription or user token is required.
-          SUMMARY
+            echo "Dry run selected after successful pull-request inventory." \
+              >>"$GITHUB_STEP_SUMMARY"
             exit 0
           fi
 
@@ -98,7 +92,7 @@ jobs:
           } >>"$GITHUB_OUTPUT"
 
       - name: Prepare bounded commercial-quality task
-        if: steps.gate.outputs.dispatch == 'true'
+        if: steps.gate.outputs.dispatch == 'true' || steps.gate.outputs.reason == 'dry_run'
         shell: bash
         run: |
           cat >"$RUNNER_TEMP/diagramweave-agent-prompt.md" <<'PROMPT'
@@ -161,7 +155,7 @@ jobs:
           PROMPT
 
       - name: Record dry-run decision
-        if: steps.gate.outputs.dispatch == 'true' && env.DRY_RUN == 'true'
+        if: steps.gate.outputs.reason == 'dry_run'
         shell: bash
         run: |
           {
@@ -169,6 +163,20 @@ jobs:
             echo
             cat "$RUNNER_TEMP/diagramweave-agent-prompt.md"
           } >>"$GITHUB_STEP_SUMMARY"
+
+      - name: Require the NVIDIA NIM model credential
+        if: steps.gate.outputs.dispatch == 'true'
+        shell: bash
+        env:
+          NVIDIA_API_KEY: ${{ secrets.NVIDIA_NIM_API_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "${NVIDIA_API_KEY:-}" ]; then
+            echo "::error::NVIDIA_NIM_API_KEY is required only for the selected model-backed path."
+            echo "reason=nim_api_key_unavailable" >>"$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          echo "::add-mask::$NVIDIA_API_KEY"
 
       - name: Check out the default branch without persisted credentials
         if: steps.gate.outputs.dispatch == 'true' && env.DRY_RUN != 'true'
@@ -244,6 +252,8 @@ jobs:
       - name: Run the NVIDIA NIM development agent
         if: steps.gate.outputs.dispatch == 'true' && env.DRY_RUN != 'true'
         shell: bash
+        env:
+          NVIDIA_API_KEY: ${{ secrets.NVIDIA_NIM_API_KEY }}
         run: |
           set -euo pipefail
 
