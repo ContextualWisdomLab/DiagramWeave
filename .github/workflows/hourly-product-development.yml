@@ -616,6 +616,10 @@ jobs:
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git_basic_auth="$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 | tr -d '\n')"
+          git_auth_header="AUTHORIZATION: basic $git_basic_auth"
+          echo "::add-mask::$git_basic_auth"
+          echo "::add-mask::$git_auth_header"
 
           if [ "$EXECUTION_MODE" = "remediation" ]; then
             rm -f PR_MESSAGE.md
@@ -639,9 +643,12 @@ jobs:
 
             git add -A
             git commit -m "fix: apply RCA-backed PR remediation"
-            git push \
-              "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
-              "HEAD:refs/heads/${target_head_branch}"
+            GIT_CONFIG_COUNT=1 \
+              GIT_CONFIG_KEY_0=http.https://github.com/.extraheader \
+              GIT_CONFIG_VALUE_0="$git_auth_header" \
+              git push \
+                "https://github.com/${GITHUB_REPOSITORY}.git" \
+                "HEAD:refs/heads/${target_head_branch}"
 
             pushed_sha="$(git rev-parse HEAD)"
             remote_head_sha="$(
@@ -688,19 +695,17 @@ jobs:
             echo "Autonomous NVIDIA NIM increment; see the diff and CHANGELOG.md." \
               >"$body_file"
           fi
-          if [ -z "$(git status --porcelain)" ]; then
-            echo "Only PR metadata was produced; no product branch will be created." \
-              >>"$GITHUB_STEP_SUMMARY"
-            exit 0
-          fi
 
           branch="nim-agent/product-dev-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           git checkout -b "$branch"
           git add -A
           git commit -m "$title"
-          git push \
-            "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
-            "HEAD:refs/heads/${branch}"
+          GIT_CONFIG_COUNT=1 \
+            GIT_CONFIG_KEY_0=http.https://github.com/.extraheader \
+            GIT_CONFIG_VALUE_0="$git_auth_header" \
+            git push \
+              "https://github.com/${GITHUB_REPOSITORY}.git" \
+              "HEAD:refs/heads/${branch}"
           pushed_sha="$(git rev-parse HEAD)"
           pr_url="$(
             gh pr create \
