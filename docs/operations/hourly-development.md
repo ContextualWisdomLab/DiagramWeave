@@ -48,6 +48,8 @@ The delegated session preserves DiagramWeave's source-first manual editing mode,
 
 In either mode, the OpenCode process receives no GitHub credential. A separate shell boundary removes transient configuration, rejects metadata-only output, runs `git diff --check`, installs the locked workspace, executes the complete repository verification suite, checks exact package contents, and only then performs a bounded commit and push.
 
+For each push, the shell derives a masked, process-local HTTP `Authorization` header from the built-in token and supplies it through command-scoped Git configuration. The token is never embedded in a remote URL, written to repository configuration, persisted by checkout, or exposed to OpenCode. The command-scoped authentication variables disappear when the push process exits.
+
 The delegated agent is forbidden from merging, publishing, releasing, weakening gates, synthesizing approval, or bypassing branch protection. The central PR-maintenance loop remains the owner of review dispatch, policy evaluation, exact-head revalidation, and final merge.
 
 ## Credentials
@@ -62,7 +64,7 @@ Do not add a personal access token merely to dispatch another central scheduler 
 
 The development agent authenticates to NVIDIA NIM with the `NVIDIA_NIM_API_KEY` organization secret. That value is injected as `NVIDIA_API_KEY` only after the inventory gate selects an actual model-backed path, and only into the OpenCode model-execution step.
 
-The built-in token is used by shell steps for inventory, bounded evidence capture, exact-head comparison, branch push, and product PR creation. The OpenCode process is launched with `GH_TOKEN`, `GITHUB_TOKEN`, `REPOSITORY_TOKEN`, and Actions OIDC request variables removed from its environment.
+The built-in token is used by shell steps for inventory, bounded evidence capture, exact-head comparison, branch push, and product PR creation. The OpenCode process is launched with `GH_TOKEN`, `GITHUB_TOKEN`, `REPOSITORY_TOKEN`, and Actions OIDC request variables removed from its environment. Git publication uses an ephemeral masked HTTP header rather than a credential-bearing remote URL.
 
 This replaces the retired Copilot Agent Tasks integration and its `COPILOT_GITHUB_TOKEN` user token. No Copilot subscription is required and the Agent Tasks preview API is not called.
 
