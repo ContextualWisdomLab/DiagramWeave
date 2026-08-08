@@ -9,6 +9,16 @@ async function readRepositoryFile(path) {
   return readFile(new URL(`../${path}`, import.meta.url), 'utf8');
 }
 
+function workflowStep(workflow, name, nextName) {
+  const marker = `      - name: ${name}\n`;
+  const start = workflow.indexOf(marker);
+  assert.notEqual(start, -1, `${name} step must exist`);
+  const nextMarker = `      - name: ${nextName}\n`;
+  const end = workflow.indexOf(nextMarker, start + marker.length);
+  assert.notEqual(end, -1, `${nextName} step must follow ${name}`);
+  return workflow.slice(start, end);
+}
+
 test('hourly PR maintenance uses only the pinned reusable governance workflow', async () => {
   const workflow = await readRepositoryFile(
     '.github/workflows/hourly-pr-maintenance.yml',
@@ -86,6 +96,79 @@ test('hourly product development fails closed and proposes one bounded NIM incre
   assert.doesNotMatch(workflow, /gh pr merge/);
 });
 
+test('hourly product gate fails inventory errors and keeps dry runs credential-free', async () => {
+  const workflow = await readRepositoryFile(
+    '.github/workflows/hourly-product-development.yml',
+  );
+  const gate = workflowStep(
+    workflow,
+    'Enforce pull-request-first single-flight gate',
+    'Prepare bounded commercial-quality task',
+  );
+
+  const inventoryReason = gate.indexOf('reason=pull_request_inventory_unavailable');
+  assert.notEqual(inventoryReason, -1);
+  const inventoryEnd = gate.indexOf('\n          fi', inventoryReason);
+  assert.notEqual(inventoryEnd, -1);
+  const inventoryFailure = gate.slice(inventoryReason, inventoryEnd);
+  assert.match(inventoryFailure, /exit 1/);
+  assert.doesNotMatch(inventoryFailure, /exit 0/);
+  assert.doesNotMatch(gate, /NVIDIA_(?:NIM_)?API_KEY/);
+
+  const openPullRequest = gate.indexOf('reason=open_pull_request');
+  const dryRun = gate.indexOf('reason=dry_run');
+  const ready = gate.indexOf('reason=ready');
+  assert.ok(openPullRequest >= 0 && dryRun > openPullRequest && ready > dryRun);
+
+  const jobStart = workflow.indexOf('  dispatch-product-gap:\n');
+  const stepsStart = workflow.indexOf('    steps:\n', jobStart);
+  assert.ok(jobStart >= 0 && stepsStart > jobStart);
+  assert.doesNotMatch(
+    workflow.slice(jobStart, stepsStart),
+    /NVIDIA_API_KEY: \$\{\{ secrets\.NVIDIA_NIM_API_KEY \}\}/,
+  );
+
+  const prepare = workflowStep(
+    workflow,
+    'Prepare bounded commercial-quality task',
+    'Record dry-run decision',
+  );
+  assert.match(
+    prepare,
+    /steps\.gate\.outputs\.dispatch == 'true' \|\| steps\.gate\.outputs\.reason == 'dry_run'/,
+  );
+
+  const dryRunStep = workflowStep(
+    workflow,
+    'Record dry-run decision',
+    'Require the NVIDIA NIM model credential',
+  );
+  assert.match(dryRunStep, /steps\.gate\.outputs\.reason == 'dry_run'/);
+
+  const credentialStep = workflowStep(
+    workflow,
+    'Require the NVIDIA NIM model credential',
+    'Check out the default branch without persisted credentials',
+  );
+  assert.match(credentialStep, /if: steps\.gate\.outputs\.dispatch == 'true'/);
+  assert.match(
+    credentialStep,
+    /NVIDIA_API_KEY: \$\{\{ secrets\.NVIDIA_NIM_API_KEY \}\}/,
+  );
+  assert.match(credentialStep, /reason=nim_api_key_unavailable/);
+  assert.match(credentialStep, /exit 1/);
+
+  const modelStep = workflowStep(
+    workflow,
+    'Run the NVIDIA NIM development agent',
+    'Open exactly one bounded pull request',
+  );
+  assert.match(
+    modelStep,
+    /NVIDIA_API_KEY: \$\{\{ secrets\.NVIDIA_NIM_API_KEY \}\}/,
+  );
+});
+
 test('hourly operations guide documents activation, credentials, and disablement', async () => {
   const guide = await readRepositoryFile('docs/operations/hourly-development.md');
 
@@ -95,6 +178,8 @@ test('hourly operations guide documents activation, credentials, and disablement
   assert.match(guide, /NVIDIA_NIM_API_KEY/);
   assert.match(guide, /OpenCode/);
   assert.match(guide, /dry run/i);
+  assert.match(guide, /dry run[^.]*does not require[^.]*NVIDIA_NIM_API_KEY/is);
+  assert.match(guide, /Inventory failure is a workflow failure, not a successful skip/i);
   assert.match(guide, /fail(?:s)? closed/i);
   assert.match(guide, /schedule.*delay|delay.*schedule/is);
   assert.match(guide, /disable/i);
