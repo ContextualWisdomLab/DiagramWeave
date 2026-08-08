@@ -25,7 +25,7 @@ test('hourly PR maintenance uses only the pinned reusable governance workflow', 
   );
 
   assert.match(workflow, /^name: Hourly PR Maintenance$/m);
-  assert.match(workflow, /cron: ["']13 \* \* \* \*['"]/);
+  assert.match(workflow, /cron: ["']13 \* \* \* \*["']/);
   assert.match(workflow, /group: hourly-pr-maintenance-\$\{\{ github\.repository \}\}/);
   assert.match(workflow, /cancel-in-progress: false/);
   assert.doesNotMatch(workflow, /CWL_AUTOMATION_TOKEN/);
@@ -55,7 +55,7 @@ test('hourly PR maintenance uses only the pinned reusable governance workflow', 
   );
 });
 
-test('hourly product development fails closed and proposes one bounded NIM increment', async () => {
+test('hourly development performs RCA remediation or one bounded NIM product increment', async () => {
   const workflow = await readRepositoryFile(
     '.github/workflows/hourly-product-development.yml',
   );
@@ -68,7 +68,7 @@ test('hourly product development fails closed and proposes one bounded NIM incre
   assert.match(workflow, /NVIDIA_API_KEY: \$\{\{ secrets\.NVIDIA_NIM_API_KEY \}\}/);
   assert.match(workflow, /gh pr list/);
   assert.match(workflow, /--state open/);
-  assert.match(workflow, /reason=open_pull_request/);
+  assert.match(workflow, /reason=open_pull_request_remediation/);
   assert.match(workflow, /reason=pull_request_inventory_unavailable/);
   assert.match(workflow, /reason=nim_api_key_unavailable/);
   assert.match(workflow, /https:\/\/integrate\.api\.nvidia\.com\/v1/);
@@ -92,52 +92,22 @@ test('hourly product development fails closed and proposes one bounded NIM incre
   assert.match(workflow, /Figma or Product Design/i);
   assert.match(workflow, /Do not merge, publish, release, or bypass/i);
   assert.match(workflow, /CHANGELOG\.md/);
+  assert.match(workflow, /npm run verify/);
+  assert.match(workflow, /check-package-contents\.mjs/);
   assert.doesNotMatch(workflow, /COPILOT_GITHUB_TOKEN/);
   assert.doesNotMatch(workflow, /\/agents\/repos\//);
   assert.doesNotMatch(workflow, /gh pr merge/);
+  assert.doesNotMatch(workflow, /--force(?:-with-lease)?/);
 });
 
-test('hourly product prompt turns RCA into feasible remediation and verification', async () => {
-  const workflow = await readRepositoryFile(
-    '.github/workflows/hourly-product-development.yml',
-  );
-  const prepare = workflowStep(
-    workflow,
-    'Prepare bounded commercial-quality task',
-    'Record dry-run decision',
-  );
-
-  assert.match(prepare, /root-cause analysis/i);
-  assert.match(prepare, /Do not stop at diagnosis or an RCA-only report/i);
-  assert.match(prepare, /corrective-action candidates/i);
-  assert.match(
-    prepare,
-    /live repository state, available permissions, configured credentials, supported APIs, available tools, time, and bounded scope/i,
-  );
-  assert.match(
-    prepare,
-    /Do not invent secrets, permissions, services, APIs, runners, or repository state/i,
-  );
-  assert.match(prepare, /execute the highest-value feasible remediation/i);
-  assert.match(
-    prepare,
-    /If the preferred remediation is infeasible[\s\S]*try the next feasible candidate/i,
-  );
-  assert.match(prepare, /rerun the relevant focused and complete verification/i);
-  assert.match(
-    prepare,
-    /Only stop without a code or configuration change when no bounded feasible action remains/i,
-  );
-});
-
-test('hourly product gate fails inventory errors and keeps dry runs credential-free', async () => {
+test('hourly gate fails closed, preserves dry-run isolation, and selects exact-head work', async () => {
   const workflow = await readRepositoryFile(
     '.github/workflows/hourly-product-development.yml',
   );
   const gate = workflowStep(
     workflow,
-    'Enforce pull-request-first single-flight gate',
-    'Prepare bounded commercial-quality task',
+    'Select remediation or product-development mode',
+    'Check out the selected exact revision without persisted credentials',
   );
 
   const inventoryReason = gate.indexOf('reason=pull_request_inventory_unavailable');
@@ -148,11 +118,20 @@ test('hourly product gate fails inventory errors and keeps dry runs credential-f
   assert.match(inventoryFailure, /exit 1/);
   assert.doesNotMatch(inventoryFailure, /exit 0/);
   assert.doesNotMatch(gate, /NVIDIA_(?:NIM_)?API_KEY/);
-
-  const openPullRequest = gate.indexOf('reason=open_pull_request');
-  const dryRun = gate.indexOf('reason=dry_run');
-  const ready = gate.indexOf('reason=ready');
-  assert.ok(openPullRequest >= 0 && dryRun > openPullRequest && ready > dryRun);
+  assert.match(gate, /jq -e 'type == "array"'/);
+  assert.match(gate, /isCrossRepository/);
+  assert.match(gate, /statusCheckRollup/);
+  assert.match(gate, /reason=dry_run/);
+  assert.match(gate, /reason=ready/);
+  assert.match(gate, /reason=open_pull_request_remediation/);
+  assert.match(gate, /reason=cross_repository_pull_request_only/);
+  assert.match(gate, /mode=product/);
+  assert.match(gate, /mode=remediation/);
+  assert.match(gate, /target_pr_number=/);
+  assert.match(gate, /target_head_branch=/);
+  assert.match(gate, /target_head_sha=/);
+  assert.match(gate, /target_base_branch=/);
+  assert.match(gate, /checkout_ref=/);
 
   const jobStart = workflow.indexOf('  dispatch-product-gap:\n');
   const stepsStart = workflow.indexOf('    steps:\n', jobStart);
@@ -161,6 +140,28 @@ test('hourly product gate fails inventory errors and keeps dry runs credential-f
     workflow.slice(jobStart, stepsStart),
     /NVIDIA_API_KEY: \$\{\{ secrets\.NVIDIA_NIM_API_KEY \}\}/,
   );
+
+  const checkout = workflowStep(
+    workflow,
+    'Check out the selected exact revision without persisted credentials',
+    'Collect live exact-head pull-request evidence',
+  );
+  assert.match(checkout, /ref: \$\{\{ steps\.gate\.outputs\.checkout_ref \}\}/);
+  assert.match(checkout, /fetch-depth: 0/);
+  assert.match(checkout, /persist-credentials: false/);
+
+  const evidence = workflowStep(
+    workflow,
+    'Collect live exact-head pull-request evidence',
+    'Prepare bounded commercial-quality task',
+  );
+  assert.match(evidence, /expected_head_sha/);
+  assert.match(evidence, /remote_head_sha/);
+  assert.match(evidence, /reviewThreads/);
+  assert.match(evidence, /check-runs/);
+  assert.match(evidence, /commit-status/);
+  assert.match(evidence, /workflow-runs/);
+  assert.match(evidence, /failed-run-logs/);
 
   const prepare = workflowStep(
     workflow,
@@ -171,6 +172,10 @@ test('hourly product gate fails inventory errors and keeps dry runs credential-f
     prepare,
     /steps\.gate\.outputs\.dispatch == 'true' \|\| steps\.gate\.outputs\.reason == 'dry_run'/,
   );
+  assert.match(prepare, /root-cause analysis/i);
+  assert.match(prepare, /candidate corrective actions/i);
+  assert.match(prepare, /verify each action's feasibility/i);
+  assert.match(prepare, /live exact-head evidence/i);
 
   const dryRunStep = workflowStep(
     workflow,
@@ -182,7 +187,7 @@ test('hourly product gate fails inventory errors and keeps dry runs credential-f
   const credentialStep = workflowStep(
     workflow,
     'Require the NVIDIA NIM model credential',
-    'Check out the default branch without persisted credentials',
+    'Install the pinned OpenCode CLI',
   );
   assert.match(credentialStep, /if: steps\.gate\.outputs\.dispatch == 'true'/);
   assert.match(
@@ -195,15 +200,23 @@ test('hourly product gate fails inventory errors and keeps dry runs credential-f
   const modelStep = workflowStep(
     workflow,
     'Run the NVIDIA NIM development agent',
-    'Open exactly one bounded pull request',
+    'Set up Node.js for exact repository verification',
   );
   assert.match(
     modelStep,
     /NVIDIA_API_KEY: \$\{\{ secrets\.NVIDIA_NIM_API_KEY \}\}/,
   );
+
+  const publish = workflow.slice(
+    workflow.indexOf('      - name: Publish one bounded mutation\n'),
+  );
+  assert.match(publish, /remote_head_sha/);
+  assert.match(publish, /HEAD:refs\/heads\/\$\{target_head_branch\}/);
+  assert.match(publish, /A pull request appeared after the gate/);
+  assert.doesNotMatch(publish, /--force(?:-with-lease)?/);
 });
 
-test('hourly operations guide documents activation, credentials, and disablement', async () => {
+test('hourly operations guide documents realistic RCA, credentials, and disablement', async () => {
   const guide = await readRepositoryFile('docs/operations/hourly-development.md');
 
   assert.match(guide, /default branch/i);
@@ -214,6 +227,15 @@ test('hourly operations guide documents activation, credentials, and disablement
   assert.match(guide, /dry run/i);
   assert.match(guide, /dry run[^.]*does not require[^.]*NVIDIA_NIM_API_KEY/is);
   assert.match(guide, /Inventory failure is a workflow failure, not a successful skip/i);
+  assert.match(guide, /root-cause analysis/i);
+  assert.match(guide, /candidate corrective actions/i);
+  assert.match(guide, /feasibility/i);
+  assert.match(guide, /exact current head/i);
+  assert.match(guide, /re-fetch/i);
+  assert.match(guide, /independent approval cannot be manufactured/i);
+  assert.match(guide, /queued or pending Checks cannot be declared successful/i);
+  assert.match(guide, /next safe, non-conflicting activity/i);
+  assert.match(guide, /no duplicate pull request/i);
   assert.match(guide, /fail(?:s)? closed/i);
   assert.match(guide, /schedule.*delay|delay.*schedule/is);
   assert.match(guide, /disable/i);
