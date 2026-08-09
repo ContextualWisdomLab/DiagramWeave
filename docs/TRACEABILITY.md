@@ -24,7 +24,7 @@ This matrix connects durable product/architecture requirements to the canonical 
 
 ## Standards/research location
 
-Feature-specific standards and primary technical references are recorded under `docs/research/` and linked from corresponding product/operations documents. LSP behavior is grounded in the Language Server Protocol 3.18 contract; PlantUML behavior uses its documented sandbox/report boundaries; source/hash/proposal decisions are repository product contracts. APA-style research/standard references should remain with the authoritative research/doctoring record for each material feature.
+Feature-specific standards and primary technical references are recorded under `docs/research/` and linked from corresponding product/operations documents. LSP behavior is grounded in the Language Server Protocol 3.18 contract; PlantUML behavior uses its documented sandbox/report boundaries; source/hash/proposal decisions are repository product contracts. APA-style research/standard references should remain with the authoritative research/documentation record for each material feature.
 
 ## Promotion rule
 
