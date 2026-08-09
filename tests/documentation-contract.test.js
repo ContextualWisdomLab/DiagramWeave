@@ -21,17 +21,41 @@ const requiredDocuments = [
   'CHANGELOG.md',
 ];
 
+const governingAdrs = [
+  '0001-source-authority.md',
+  '0002-model-proposals.md',
+  '0003-renderer-isolation.md',
+  '0004-authoritative-symbol-tree.md',
+  '0005-transport-neutral-lsp.md',
+  '0006-provider-neutral-orchestrator.md',
+  '0007-automation-authority.md',
+];
+
 const readDocument = (path) => readFileSync(path, 'utf8');
+
+const assertTraceabilityMaturity = (traceability, label, maturity) => {
+  const row = traceability
+    .split('\n')
+    .find((line) => line.startsWith('|') && line.includes(`| ${label} |`));
+  assert.ok(row, `missing traceability row: ${label}`);
+  assert.ok(
+    row.trimEnd().endsWith(`| ${maturity} |`),
+    `${label} must remain ${maturity}: ${row}`,
+  );
+};
 
 test('canonical product and architecture documents remain discoverable', () => {
   const missing = requiredDocuments.filter((path) => !existsSync(path));
   assert.deepEqual(missing, []);
 });
 
-test('documentation map links the cross-cutting contracts', () => {
+test('documentation map links every canonical contract', () => {
   const documentation = readDocument('DOCUMENTATION.md');
-  for (const path of requiredDocuments.slice(1, 12)) {
-    assert.match(documentation, new RegExp(path.replaceAll('.', '\\.')));
+  for (const path of requiredDocuments.slice(1)) {
+    assert.ok(
+      documentation.includes(`](${path})`),
+      `documentation map does not link ${path}`,
+    );
   }
 });
 
@@ -42,25 +66,25 @@ test('conceptual ERD does not invent foundation persistence', () => {
   assert.match(erd, /future physical ERD/);
 });
 
-test('active pull requests are not promoted to protected-main claims', () => {
+test('active and future work is not promoted to protected-main claims', () => {
   const documentation = readDocument('DOCUMENTATION.md');
   const traceability = readDocument('docs/TRACEABILITY.md');
-  assert.match(documentation, /Open PR #22 references and PR #24 hourly-governance remediation remain active-PR/);
-  assert.match(traceability, /same-document references[\s\S]*active-PR/);
-  assert.match(traceability, /work-conserving hourly remediation[\s\S]*active-PR/);
+  assert.match(
+    documentation,
+    /Open PR #22 references and PR #24 hourly-governance remediation remain active-PR/,
+  );
+  assertTraceabilityMaturity(traceability, 'same-document references', 'active-PR');
+  assertTraceabilityMaturity(
+    traceability,
+    'work-conserving hourly remediation',
+    'active-PR',
+  );
+  assertTraceabilityMaturity(traceability, 'Studio visual editor', 'future-host');
 });
 
-test('ADR index contains every governing decision', () => {
+test('ADR index links every governing decision', () => {
   const index = readDocument('docs/adr/README.md');
-  for (const adr of [
-    '0001-source-authority.md',
-    '0002-model-proposals.md',
-    '0003-renderer-isolation.md',
-    '0004-authoritative-symbol-tree.md',
-    '0005-transport-neutral-lsp.md',
-    '0006-provider-neutral-orchestrator.md',
-    '0007-automation-authority.md',
-  ]) {
-    assert.match(index, new RegExp(adr.replaceAll('.', '\\.')));
+  for (const adr of governingAdrs) {
+    assert.ok(index.includes(`](${adr})`), `ADR index does not link ${adr}`);
   }
 });
