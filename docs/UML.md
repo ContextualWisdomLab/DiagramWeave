@@ -141,18 +141,22 @@ Studio owns visible editor state, focus, accessibility, user approval, file save
 ```mermaid
 flowchart LR
     MODEL[OpenCode / model process]
-    VERIFY[credential-free verification]
-    PUBLISH[bounded trusted publication]
-    REVIEW[independent review/security]
+    WORKTREE[revision-bound working-tree proposal]
+    VERIFY[credential-free deterministic verification]
+    PUBLISH[trusted GitHub publisher]
+    PR[ordinary proposal branch / pull request]
+    REVIEW[independent review + security + required checks]
     MAIN[protected main]
 
-    MODEL -->|bounded patch| VERIFY
-    VERIFY --> PUBLISH
-    PUBLISH -->|ordinary PR/branch update only| REVIEW
-    REVIEW -->|all gates satisfied| MAIN
+    MODEL -->|no GitHub/OIDC write credential| WORKTREE
+    WORKTREE --> VERIFY
+    VERIFY -->|verified result + exact-ref recheck| PUBLISH
+    PUBLISH -->|bounded publication only| PR
+    PR --> REVIEW
+    REVIEW -->|all gates + qualifying approval| MAIN
 ```
 
-PR #24 changes the repository's hourly governance workflow and remains active-PR until merged.
+The model process may create only a revision-bound proposal in the checked-out working tree. It cannot push, open a pull request, approve, merge, tag, publish a package, or release. A separate trusted workflow publisher may create the ordinary branch/PR after deterministic verification and exact-ref revalidation; publication itself is not approval. Independent review/security and protected-branch policy remain separate authorities. PR #24 changes the repository's hourly remediation workflow and remains active-PR until merged.
 
 ## Diagram maintenance rule
 
