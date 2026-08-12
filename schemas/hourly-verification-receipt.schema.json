@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contextualwisdomlab.example/schemas/hourly-verification-receipt.schema.json",
+  "title": "DiagramWeave Hourly Verification Receipt",
+  "description": "Binds deterministic verification on a fresh runner to one immutable proposal artifact and exact source tree.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "proposal_artifact_digest",
+    "proposal_manifest_sha256",
+    "verified_source_tree_sha256",
+    "base_commit_sha",
+    "verification_commit_sha",
+    "verification_commands",
+    "source_unchanged_during_verification"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "proposal_artifact_digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "proposal_manifest_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "verified_source_tree_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "base_commit_sha": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "verification_commit_sha": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "verification_commands": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "prefixItems": [
+        {
+          "const": "npm ci --ignore-scripts --no-audit --no-fund"
+        },
+        {
+          "const": "npm run verify"
+        },
+        {
+          "const": "node scripts/check-package-contents.mjs"
+        }
+      ],
+      "items": false
+    },
+    "source_unchanged_during_verification": {
+      "const": true
+    }
+  }
+}
