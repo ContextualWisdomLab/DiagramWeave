@@ -1,0 +1,70 @@
+name: Repair hourly autonomous-agent isolation
+
+on:
+  push:
+    branches:
+      - fix/hourly-product-noop-fallback
+
+concurrency:
+  group: repair-hourly-agent-isolation
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    runs-on: ubuntu-slim
+    timeout-minutes: 25
+    steps:
+      - name: Check out repair branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: fix/hourly-product-noop-fallback
+          fetch-depth: 0
+
+      - name: Confirm test-first RED isolation contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          if node --test tests/hourly-agent-isolation-contract.test.js; then
+            echo "::error::The autonomous-agent isolation contract unexpectedly passed before production repair."
+            exit 1
+          fi
+          echo "Confirmed that the new isolation contract fails on the unisolated workflow." \
+            >>"$GITHUB_STEP_SUMMARY"
+
+      - name: Apply reviewed isolation repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/repair-hourly-agent-isolation.py
+          python3 scripts/repair-hourly-agent-isolation.py
+
+      - name: Set up Node.js
+        uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238
+        with:
+          node-version: 24
+          package-manager-cache: false
+
+      - name: Verify complete repository
+        shell: bash
+        run: |
+          set -euo pipefail
+          test ! -e .github/workflows/repair-hourly-agent-isolation.yml
+          test ! -e scripts/repair-hourly-agent-isolation.py
+          git diff --check
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm run verify
+          node scripts/check-package-contents.mjs
+
+      - name: Commit verified repair and remove one-shot helpers
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --check
+          git commit -m "fix(security): isolate hourly model execution"
+          git push origin HEAD:fix/hourly-product-noop-fallback
