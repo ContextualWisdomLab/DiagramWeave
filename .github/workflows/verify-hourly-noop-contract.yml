@@ -52,13 +52,15 @@ jobs:
           from pathlib import Path
           path = Path('.github/workflows/hourly-product-development.yml')
           text = path.read_text(encoding='utf-8')
-          old = '''          if [ "$status" -ne 0 ]; then
-            if [ "$EXECUTION_MODE" = "remediation" ]; then
-'''
-          new = '''          if [ "$status" -ne 0 ]; then
-            if [ "$EXECUTION_MODE" = "remediation" ] && \\
-               [ "$completed_without_mutation" -gt 0 ]; then
-'''
+          old = (
+              '          if [ "$status" -ne 0 ]; then\n'
+              '            if [ "$EXECUTION_MODE" = "remediation" ]; then\n'
+          )
+          new = (
+              '          if [ "$status" -ne 0 ]; then\n'
+              '            if [ "$EXECUTION_MODE" = "remediation" ] && \\\n'
+              '               [ "$completed_without_mutation" -gt 0 ]; then\n'
+          )
           if text.count(old) != 1:
               raise SystemExit('could not inject remediation counter regression')
           path.write_text(text.replace(old, new, 1), encoding='utf-8')
@@ -91,13 +93,14 @@ jobs:
           from pathlib import Path
           path = Path('.github/workflows/hourly-product-development.yml')
           text = path.read_text(encoding='utf-8')
-          old = '''            if [ "$EXECUTION_MODE" = "product" ]; then
-              echo "::error::Product-development mode completed without a repository mutation."
-              echo "A clean model exit is not a completed product increment." \\
-                >>"$GITHUB_STEP_SUMMARY"
-              exit 1
-            fi
-'''
+          old = (
+              '            if [ "$EXECUTION_MODE" = "product" ]; then\n'
+              '              echo "::error::Product-development mode completed without a repository mutation."\n'
+              '              echo "A clean model exit is not a completed product increment." \\\n'
+              '                >>"$GITHUB_STEP_SUMMARY"\n'
+              '              exit 1\n'
+              '            fi\n'
+          )
           new = old.replace('              exit 1\n', '              exit 0\n')
           if text.count(old) != 1:
               raise SystemExit('could not inject product false-green regression')
