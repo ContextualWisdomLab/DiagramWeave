@@ -545,7 +545,6 @@ jobs:
 
           prompt="$(cat "$RUNNER_TEMP/diagramweave-agent-prompt.md")"
           status=1
-          completed_without_mutation=0
           for model in $OPENCODE_MODEL_CANDIDATES; do
             echo "::group::opencode $model"
             if timeout --kill-after=30s "${OPENCODE_RUN_TIMEOUT_SECONDS}s" \
@@ -563,7 +562,6 @@ jobs:
                   >>"$GITHUB_STEP_SUMMARY"
                 break
               fi
-              completed_without_mutation=$((completed_without_mutation + 1))
               echo "::endgroup::"
               echo "::warning::Model $model completed without a repository mutation; trying the next candidate."
             else
@@ -571,7 +569,7 @@ jobs:
               echo "::warning::Model $model failed; discarding partial work and trying the next candidate."
             fi
             git reset --hard HEAD
-            git clean -fd
+            git clean -fdx -e /opencode.json
           done
           if [ "$status" -ne 0 ]; then
             if [ "$EXECUTION_MODE" = "remediation" ]; then

@@ -91,6 +91,12 @@ async function createModelHarness(modelScript) {
   await mkdir(runnerTemp);
   await mkdir(executableDirectory);
   await writeFile(join(workspace, 'product.txt'), 'baseline\n', 'utf8');
+  await writeFile(
+    join(workspace, '.gitignore'),
+    'ignored-output.txt\nopencode.json\n',
+    'utf8',
+  );
+  await writeFile(join(workspace, 'opencode.json'), 'trusted config\n', 'utf8');
   await writeFile(promptPath, 'bounded test prompt\n', 'utf8');
   await writeFile(summaryPath, '', 'utf8');
   await writeFile(modelLogPath, '', 'utf8');
@@ -103,10 +109,12 @@ printf '%s\\n' "$model" >>"$MODEL_LOG"
 case "$model" in
   fail*)
     printf 'partial\\n' >"$GITHUB_WORKSPACE/junk-$model.txt"
+    printf 'ignored partial\\n' >"$GITHUB_WORKSPACE/ignored-output.txt"
     exit 1
     ;;
   metadata)
     printf 'metadata-only\\n' >"$GITHUB_WORKSPACE/PR_MESSAGE.md"
+    printf 'ignored no-op\\n' >"$GITHUB_WORKSPACE/ignored-output.txt"
     exit 0
     ;;
   mutate)
@@ -133,7 +141,9 @@ esac
   runRequired('git', ['config', 'user.email', 'contract@example.invalid'], {
     cwd: workspace,
   });
-  runRequired('git', ['add', 'product.txt'], { cwd: workspace });
+  runRequired('git', ['add', '.gitignore', 'product.txt'], {
+    cwd: workspace,
+  });
   runRequired('git', ['commit', '--quiet', '-m', 'baseline'], {
     cwd: workspace,
   });
@@ -175,8 +185,8 @@ test('candidate control flow filters status, cleans failed output, and retries i
   );
 
   assert.match(modelScript, /EXECUTION_MODE.*remediation/s);
+  assert.doesNotMatch(modelScript, /completed_without_mutation/);
   assertOrdered(modelScript, [
-    'completed_without_mutation=0',
     'for model in $OPENCODE_MODEL_CANDIDATES; do',
     'if timeout --kill-after=30s',
     'meaningful_status="$(',
@@ -185,9 +195,8 @@ test('candidate control flow filters status, cleans failed output, and retries i
     'if [ -n "$meaningful_status" ]; then',
     'status=0',
     'break',
-    'completed_without_mutation=$((completed_without_mutation + 1))',
     'git reset --hard HEAD',
-    'git clean -fd',
+    'git clean -fdx -e /opencode.json',
     'done',
   ]);
 
@@ -216,6 +225,13 @@ test('candidate control flow filters status, cleans failed output, and retries i
     );
     await assert.rejects(readFile(join(harness.workspace, 'junk-fail_first.txt')));
     await assert.rejects(readFile(join(harness.workspace, 'PR_MESSAGE.md')));
+    await assert.rejects(
+      readFile(join(harness.workspace, 'ignored-output.txt')),
+    );
+    assert.equal(
+      await readFile(join(harness.workspace, 'opencode.json'), 'utf8'),
+      'trusted config\n',
+    );
     assert.match(
       await readFile(join(harness.workspace, 'product.txt'), 'utf8'),
       /verified mutation/,
