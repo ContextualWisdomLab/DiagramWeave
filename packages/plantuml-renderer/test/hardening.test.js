@@ -214,6 +214,7 @@ test('rejects malformed SVG boundaries and multiple root documents', async () =>
     '<svg><svg/>',
     '<svg></svg>trailing',
     '<svg/><!-- trailing -->',
+    '<svg/><![CDATA[trailing]]>',
     '<svg/><svg/>',
     '<svg/   >',
     '</svg>',
