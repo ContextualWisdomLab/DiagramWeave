@@ -91,5 +91,5 @@ test('remediation exhaustion leaves the exact head unchanged even when every can
   assert.match(remediation, /leaving the exact head unchanged/i);
   assert.match(remediation, /exit 0/);
   assert.doesNotMatch(remediation, /git (?:commit|push)|gh pr create/);
-  assert.match(exhaustion, /no product mutation[\s\S]*?exit 1/i);
+  assert.match(exhaustion, /without a product mutation[\s\S]*?exit 1/i);
 });
