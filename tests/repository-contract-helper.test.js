@@ -3,7 +3,7 @@ import test from "node:test";
 
 import { finalWorkflowStep } from "./helpers/repository-contract.js";
 
-test("finalWorkflowStep excludes following workflow steps", () => {
+test("finalWorkflowStep rejects following workflow steps", () => {
   const workflow = `
 jobs:
   example:
@@ -14,10 +14,10 @@ jobs:
         run: git push --force
 `;
 
-  const publish = finalWorkflowStep(workflow, "Publish one bounded mutation");
-
-  assert.match(publish, /echo publish/);
-  assert.doesNotMatch(publish, /Unrelated later step|git push --force/);
+  assert.throws(
+    () => finalWorkflowStep(workflow, "Publish one bounded mutation"),
+    /Publish one bounded mutation step must be final/,
+  );
 });
 
 test("finalWorkflowStep rejects a missing requested step", () => {
