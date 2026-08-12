@@ -1,15 +1,157 @@
-name: Retired hourly autonomous-agent isolation repair
+name: Finalize hourly no-op remediation contract
 
 on:
-  workflow_dispatch:
+  push:
+    branches:
+      - fix/hourly-product-noop-fallback
+
+concurrency:
+  group: finalize-hourly-noop-remediation-contract
+  cancel-in-progress: true
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  retired:
-    if: ${{ false }}
+  finalize:
     runs-on: ubuntu-slim
+    timeout-minutes: 25
     steps:
-      - name: Retired
-        run: exit 0
+      - name: Check out exact repair branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: fix/hourly-product-noop-fallback
+          fetch-depth: 0
+
+      - name: Add the remediation-exhaustion regression contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path("tests/hourly-noop-fallback-contract.test.js")
+          text = path.read_text(encoding="utf-8")
+          marker = "remediation exhaustion is a safe unchanged result even when every candidate fails"
+          if marker in text:
+              raise SystemExit("remediation-exhaustion contract already exists")
+          text += r'''
+
+          test('remediation exhaustion is a safe unchanged result even when every candidate fails', async () => {
+            const workflow = await readRepositoryFile(
+              '.github/workflows/hourly-product-development.yml',
+            );
+            const modelStep = workflowStep(
+              workflow,
+              'Run the NVIDIA NIM development agent',
+              'Set up Node.js for exact repository verification',
+            );
+
+            const exhaustionStart = modelStep.indexOf('if [ "$status" -ne 0 ]; then');
+            assert.notEqual(exhaustionStart, -1);
+            const exhaustion = modelStep.slice(exhaustionStart);
+            const remediationStart = exhaustion.indexOf(
+              'if [ "$EXECUTION_MODE" = "remediation"',
+            );
+            const productFailure = exhaustion.indexOf(
+              'Every NVIDIA NIM model candidate failed or completed without a product mutation',
+            );
+            assert.ok(remediationStart >= 0 && productFailure > remediationStart);
+
+            const remediation = exhaustion.slice(remediationStart, productFailure);
+            assert.match(
+              remediation,
+              /if \[ "\$EXECUTION_MODE" = "remediation" \]; then/,
+            );
+            assert.doesNotMatch(remediation, /completed_without_mutation/);
+            assert.match(remediation, /leaving the exact head unchanged/i);
+            assert.match(remediation, /exit 0/);
+            assert.doesNotMatch(remediation, /git (?:commit|push)|gh pr create/);
+            assert.match(exhaustion, /no product mutation[\s\S]*?exit 1/i);
+          });
+          '''
+          path.write_text(text, encoding="utf-8")
+          PY
+
+      - name: Confirm test-first RED evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          if node --test tests/hourly-noop-fallback-contract.test.js; then
+            echo "::error::The remediation-exhaustion contract unexpectedly passed before the workflow repair."
+            exit 1
+          fi
+          echo "The focused contract failed on the counter-gated remediation branch as expected." \
+            >>"$GITHUB_STEP_SUMMARY"
+
+      - name: Apply the focused repair and remove superseded scaffolding
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          workflow_path = Path(".github/workflows/hourly-product-development.yml")
+          workflow = workflow_path.read_text(encoding="utf-8")
+          old = '''          if [ "$status" -ne 0 ]; then
+            if [ "$EXECUTION_MODE" = "remediation" ] && \\
+               [ "$completed_without_mutation" -gt 0 ]; then
+'''
+          new = '''          if [ "$status" -ne 0 ]; then
+            if [ "$EXECUTION_MODE" = "remediation" ]; then
+'''
+          count = workflow.count(old)
+          if count != 1:
+              raise SystemExit(
+                  f"remediation exhaustion branch: expected one match, found {count}"
+              )
+          workflow_path.write_text(workflow.replace(old, new, 1), encoding="utf-8")
+
+          for obsolete_path in (
+              ".github/workflows/repair-hourly-agent-isolation.yml",
+              "scripts/hourly-product-development-tail.yml",
+              "scripts/repair-hourly-agent-isolation.py",
+              "tests/hourly-agent-isolation-contract.test.js",
+          ):
+              path = Path(obsolete_path)
+              if not path.exists():
+                  raise SystemExit(f"expected superseded scaffold is missing: {obsolete_path}")
+              path.unlink()
+          PY
+
+      - name: Set up Node.js
+        uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238
+        with:
+          node-version: 24
+          package-manager-cache: false
+
+      - name: Verify the complete repository
+        shell: bash
+        run: |
+          set -euo pipefail
+          test ! -e .github/workflows/repair-hourly-agent-isolation.yml
+          test ! -e scripts/hourly-product-development-tail.yml
+          test ! -e scripts/repair-hourly-agent-isolation.py
+          test ! -e tests/hourly-agent-isolation-contract.test.js
+          git diff --check
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm run verify
+          node scripts/check-package-contents.mjs
+
+      - name: Create the verified commit and publish its object
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --check
+          git commit -m "fix(ci): complete no-op fallback remediation"
+          verified_commit_sha="$(git rev-parse HEAD)"
+          echo "VERIFIED_COMMIT_SHA=$verified_commit_sha"
+          echo "Verified commit: \`$verified_commit_sha\`" >>"$GITHUB_STEP_SUMMARY"
+          if git push origin HEAD:fix/hourly-product-noop-fallback; then
+            echo "Branch advanced by the ordinary push." >>"$GITHUB_STEP_SUMMARY"
+          else
+            echo "::warning::The ordinary push was refused after object upload; an authorized ref update may advance the branch to $verified_commit_sha."
+          fi
