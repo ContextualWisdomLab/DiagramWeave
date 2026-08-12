@@ -1,56 +1,15 @@
-name: Verify hourly proposal bundle RED contract
+name: Retired hourly proposal bundle RED verifier
 
 on:
-  push:
-    branches:
-      - security/isolated-autonomous-publication
-
-concurrency:
-  group: verify-hourly-proposal-bundle-red
-  cancel-in-progress: true
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
-  verify-red:
+  retired:
+    if: ${{ false }}
     runs-on: ubuntu-slim
-    timeout-minutes: 10
     steps:
-      - name: Check out exact security branch
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-        with:
-          ref: security/isolated-autonomous-publication
-          persist-credentials: false
-
-      - name: Set up Node.js
-        uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238
-        with:
-          node-version: 24
-          package-manager-cache: false
-
-      - name: Confirm the focused contract is RED for the intended missing boundary
-        shell: bash
-        run: |
-          set -euo pipefail
-          test ! -e scripts/hourly-proposal-bundle.mjs
-          test ! -e schemas/hourly-proposal-manifest.schema.json
-          test ! -e schemas/hourly-verification-receipt.schema.json
-
-          output_file="$RUNNER_TEMP/hourly-proposal-bundle-red.log"
-          set +e
-          node --test tests/hourly-proposal-bundle.test.js \
-            >"$output_file" 2>&1
-          test_status=$?
-          set -e
-          cat "$output_file"
-
-          if [ "$test_status" -eq 0 ]; then
-            echo "::error::The proposal-bundle contract unexpectedly passed before implementation."
-            exit 1
-          fi
-          grep -F \
-            'trusted hourly proposal bundle module must exist: ERR_MODULE_NOT_FOUND' \
-            "$output_file"
-          echo "Focused contract failed for the intended missing trusted bundle boundary." \
-            >>"$GITHUB_STEP_SUMMARY"
+      - name: Retired after RED evidence
+        run: exit 0
