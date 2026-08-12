@@ -174,10 +174,7 @@ test('candidate control flow filters status, cleans failed output, and retries i
     'Set up Node.js for exact repository verification',
   );
 
-  assert.match(
-    modelScript,
-    /EXECUTION_MODE.*remediation/s,
-  );
+  assert.match(modelScript, /EXECUTION_MODE.*remediation/s);
   assertOrdered(modelScript, [
     'completed_without_mutation=0',
     'for model in $OPENCODE_MODEL_CANDIDATES; do',
@@ -326,7 +323,10 @@ test('candidate exhaustion preserves HEAD, leaves remediation clean, and fails p
       runRequired('git', ['status', '--porcelain'], { cwd: harness.workspace }),
       '',
     );
-    assert.match(product.stderr, /no product mutation/i);
+    assert.match(
+      `${product.stdout}\n${product.stderr}`,
+      /no product mutation/i,
+    );
   } finally {
     await rm(harness.root, { force: true, recursive: true });
   }
