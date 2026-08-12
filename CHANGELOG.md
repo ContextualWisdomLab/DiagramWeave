@@ -8,14 +8,25 @@ The project follows Semantic Versioning after the first release.
 
 ### Changed
 
-- Hourly product development now runs an in-workflow OpenCode agent against
-  NVIDIA NIM (`NVIDIA_NIM_API_KEY` organization secret) and opens the bounded
-  pull request itself; the workflow no longer assumes `COPILOT_GITHUB_TOKEN`
-  or the Copilot Agent Tasks API.
+- Hourly development now routes an open same-repository pull request into an
+  RCA-driven exact-head remediation session, verifies candidate actions against
+  live review and Check evidence, publishes only a normal fast-forward repair
+  after full repository verification, and re-fetches post-push state.
+- When no pull request is open, the same credential-isolated OpenCode workflow
+  uses NVIDIA NIM (`NVIDIA_NIM_API_KEY`) to create at most one bounded product
+  pull request; it no longer assumes `COPILOT_GITHUB_TOKEN` or the Copilot
+  Agent Tasks API and rechecks the queue immediately before creation.
+
+### Security
+
+- Hourly remediation and product-branch pushes now use a masked,
+  command-scoped HTTP authorization header. Repository tokens are no longer
+  embedded in Git remote URLs or persisted in repository configuration.
 
 ### Added
 
-- A canonical documentation map, cross-cutting TRD, UML views, conceptual non-persistent ERD, threat model, test strategy, operability/recovery guide, requirements/evidence traceability matrix, and indexed status-bearing ADR set. Documentation contract tests distinguish protected-main capabilities from active PR #22/#24 work and prevent conceptual host/persistence boundaries from being presented as already implemented.
+- Conservative same-document LSP 3.18 `textDocument/references` navigation for uniquely proven explicit PlantUML identifiers, with `referencesProvider` capability negotiation, mandatory boolean `context.includeDeclaration`, authoritative document-symbol identity, exact UTF-16 source-order immutable `Location[]`, duplicate and malformed ambiguity omission, an inclusive 4,096-location ceiling with fail-closed overflow, accepted-snapshot race protection, and shared Studio, IDE, stdio, naruon, and CWL host behavior without an LLM, renderer, file read, URI dereference, include, macro, workspace scan, shell, or network request.
+- A canonical documentation map, cross-cutting TRD, UML views, conceptual non-persistent ERD, threat model, test strategy, operability/recovery guide, requirements/evidence traceability matrix, and indexed status-bearing ADR set. Documentation contract tests record same-document references and hourly remediation as protected-main capabilities while preventing conceptual host/persistence boundaries from being presented as already implemented.
 - Conservative same-document LSP 3.18 `textDocument/definition` navigation for uniquely proven explicit PlantUML identifiers, with `definitionProvider` capability negotiation, authoritative document-symbol target ranges, exact UTF-16 declaration, alias, relation-endpoint, and member-owner tokens, duplicate and malformed ambiguity omission, immutable `Location | null` results, accepted-snapshot race protection, and shared Studio, IDE, stdio, naruon, and CWL host behavior without an LLM, renderer, file read, URI dereference, include, macro, workspace scan, shell, or network request.
 - Evidence-bounded LSP 3.18 `textDocument/hover` for explicit PlantUML declaration labels, with `hoverProvider` capability negotiation, bounded client-preferred plaintext or Markdown, exact authoritative UTF-16 selection ranges, immediate proven package or namespace context, non-terminable dynamic Markdown fences, immutable accepted-snapshot responses, stale-mutation protection, and shared Studio, IDE, stdio, naruon, and CWL host behavior without an LLM, renderer, file read, include, macro, workspace scan, shell, or network request.
 - Conservative LSP 3.18 `textDocument/foldingRange` support for nonempty package and namespace scopes proven by the authoritative document-symbol tree, with `foldingRangeProvider` capability negotiation, bounded `rangeLimit`, boolean `lineFoldingOnly`, iterative source-order traversal, immutable line-only records, stale-snapshot protection, and shared Studio, IDE, stdio, naruon, and CWL host behavior without an LLM, renderer, file read, or network request.

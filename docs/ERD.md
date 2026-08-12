@@ -1,6 +1,6 @@
 # DiagramWeave Conceptual Domain and ERD
 
-**Status:** Accepted conceptual model. Protected main has no DiagramWeave-owned database.  
+**Status:** Accepted conceptual model. Protected main has no DiagramWeave-owned database.
 **Last reviewed:** 2026-08-09
 
 This document models durable product concepts without inventing persistence. Current packages keep source/session data in process or caller-owned files. A future Studio/service persistence layer requires its own physical ERD, migration, tenant, lifecycle, backup, and authorization evidence.

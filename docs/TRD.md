@@ -1,7 +1,7 @@
 # DiagramWeave Technical Requirements Document
 
-**Status:** Accepted technical baseline for protected `main` at `5672d7596878dfea05a7367c910546bf93beb1a4`  
-**Last reviewed:** 2026-08-09
+**Status:** Accepted technical baseline for protected `main` at `7ee5b04a6fabf4fdf81a4d7bd1d662c48aa5f31d`
+**Last reviewed:** 2026-08-12
 
 ## 1. Technical objective
 
@@ -73,7 +73,7 @@ A feature is advertised only when the client provides the required valid capabil
 
 Positions/ranges use UTF-16 code units, including multilingual source and emoji. Invalid positions become fixed protocol errors/null/empty results according to the LSP method contract and must not reflect source/URI values.
 
-## 8. Current and active-PR editor features
+## 8. Current editor and governance features
 
 Implemented on protected main:
 
@@ -82,9 +82,11 @@ Implemented on protected main:
 - declaration completion;
 - conservative package/namespace folding;
 - evidence-bounded declaration hover;
-- same-document conservative definition navigation.
+- same-document conservative definition navigation;
+- same-document conservative reference navigation;
+- work-conserving hourly remediation/product-development governance.
 
-Active PR #22 proposes same-document references. Active PR #24 proposes work-conserving hourly remediation/product-development governance. These are not protected-main claims until merged.
+These capabilities were integrated through PR #22 and PR #24 and are protected-main claims at the baseline above.
 
 ## 9. Security/trust invariants
 

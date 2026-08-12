@@ -1,6 +1,6 @@
 # ADR-0007: Separate autonomous development, trusted publication, review, merge, and release authority
 
-**Status:** Accepted  
+**Status:** Accepted
 **Date:** 2026-08-09
 
 ## Context
@@ -13,7 +13,7 @@ The model-assisted development process may inspect the checked-out revision, pro
 
 A separate trusted publisher may create or fast-forward an ordinary proposal branch and open/update the bounded pull request only after deterministic verification and exact target/ref revalidation. That publication is a transport/handoff step, not approval. Opening a pull request does not require human approval, but the resulting exact head must pass repository policy, security/quality gates, and qualifying independent review before protected integration.
 
-Neither the model process nor the trusted publisher may manufacture independent approval, force-push over another writer, weaken required checks, bypass branch protection, merge protected branches, tag, publish packages, or release. Reviewer, merge, and release credential chains remain independent from both development and publication authority. Active PR #24 refines hourly remediation while preserving this separation.
+Neither the model process nor the trusted publisher may manufacture independent approval, force-push over another writer, weaken required checks, bypass branch protection, merge protected branches, tag, publish packages, or release. Reviewer, merge, and release credential chains remain independent from both development and publication authority. The hourly remediation refinement integrated through PR #24 preserves this separation on protected main.
 
 ## Consequences
 

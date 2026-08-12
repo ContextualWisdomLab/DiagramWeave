@@ -1,7 +1,7 @@
 # DiagramWeave Requirements and Evidence Traceability
 
-**Status:** Accepted baseline  
-**Last reviewed:** 2026-08-09
+**Status:** Accepted baseline
+**Last reviewed:** 2026-08-12
 
 This matrix connects durable product/architecture requirements to the canonical source boundary and representative evidence. Slice-specific product/research/operations documents remain valuable but do not replace cross-cutting traceability.
 
@@ -16,8 +16,8 @@ This matrix connects durable product/architecture requirements to the canonical 
 | transport-neutral LSP | PRD; ADR-0005 | language-server | lifecycle/snapshot/capability tests | implemented-main |
 | one authoritative symbol tree | Architecture; ADR-0004 | language-server | hierarchy/flat/completion/folding/hover/definition tests | implemented-main |
 | same-document definition | product/research/operations docs | language-server | exact UTF-16/ambiguity/stdio parity tests | implemented-main |
-| same-document references | PR #22 | language-server | PR #22 exact-head tests/CI | active-PR |
-| work-conserving hourly remediation | PR #24; ADR-0007 | GitHub workflows | PR #24 workflow-contract and exact-head CI/security evidence | active-PR |
+| same-document references | product/research/operations docs; PR #22 | language-server | exact UTF-16/ambiguity/limit/stdio parity tests | implemented-main |
+| work-conserving hourly remediation | ADR-0007; PR #24 | GitHub workflows | workflow-contract tests and protected-main CI/security evidence | implemented-main |
 | exact 100% line/branch/function/JSDoc | quality contract | production workspace packages | `npm run verify`, Node 22/24 CI | implemented-main |
 | Studio visual editor | PRD/Architecture | future host | no protected-main product code yet | future-host |
 | foundation persistence | ERD/TRD | none | explicit no-database boundary | not-applicable-current |

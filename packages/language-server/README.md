@@ -3,16 +3,18 @@
 A transport-neutral Language Server Protocol 3.18 session for PlantUML
 diagnostics, capability-negotiated document outlines, deterministic declaration
 completion, conservative folding ranges, evidence-bounded declaration hover,
-and conservative same-document definition navigation. It is independently
-reusable by DiagramWeave Studio, IDE adapters, naruon, and other CWL hosts
-without importing a desktop shell or JSON-RPC transport.
+conservative same-document definition navigation, and conservative same-document
+references. It is independently reusable by DiagramWeave Studio, IDE adapters,
+naruon, and other CWL hosts without importing a desktop shell or JSON-RPC
+transport.
 
 ## Foundation scope
 
 The package implements protocol-level lifecycle, full-document diagnostic
 synchronization, a conservative explicit-declaration hierarchy, legacy outline
 compatibility, local keyword completion, bounded package/namespace folding,
-exact declaration-label hover, and same-document Go to Definition:
+exact declaration-label hover, same-document Go to Definition, and same-document
+Find All References:
 
 - `initialize`, `initialized`, `shutdown`, and `exit`;
 - `textDocument/didOpen`, `textDocument/didChange`, and
@@ -28,10 +30,12 @@ exact declaration-label hover, and same-document Go to Definition:
 - capability-gated `textDocument/hover` with `hoverProvider: true`;
 - capability-gated `textDocument/definition` with
   `definitionProvider: true`;
+- capability-gated `textDocument/references` with
+  `referencesProvider: true`;
 - UTF-16 positions and LSP full-document synchronization;
 - exact document-version and generation binding so stale renderer completions
   cannot overwrite newer diagnostics, outline source, completion source,
-  folding source, hover source, or definition source;
+  folding source, hover source, definition source, or reference source;
 - bounded local `file:` URI identifiers for `.puml` and `.plantuml` documents;
 - the existing stdin-only PlantUML `SANDBOX` renderer and shared structured
   diagnostic sanitizer;
@@ -79,6 +83,7 @@ const initializeResult = await session.request('initialize', {
         contentFormat: ['markdown', 'plaintext'],
       },
       definition: {},
+      references: {},
     },
   },
 });
@@ -117,13 +122,20 @@ const declarationDefinition = await session.request('textDocument/definition', {
   textDocument: { uri: documentUri },
   position: { line: 3, character: 3 },
 });
+const declarationReferences = await session.request('textDocument/references', {
+  textDocument: { uri: documentUri },
+  position: { line: 3, character: 3 },
+  context: { includeDeclaration: true },
+});
 
 console.log(initializeResult.capabilities.definitionProvider);
+console.log(initializeResult.capabilities.referencesProvider);
 console.log(symbols[0].children.map(({ name }) => name));
 console.log(completions.map(({ label }) => label));
 console.log(folds);
 console.log(declarationHover?.contents.value);
 console.log(declarationDefinition?.range);
+console.log(declarationReferences.map(({ range }) => range));
 ```
 
 `rendererFactory` is an optional deterministic test seam. Production hosts
@@ -270,7 +282,46 @@ implicit declarations, unknown identifiers, or structurally ambiguous text.
 
 Definition performs no LLM call, renderer call, file read, URI dereference,
 include or macro expansion, workspace scan, shell execution, or network access.
-Cross-document definitions, references, and rename remain later bounded slices.
+Cross-document definitions and rename remain later bounded slices.
+
+## Same-document references contract
+
+The references slice is enabled only when initialize receives a plain
+`capabilities.textDocument.references` record. The server advertises
+`referencesProvider: true` and accepts LSP 3.18 `textDocument/references` for the
+latest accepted local full-document snapshot.
+
+Every reference request must provide a boolean `context.includeDeclaration`.
+`referencesForSource` returns a deeply frozen source-order `Location[]` only when
+the requested UTF-16 position proves one unique explicit identifier. The
+resolver reuses the same authoritative `DocumentSymbol.selectionRange` evidence
+and conservative identifier grammar as same-document definitions, so navigation
+does not create a second declaration-identity system.
+
+With `includeDeclaration: true`, the authoritative declaration selection range
+is included exactly once. With `includeDeclaration: false`, only proven uses are
+returned. A valid non-identifier, duplicate, malformed alias, implicit
+declaration, unsupported identity, or otherwise ambiguous request returns the
+shared frozen empty result instead of promoting textual coincidence into
+semantic evidence.
+
+Reference identity is exact and case-sensitive. Proven declaration labels and
+aliases, relation endpoints, sequence endpoints, and supported member-owner
+shorthand may contribute locations. Comments, block comments, quoted narrative,
+display labels, directives, relation or message labels, includes, macros,
+renderer-derived identities, and cross-document evidence are excluded.
+
+One result is bounded to 4,096 locations. A 4,097th proven location fails closed
+with the stable `reference_limit_exceeded` error; the server never silently
+truncates the set because incomplete evidence would be unsafe for later rename,
+refactoring, migration, or blast-radius workflows.
+
+References perform no LLM call, renderer call, file read, URI dereference,
+include or macro expansion, workspace scan, shell execution, or network access.
+The same exact-version and session-epoch rules as the other composed layers
+prevent rejected or late mutations from publishing stale reference evidence.
+Cross-document references, workspace indexing, and rename remain later bounded
+slices.
 
 ## Safety and limits
 
@@ -285,13 +336,16 @@ Cross-document definitions, references, and rename remain later bounded slices.
   each symbol name is limited to 1,024 UTF-8 bytes.
 - One completion request may return at most 64 items.
 - A hover `contentFormat` preference list may contain at most 16 entries.
+- One reference request may return at most 4,096 locations; overflow fails closed
+  without truncation.
 - Only monotonically increasing nonnegative safe-integer versions are accepted.
 - Incremental range edits are rejected; this foundation uses full-document
   synchronization.
 - Public diagnostics, symbol trees, symbol information, completion results,
-  folding results, hover results, definition locations, markup records, child
-  arrays, positions, ranges, and edits are deeply frozen and contain no source
-  excerpt, raw stderr, Java/JAR path, host error, or credential.
+  folding results, hover results, definition locations, reference locations,
+  markup records, child arrays, positions, ranges, and edits are deeply frozen
+  and contain no source excerpt, raw stderr, Java/JAR path, host error, or
+  credential.
 - Hostile getters, proxies, arrays, renderer contracts, rejected mutations, and
   stale concurrent completions fail closed with stable `LanguageServerError`
   codes.
@@ -299,6 +353,6 @@ Cross-document definitions, references, and rename remain later bounded slices.
 ## Release status
 
 Version `0.0.0` is an unreleased foundation. Completion resolve, snippets,
-relation and member hover, cross-document definition, references, rename,
+relation and member hover, cross-document definition and references, rename,
 arbitrary region folding, workspace indexing, cancellation, and Studio
 integration remain later bounded slices.

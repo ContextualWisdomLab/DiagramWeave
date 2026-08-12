@@ -76,7 +76,7 @@ test('implementation exposes exact bounded definition composition and verificati
   assert.match(sessionSource, /createHoverLanguageServerSession/);
   assert.match(sessionSource, /definitionProvider: true/);
   assert.match(sessionSource, /textDocument\/definition/);
-  assert.match(indexSource, /createDefinitionLanguageServerSession as createLanguageServerSession/);
+  assert.match(indexSource, /createReferenceLanguageServerSession as createLanguageServerSession/);
   assert.match(packageCheck, /package\/src\/definitions\.js/);
   assert.match(packageCheck, /package\/src\/definition-session\.js/);
   assert.match(design, /production line, branch, and function.*JSDoc must reach 100%/is);

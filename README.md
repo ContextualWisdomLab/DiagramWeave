@@ -107,7 +107,8 @@ The package is independently reusable by naruon, CI, and other CWL hosts. See [`
 
 A transport-neutral LSP 3.18 session for local PlantUML diagnostics,
 capability-negotiated document outlines, deterministic declaration completion,
-conservative folding ranges, and evidence-bounded declaration hover:
+conservative folding ranges, evidence-bounded declaration hover, same-document
+Go to Definition, and conservative Find All References:
 
 ```js
 import {
@@ -136,6 +137,8 @@ await session.request('initialize', {
       hover: {
         contentFormat: ['markdown', 'plaintext'],
       },
+      definition: {},
+      references: {},
     },
   },
 });
@@ -144,8 +147,9 @@ await session.request('initialize', {
 The session uses full-document synchronization, local file-URI identifiers,
 source-free renderer diagnostics, exact version/generation checks,
 capability-negotiated `textDocument/documentSymbol`, capability-gated
-`textDocument/completion`, capability-gated `textDocument/foldingRange`, and
-capability-gated `textDocument/hover`. Clients that explicitly advertise
+`textDocument/completion`, capability-gated `textDocument/foldingRange`,
+capability-gated `textDocument/hover`, capability-gated `textDocument/definition`,
+and capability-gated `textDocument/references`. Clients that explicitly advertise
 `hierarchicalDocumentSymbolSupport: true` receive the bounded immutable
 `DocumentSymbol[]` tree. Other clients receive source-order
 `SymbolInformation[]` from the same authoritative tree, with the validated local
@@ -174,6 +178,16 @@ displayed name, immediate proven package or namespace context, and the same
 frozen range used by the outline. Valid non-label positions return `null`, and
 Markdown uses a dynamically sized fence that source labels cannot terminate.
 
+Definition and references reuse the same authoritative declaration tree and
+conservative explicit-identifier grammar. `textDocument/definition` resolves only
+a uniquely proven same-document declaration. `textDocument/references` requires
+a boolean `context.includeDeclaration`, returns deeply frozen source-order
+`Location[]`, and fails by omission for ambiguous or unsupported identities. The
+reference set is capped at 4,096 locations and overflow fails closed rather than
+silently truncating evidence. Neither operation invokes an LLM, renderer,
+filesystem, include processor, macro processor, workspace scan, shell, or
+network service.
+
 Studio, IDE extensions, naruon, and other CWL hosts reuse this package without
 importing a process transport.
 
@@ -192,18 +206,19 @@ The adapter validates ASCII Content-Length framing and UTF-8 JSON-RPC 2.0,
 serializes input and output, bounds messages and queues, and returns exit code
 zero only after successful shutdown followed by exit. It imports the same
 transport-neutral session, so diagnostics, negotiated document symbols,
-declaration completion, conservative folding ranges, and declaration hover do
-not diverge between embedded and process-based hosts. Invalid completion and
-hover positions are returned as fixed JSON-RPC Invalid params responses without
-source or URI values.
+declaration completion, conservative folding ranges, declaration hover,
+same-document definition, and same-document references do not diverge between
+embedded and process-based hosts. Invalid completion, hover, definition, and
+reference positions are returned as fixed JSON-RPC Invalid params responses
+without source or URI values.
 
 ## Product direction
 
 The repository is the modular foundation for:
 
-- **DiagramWeave Studio:** manual source editor, preview, diagnostics, hierarchical outline, completion, declaration hover, Context Inspector, diff review, recovery, and accessible approval flows;
+- **DiagramWeave Studio:** manual source editor, preview, diagnostics, hierarchical outline, completion, declaration hover, Go to Definition, Find All References, Context Inspector, diff review, recovery, and accessible approval flows;
 - **DiagramWeave Renderer:** implemented local PlantUML package with stdin-only rendering, `SANDBOX`, metadata suppression, bounded resources, safe line diagnostics, and local and remote includes unavailable;
-- **DiagramWeave Language Server:** implemented diagnostics, capability-negotiated hierarchical or legacy-flat document outlines, deterministic declaration completion, conservative package and namespace folding ranges, evidence-bounded explicit-declaration hover, and bounded stdio integration reusable by Studio and external IDEs;
+- **DiagramWeave Language Server:** implemented diagnostics, capability-negotiated hierarchical or legacy-flat document outlines, deterministic declaration completion, conservative package and namespace folding ranges, evidence-bounded explicit-declaration hover, conservative same-document definition and references, and bounded stdio integration reusable by Studio and external IDEs;
 - **DiagramWeave CLI:** implemented deterministic validation, rendering, atomic publication, and structured diagnostic foundation, with formatting and policy checks remaining future work;
 - **naruon and CWL integration:** embeddable Core, renderer, diagnostics, CLI, Language Server, stdio transport, and provider adapters without requiring the Studio application.
 
@@ -218,13 +233,15 @@ The detailed product contract is in [`docs/product/diagramweave-prd.md`](docs/pr
 5. Schema, range, replacement, and scope expansion are validated locally.
 6. Expanded edits require an explicit reason and host approval.
 7. Raw child output remains inside the renderer boundary; hosts receive only bounded, fixed-message diagnostics.
-8. Outline, completion, folding, and hover records are derived only from sanitized accepted open-document snapshots and are never inferred from remote content.
+8. Outline, completion, folding, hover, definition, and reference records are derived only from sanitized accepted open-document snapshots and are never inferred from remote content.
 9. Outline hierarchy requires complete stack-ordered package or namespace braces with matching indentation; ambiguous or malformed structure remains flat.
 10. Non-hierarchical clients receive immutable `SymbolInformation[]` from the same authoritative symbol tree rather than a second parser.
 11. Declaration completion fails by omission in comments, strings, relations, directives, completed declarations, and ambiguous cursor positions.
 12. Folding ranges are derived only from complete nonempty package or namespace scopes in the same authoritative symbol tree; ambiguous structure produces no fold.
 13. Declaration hover matches only exact authoritative label selections, returns `null` elsewhere, and cannot invoke an LLM, renderer, file reader, include processor, macro processor, workspace scan, shell, or network service.
-14. The user remains responsible for accepting, rejecting, saving, and committing changes.
+14. Same-document definition and references use exact case-sensitive identity, fail by omission for ambiguity, and never promote comments, labels, directives, or unrelated text into semantic evidence.
+15. Reference results are bounded to 4,096 locations and overflow fails closed rather than returning incomplete evidence.
+16. The user remains responsible for accepting, rejecting, saving, and committing changes.
 
 ## Development
 
@@ -245,6 +262,8 @@ npm run verify
 - [Document-symbol compatibility product slice](docs/product/document-symbol-compatibility.md)
 - [Conservative folding-ranges product slice](docs/product/folding-ranges.md)
 - [Evidence-bounded declaration-hover product slice](docs/product/declaration-hover.md)
+- [Same-document definition product slice](docs/product/same-document-definitions.md)
+- [Same-document references product slice](docs/product/same-document-references.md)
 - [Architecture](docs/architecture.md)
 - [Security model](docs/security-model.md)
 - [Structured diagnostics research](docs/research/plantuml-structured-diagnostics.md)
@@ -254,6 +273,8 @@ npm run verify
 - [LSP document-symbol compatibility research](docs/research/lsp-document-symbol-compatibility.md)
 - [PlantUML folding-ranges research](docs/research/plantuml-folding-ranges.md)
 - [PlantUML declaration-hover research](docs/research/plantuml-declaration-hover.md)
+- [PlantUML same-document definition research](docs/research/plantuml-same-document-definitions.md)
+- [PlantUML same-document reference research](docs/research/plantuml-same-document-references.md)
 - [Contextual Orchestrator operations](docs/operations/contextual-orchestrator.md)
 - [PlantUML renderer operations](docs/operations/plantuml-renderer.md)
 - [Document-symbol operations](docs/operations/document-symbols.md)
@@ -262,6 +283,8 @@ npm run verify
 - [Document-symbol compatibility operations](docs/operations/document-symbol-compatibility.md)
 - [Folding-ranges operations](docs/operations/folding-ranges.md)
 - [Declaration-hover operations](docs/operations/declaration-hover.md)
+- [Same-document definition operations](docs/operations/same-document-definitions.md)
+- [Same-document reference operations](docs/operations/same-document-references.md)
 - [DiagramWeave Language Server](packages/language-server/README.md)
 - [DiagramWeave stdio Language Server](packages/language-server-stdio/README.md)
 - [DiagramWeave CLI](packages/cli/README.md)

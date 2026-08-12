@@ -32,4 +32,4 @@ This index makes the repository's product, technical, architecture, safety, and 
 - **conceptual** — logical domain entity or relationship; not evidence of persistence.
 - **host-owned** — responsibility belongs to Studio, naruon, IDE, deployment wrapper, or another host.
 
-Current protected main implements the source-first Core, Contextual Orchestrator adapter, sandboxed PlantUML renderer, CLI, transport-neutral Language Server and stdio adapter, diagnostics, symbols, completion, folding, hover, and same-document definition navigation. Open PR #22 references and PR #24 hourly-governance remediation remain active-PR behavior until merged.
+Current protected main implements the source-first Core, Contextual Orchestrator adapter, sandboxed PlantUML renderer, CLI, transport-neutral Language Server and stdio adapter, diagnostics, symbols, completion, folding, hover, same-document definition and reference navigation, and work-conserving hourly-governance remediation. DiagramWeave Studio remains a future-host boundary.

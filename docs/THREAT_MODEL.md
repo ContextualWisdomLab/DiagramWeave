@@ -1,6 +1,6 @@
 # DiagramWeave Threat Model
 
-**Status:** Accepted baseline for protected-main foundation.  
+**Status:** Accepted baseline for protected-main foundation.
 **Last reviewed:** 2026-08-09
 
 ## Scope

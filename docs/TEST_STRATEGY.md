@@ -1,7 +1,7 @@
 # DiagramWeave Test Strategy
 
-**Status:** Accepted quality baseline  
-**Last reviewed:** 2026-08-09
+**Status:** Accepted quality baseline
+**Last reviewed:** 2026-08-12
 
 ## Objective
 
@@ -99,7 +99,7 @@ Where practical, retain a small real PlantUML integration lane in addition to fa
 - folding limit/line-only contract;
 - hover fixed/evidence-bounded content and safe Markdown;
 - definition same-document exact locations;
-- PR #22 references tests remain active-PR evidence until merge;
+- same-document references exact locations, declaration-inclusion policy, ambiguity omission, result limit, and stdio parity;
 - invalid positions map to fixed null/empty/Invalid params results without source/URI reflection.
 
 ## stdio/JSON-RPC tests
@@ -118,7 +118,7 @@ Mirror `docs/THREAT_MODEL.md`: source/model prompt injection boundaries, child e
 
 ## Documentation contract
 
-CI must retain discoverable PRD, TRD, Architecture, UML, conceptual ERD, security model, threat model, test strategy, operability, traceability, ADR index, AGENTS, CLAUDE, README, and CHANGELOG. Tests should explicitly prevent active PR #22/#24 behavior from being promoted to protected-main claims before integration.
+CI must retain discoverable PRD, TRD, Architecture, UML, conceptual ERD, security model, threat model, test strategy, operability, traceability, ADR index, AGENTS, CLAUDE, README, and CHANGELOG. Tests should record same-document references and hourly remediation as protected-main capabilities while continuing to prevent future-host Studio and conceptual persistence from being presented as already implemented.
 
 ## Release acceptance
 

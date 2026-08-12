@@ -1,7 +1,7 @@
 # DiagramWeave UML and Runtime Views
 
-**Status:** Accepted diagrams for protected-main foundations and explicitly labelled future/active-PR boundaries.  
-**Last reviewed:** 2026-08-09
+**Status:** Accepted diagrams for protected-main foundations and explicitly labelled future-host boundaries.
+**Last reviewed:** 2026-08-12
 
 ## Component view
 
@@ -86,14 +86,14 @@ flowchart TB
     FOLD[folding ranges]
     HOVER[declaration hover]
     DEF[same-document definition]
-    FUTURE[references — PR #22 active-PR]
+    REFS[same-document references]
 
     BASE --> SYMBOL
     SYMBOL --> COMPLETION
     SYMBOL --> FOLD
     SYMBOL --> HOVER
     SYMBOL --> DEF
-    SYMBOL -. future reuse .-> FUTURE
+    SYMBOL --> REFS
 ```
 
 Every feature reuses accepted source snapshots and the same structural evidence. No outer feature gets authority to parse includes/macros/remotely rendered semantics independently.
@@ -156,7 +156,7 @@ flowchart LR
     REVIEW -->|all gates + qualifying approval| MAIN
 ```
 
-The model process may create only a revision-bound proposal in the checked-out working tree. It cannot push, open a pull request, approve, merge, tag, publish a package, or release. A separate trusted workflow publisher may create the ordinary branch/PR after deterministic verification and exact-ref revalidation; publication itself is not approval. Independent review/security and protected-branch policy remain separate authorities. PR #24 changes the repository's hourly remediation workflow and remains active-PR until merged.
+The model process may create only a revision-bound proposal in the checked-out working tree. It cannot push, open a pull request, approve, merge, tag, publish a package, or release. A separate trusted workflow publisher may create the ordinary branch/PR after deterministic verification and exact-ref revalidation; publication itself is not approval. Independent review/security and protected-branch policy remain separate authorities. The hourly remediation change integrated through PR #24 preserves these boundaries on protected main.
 
 ## Diagram maintenance rule
 

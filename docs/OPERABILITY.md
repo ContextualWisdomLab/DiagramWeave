@@ -1,6 +1,6 @@
 # DiagramWeave Operability, Recovery, and Release Guide
 
-**Status:** Accepted foundation operating baseline  
+**Status:** Accepted foundation operating baseline
 **Last reviewed:** 2026-08-09
 
 DiagramWeave currently ships reusable packages and process boundaries rather than a hosted control plane. Operability therefore focuses on deterministic local dependencies, safe failures, bounded resources, integration observability, recovery, and release evidence. Existing feature-specific runbooks under `docs/operations/` remain authoritative for their slices.

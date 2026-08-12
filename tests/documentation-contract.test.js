@@ -66,18 +66,18 @@ test('conceptual ERD does not invent foundation persistence', () => {
   assert.match(erd, /future physical ERD/);
 });
 
-test('active and future work is not promoted to protected-main claims', () => {
+test('implemented and future work retain protected-main authority', () => {
   const documentation = readDocument('DOCUMENTATION.md');
   const traceability = readDocument('docs/TRACEABILITY.md');
   assert.match(
     documentation,
-    /Open PR #22 references and PR #24 hourly-governance remediation remain active-PR/,
+    /same-document definition and reference navigation, and work-conserving hourly-governance remediation/,
   );
-  assertTraceabilityMaturity(traceability, 'same-document references', 'active-PR');
+  assertTraceabilityMaturity(traceability, 'same-document references', 'implemented-main');
   assertTraceabilityMaturity(
     traceability,
     'work-conserving hourly remediation',
-    'active-PR',
+    'implemented-main',
   );
   assertTraceabilityMaturity(traceability, 'Studio visual editor', 'future-host');
 });
