@@ -468,8 +468,13 @@ async function assertSafeExistingRegularFile(rootPath, repositoryPath, prefix) {
     if (index < pathParts.length - 1 && !pathStat.isDirectory()) {
       fail(prefix, 'non_directory_parent');
     }
-    if (index === pathParts.length - 1 && !pathStat.isFile()) {
-      fail(prefix, 'non_regular_file');
+    if (index === pathParts.length - 1) {
+      if (!pathStat.isFile()) {
+        fail(prefix, 'non_regular_file');
+      }
+      if (pathStat.nlink !== 1) {
+        fail(prefix, 'hard_link');
+      }
     }
   }
   return lstat(cursor);
@@ -657,6 +662,9 @@ export async function buildProposalBundle(options) {
     baseCommitSha,
     '--',
   ]);
+  if (patch.length > maximumSourceBytes) {
+    fail('proposal_bundle_invalid', 'patch_size');
+  }
   assertNoForbiddenLiteral(patch, forbiddenValues);
 
   await mkdir(outputDirectory, { mode: 0o700 });
@@ -735,6 +743,8 @@ export async function buildProposalBundle(options) {
  * @param {string} options.expectedRepositoryFullName Expected repository.
  * @param {string} options.expectedBaseCommitSha Expected exact base SHA.
  * @param {'product'|'remediation'} options.expectedExecutionMode Expected mode.
+ * @param {(string|Buffer|Uint8Array)[]} [options.forbiddenLiteralValues]
+ *   Sensitive byte sequences forbidden anywhere in the artifact payload.
  * @returns {Promise<Readonly<object>>} Deeply frozen validated manifest.
  * @throws {Error} `proposal_bundle_invalid:*` on tampering or mismatch.
  */
@@ -747,7 +757,17 @@ export async function validateProposalBundle(options) {
     expectedBaseCommitSha,
     expectedExecutionMode,
     expectedRepositoryFullName,
+    forbiddenLiteralValues,
   } = options;
+  const forbiddenValues = normalizeForbiddenValues(forbiddenLiteralValues);
+  const bundleStat = await lstatOrNull(bundleDirectory);
+  if (
+    bundleStat === null ||
+    bundleStat.isSymbolicLink() ||
+    !bundleStat.isDirectory()
+  ) {
+    fail('proposal_bundle_invalid', 'bundle_directory');
+  }
   const topLevelEntries = await readdir(bundleDirectory, { withFileTypes: true });
   const observedTopLevel = sortPaths(topLevelEntries.map((entry) => entry.name));
   const expectedTopLevel = ['files', 'proposal-manifest.json', 'proposal.patch'];
@@ -766,17 +786,28 @@ export async function validateProposalBundle(options) {
     if (!directoryEntry?.isFile() || directoryEntry.isSymbolicLink()) {
       fail('proposal_bundle_invalid', requiredFile);
     }
+    const requiredStat = await lstat(join(bundleDirectory, requiredFile));
+    if (requiredStat.nlink !== 1) {
+      fail('proposal_bundle_invalid', 'hard_link');
+    }
   }
 
+  let manifestContent;
   let parsedManifest;
   try {
-    parsedManifest = JSON.parse(
-      await readFile(join(bundleDirectory, 'proposal-manifest.json'), 'utf8'),
+    manifestContent = await readFile(
+      join(bundleDirectory, 'proposal-manifest.json'),
+      'utf8',
     );
+    parsedManifest = JSON.parse(manifestContent);
   } catch {
     fail('proposal_bundle_invalid', 'manifest_json');
   }
   const manifest = validateProposalManifest(parsedManifest);
+  if (manifestContent !== canonicalJson(manifest)) {
+    fail('proposal_bundle_invalid', 'manifest_canonical');
+  }
+  assertNoForbiddenLiteral(Buffer.from(manifestContent), forbiddenValues);
   if (manifest.repository_full_name !== expectedRepositoryFullName) {
     fail('proposal_bundle_invalid', 'repository_full_name');
   }
@@ -787,6 +818,10 @@ export async function validateProposalBundle(options) {
     fail('proposal_bundle_invalid', 'execution_mode');
   }
   const patch = await readFile(join(bundleDirectory, 'proposal.patch'));
+  if (patch.length > maximumSourceBytes) {
+    fail('proposal_bundle_invalid', 'patch_size');
+  }
+  assertNoForbiddenLiteral(patch, forbiddenValues);
   if (sha256Hex(patch) !== manifest.patch_sha256) {
     fail('proposal_bundle_invalid', 'patch_sha256');
   }
@@ -818,6 +853,7 @@ export async function validateProposalBundle(options) {
       fail('proposal_bundle_invalid', 'missing_file_snapshot');
     }
     const snapshot = await readFile(snapshotPath);
+    assertNoForbiddenLiteral(snapshot, forbiddenValues);
     const observedMode = snapshotStat.mode & 0o111 ? '0755' : '0644';
     if (
       snapshot.length !== fileEntry.size_bytes ||
@@ -846,6 +882,8 @@ export async function validateProposalBundle(options) {
  * @param {string} options.expectedRepositoryFullName Expected repository.
  * @param {string} options.expectedBaseCommitSha Expected exact base SHA.
  * @param {'product'|'remediation'} options.expectedExecutionMode Expected mode.
+ * @param {(string|Buffer|Uint8Array)[]} [options.forbiddenLiteralValues]
+ *   Sensitive byte sequences forbidden anywhere in the artifact payload.
  * @returns {Promise<Readonly<object>>} Validated manifest.
  * @throws {Error} `proposal_materialization_invalid:*` on any mismatch.
  */
@@ -858,6 +896,7 @@ export async function materializeProposalBundle(options) {
     expectedBaseCommitSha,
     expectedExecutionMode,
     expectedRepositoryFullName,
+    forbiddenLiteralValues,
     targetWorkspacePath,
   } = options;
   const manifest = await validateProposalBundle({
@@ -865,6 +904,7 @@ export async function materializeProposalBundle(options) {
     expectedBaseCommitSha,
     expectedExecutionMode,
     expectedRepositoryFullName,
+    forbiddenLiteralValues,
   });
   assertExactHead(
     targetWorkspacePath,
