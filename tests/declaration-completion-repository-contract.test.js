@@ -88,7 +88,7 @@ test('public entry point retains completion beneath definition hover and folding
     readFile(new URL('../docs/superpowers/plans/2026-08-05-declaration-completion.md', import.meta.url), 'utf8'),
   ]);
 
-  assert.match(indexSource, /createDefinitionLanguageServerSession as createLanguageServerSession/);
+  assert.match(indexSource, /createReferenceLanguageServerSession as createLanguageServerSession/);
   assert.match(definitionSessionSource, /createHoverLanguageServerSession/);
   assert.match(hoverSessionSource, /createFoldingLanguageServerSession/);
   assert.match(foldingSessionSource, /createCompletionLanguageServerSession/);
