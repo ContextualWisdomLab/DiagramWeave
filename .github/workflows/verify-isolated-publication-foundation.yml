@@ -1,0 +1,58 @@
+name: Verify isolated publication foundation
+
+on:
+  push:
+    branches:
+      - security/isolated-autonomous-publication
+
+concurrency:
+  group: verify-isolated-publication-foundation
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  verify:
+    runs-on: ubuntu-slim
+    timeout-minutes: 25
+    steps:
+      - name: Check out exact security branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: security/isolated-autonomous-publication
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238
+        with:
+          node-version: 24
+          package-manager-cache: false
+
+      - name: Verify complete repository and clean source tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          test ! -e scripts/__pycache__
+          git diff --check
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm run verify
+          node scripts/check-package-contents.mjs
+          node --test \
+            tests/hourly-proposal-bundle.test.js \
+            tests/hourly-proposal-bundle-adversarial.test.js
+
+      - name: Remove this one-shot workflow from the verified branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm .github/workflows/verify-isolated-publication-foundation.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --check
+          git commit -m "chore: remove foundation verification workflow"
+          verified_commit_sha="$(git rev-parse HEAD)"
+          echo "VERIFIED_COMMIT_SHA=$verified_commit_sha"
+          echo "Verified foundation commit: $verified_commit_sha" >>"$GITHUB_STEP_SUMMARY"
+          git push origin HEAD:security/isolated-autonomous-publication || true
