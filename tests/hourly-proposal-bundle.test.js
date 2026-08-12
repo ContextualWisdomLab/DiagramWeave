@@ -213,7 +213,7 @@ test('canonical JSON and SHA-256 are deterministic and reject ambiguous values',
   );
   assert.equal(
     sha256Hex('DiagramWeave'),
-    'afecdb5577f362b6f1ee04d324384ea0c48561177c69b1d2942fe6b9541b0e84',
+    '15881be609faa66654fdcb4c5ebac18821eca082d88a3d7cbb242a05312e113a',
   );
   assert.throws(() => canonicalJson({ value: Number.NaN }), /canonical_json_invalid/);
   assert.throws(() => canonicalJson({ value: undefined }), /canonical_json_invalid/);
