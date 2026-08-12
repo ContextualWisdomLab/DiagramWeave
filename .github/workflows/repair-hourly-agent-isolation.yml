@@ -34,6 +34,33 @@ jobs:
           echo "Confirmed that the new isolation contract fails on the unisolated workflow." \
             >>"$GITHUB_STEP_SUMMARY"
 
+      - name: Harden one-shot document anchors
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('scripts/repair-hourly-agent-isolation.py')
+          text = path.read_text(encoding='utf-8')
+          replacements = {
+              'security_anchor = """### Contextual Orchestrator transport boundary\n"""':
+                  'security_anchor = "### Contextual Orchestrator transport boundary"',
+              'operations_anchor = """### Common verification boundary\n"""':
+                  'operations_anchor = "### Common verification boundary"',
+              'architecture_anchor = """## Modular MSA compatibility\n"""':
+                  'architecture_anchor = "## Modular MSA compatibility"',
+          }
+          for old, new in replacements.items():
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(
+                      f'one-shot anchor patch expected one match, found {count}: {old!r}'
+                  )
+              text = text.replace(old, new, 1)
+          path.write_text(text, encoding='utf-8')
+          PY
+
       - name: Apply reviewed isolation repair
         shell: bash
         run: |
