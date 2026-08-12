@@ -12,17 +12,17 @@ test("converts Node built-in totals into standard coverage evidence", () => {
 ℹ -------------------------------------------------------------------------------
 ℹ file                  | line % | branch % | funcs % | uncovered lines
 ℹ -------------------------------------------------------------------------------
-ℹ all files             | 100.00 |   100.00 |  100.00 |
+All files       |   91.11 |    82.22 |   73.33 |   64.44 |
 ℹ -------------------------------------------------------------------------------
 ℹ end of coverage report
 `;
 
   assert.deepEqual(parseCoverageSummary(output), {
     total: {
-      lines: { pct: 100 },
-      statements: { pct: 100 },
-      functions: { pct: 100 },
-      branches: { pct: 100 },
+      lines: { pct: 64.44 },
+      statements: { pct: 91.11 },
+      functions: { pct: 73.33 },
+      branches: { pct: 82.22 },
     },
   });
 });
@@ -38,5 +38,8 @@ test("emits summary and changed-line coverage evidence", () => {
   assert.ok(COVERAGE_ARGS.includes("--reporter=json-summary"));
   assert.ok(COVERAGE_ARGS.includes("--reporter=json"));
   assert.ok(COVERAGE_ARGS.includes("--check-coverage"));
+  assert.ok(COVERAGE_ARGS.includes("--lines=100"));
+  assert.ok(COVERAGE_ARGS.includes("--branches=100"));
+  assert.ok(COVERAGE_ARGS.includes("--functions=100"));
   assert.ok(COVERAGE_ARGS.includes("--statements=100"));
 });

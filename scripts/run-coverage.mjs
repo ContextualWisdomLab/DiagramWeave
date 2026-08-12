@@ -24,18 +24,18 @@ export const COVERAGE_ARGS = [
 export function parseCoverageSummary(output) {
   const totalRow = output
     .split(/\r?\n/)
-    .map((line) => line.match(/\ball files\s*\|\s*([\d.]+)\s*\|\s*([\d.]+)\s*\|\s*([\d.]+)/i))
+    .map((line) => line.match(/\ball files\s*\|\s*([\d.]+)\s*\|\s*([\d.]+)\s*\|\s*([\d.]+)\s*\|\s*([\d.]+)/i))
     .find(Boolean);
 
   if (!totalRow) {
     throw new Error("coverage total row was not found");
   }
 
-  const [, linePct, branchPct, functionPct] = totalRow;
+  const [, statementPct, branchPct, functionPct, linePct] = totalRow;
   return {
     total: {
       lines: { pct: Number(linePct) },
-      statements: { pct: Number(linePct) },
+      statements: { pct: Number(statementPct) },
       functions: { pct: Number(functionPct) },
       branches: { pct: Number(branchPct) },
     },
