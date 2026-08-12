@@ -1,0 +1,119 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contextualwisdomlab.example/schemas/hourly-proposal-manifest.schema.json",
+  "title": "DiagramWeave Hourly Proposal Manifest",
+  "description": "Binds one bounded autonomous repository proposal to an exact source revision without granting publication authority.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "repository_full_name",
+    "base_commit_sha",
+    "execution_mode",
+    "patch_sha256",
+    "files",
+    "total_file_count",
+    "total_source_bytes"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "repository_full_name": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$",
+      "maxLength": 200
+    },
+    "base_commit_sha": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "execution_mode": {
+      "enum": [
+        "product",
+        "remediation"
+      ]
+    },
+    "patch_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "files": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 2048,
+      "items": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "path",
+              "mode",
+              "sha256",
+              "size_bytes"
+            ],
+            "properties": {
+              "kind": {
+                "const": "file"
+              },
+              "path": {
+                "$ref": "#/$defs/safe_repository_path"
+              },
+              "mode": {
+                "enum": [
+                  "0644",
+                  "0755"
+                ]
+              },
+              "sha256": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              },
+              "size_bytes": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 67108864
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "path"
+            ],
+            "properties": {
+              "kind": {
+                "const": "deleted"
+              },
+              "path": {
+                "$ref": "#/$defs/safe_repository_path"
+              }
+            }
+          }
+        ]
+      }
+    },
+    "total_file_count": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 2048
+    },
+    "total_source_bytes": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 67108864
+    }
+  },
+  "$defs": {
+    "safe_repository_path": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4096,
+      "pattern": "^(?!/)(?!.*\\\\)(?!.*//)(?!.*(?:^|/)(?:\\.|\\.\\.|\\.git)(?:/|$))(?!.*[\\u0000-\\u001F\\u007F]).+$"
+    }
+  }
+}
