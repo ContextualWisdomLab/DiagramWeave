@@ -53,8 +53,8 @@ workflow = replace_once(
 )
 workflow = replace_once(
     workflow,
-    '            GH_TOKEN="$REPOSITORY_TOKEN" gh pr list \\\n',
-    "            gh pr list \\\n",
+    'GH_TOKEN="$REPOSITORY_TOKEN" gh pr list',
+    "gh pr list",
     "gate inventory token use",
 )
 
