@@ -7,7 +7,7 @@ on:
 
 concurrency:
   group: repair-hourly-product-noop-fallback
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 permissions:
   contents: write
