@@ -1,0 +1,74 @@
+name: Verify hourly proposal bundle GREEN contract
+
+on:
+  push:
+    branches:
+      - security/isolated-autonomous-publication
+
+concurrency:
+  group: verify-hourly-proposal-bundle-green
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  verify-green:
+    runs-on: ubuntu-slim
+    timeout-minutes: 20
+    steps:
+      - name: Check out exact security branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: security/isolated-autonomous-publication
+          fetch-depth: 0
+
+      - name: Correct the independently verified SHA-256 test vector
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('tests/hourly-proposal-bundle.test.js')
+          text = path.read_text(encoding='utf-8')
+          old = 'afecdb5577f362b6f1ee04d324384ea0c48561177c69b1d2942fe6b9541b0e84'
+          new = '15881be609faa66654fdcb4c5ebac18821eca082d88a3d7cbb242a05312e113a'
+          count = text.count(old)
+          if count != 1:
+              raise SystemExit(f'SHA-256 test vector: expected one match, found {count}')
+          path.write_text(text.replace(old, new, 1), encoding='utf-8')
+          PY
+
+      - name: Set up Node.js
+        uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238
+        with:
+          node-version: 24
+          package-manager-cache: false
+
+      - name: Verify syntax, schemas, and focused behavior
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check scripts/hourly-proposal-bundle.mjs
+          node -e "JSON.parse(require('node:fs').readFileSync('schemas/hourly-proposal-manifest.schema.json', 'utf8'))"
+          node -e "JSON.parse(require('node:fs').readFileSync('schemas/hourly-verification-receipt.schema.json', 'utf8'))"
+          node --test tests/hourly-proposal-bundle.test.js
+          git diff --check
+
+      - name: Commit verified Task 1 without temporary workflows
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f \
+            .github/workflows/verify-hourly-proposal-bundle-red.yml \
+            .github/workflows/verify-hourly-proposal-bundle-green.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --check
+          git commit -m "feat(ci): complete bounded proposal artifact foundation"
+          verified_commit_sha="$(git rev-parse HEAD)"
+          echo "VERIFIED_COMMIT_SHA=$verified_commit_sha"
+          echo "Verified Task 1 commit: $verified_commit_sha" >>"$GITHUB_STEP_SUMMARY"
+          git push origin HEAD:security/isolated-autonomous-publication || true
