@@ -31,7 +31,7 @@ test('repository authority is step-scoped and absent from the model job environm
   );
 });
 
-test('the model receives a clean environment and cannot persist Git control-plane state', async () => {
+test('the model runs as a separate user in a disposable local clone', async () => {
   const workflow = await readRepositoryFile(workflowPath);
   assert.match(workflow, /- name: Capture trusted Git control plane/);
 
@@ -40,6 +40,16 @@ test('the model receives a clean environment and cannot persist Git control-plan
     'Run the NVIDIA NIM development agent',
     'Set up Node.js for exact repository verification',
   );
+
+  assert.match(modelStep, /sudo useradd/);
+  assert.match(modelStep, /chmod 0700 "\$GITHUB_WORKSPACE"/);
+  assert.match(modelStep, /git clone --no-hardlinks/);
+  assert.match(modelStep, /remote remove origin/);
+  assert.match(modelStep, /sudo chown -R "\$agent_user"/);
+  assert.match(modelStep, /sudo -u "\$agent_user"/);
+  assert.match(modelStep, /pkill -KILL -u "\$agent_user"/);
+  assert.match(modelStep, /pgrep -u "\$agent_user"/);
+
   const cleanEnvironmentStart = modelStep.indexOf('env -i');
   const invocationEnd = modelStep.indexOf('opencode run', cleanEnvironmentStart);
   assert.ok(cleanEnvironmentStart >= 0 && invocationEnd > cleanEnvironmentStart);
@@ -55,6 +65,15 @@ test('the model receives a clean environment and cannot persist Git control-plan
     cleanInvocation,
     /GITHUB_(?:ENV|PATH|OUTPUT|STATE|STEP_SUMMARY|TOKEN)|GH_TOKEN|REPOSITORY_TOKEN|ACTIONS_ID_TOKEN/,
   );
+});
+
+test('the trusted shell restores disposable Git metadata and imports only bounded worktree changes', async () => {
+  const workflow = await readRepositoryFile(workflowPath);
+  const modelStep = workflowStep(
+    workflow,
+    'Run the NVIDIA NIM development agent',
+    'Set up Node.js for exact repository verification',
+  );
 
   assert.match(modelStep, /restore_git_control_plane/);
   assert.match(modelStep, /\.git\/config/);
@@ -67,6 +86,14 @@ test('the model receives a clean environment and cannot persist Git control-plan
   assert.match(modelStep, /GIT_NO_REPLACE_OBJECTS=1/);
   assert.match(modelStep, /core\.hooksPath=\/dev\/null/);
   assert.match(modelStep, /reset --mixed "\$TRUSTED_HEAD_SHA"/);
+  assert.match(modelStep, /git diff --binary --full-index/);
+  assert.match(modelStep, /git apply --binary/);
+  assert.match(modelStep, /git ls-files --others --exclude-standard -z/);
+  assert.match(modelStep, /maximum_file_count/);
+  assert.match(modelStep, /maximum_total_bytes/);
+  assert.match(modelStep, /is_symlink\(\)/);
+  assert.match(modelStep, /is_file\(\)/);
+  assert.match(modelStep, /PR_MESSAGE\.md/);
 });
 
 test('commit preparation is token-free and publication cannot execute model-supplied hooks', async () => {
@@ -93,4 +120,20 @@ test('commit preparation is token-free and publication cannot execute model-supp
   assert.match(publish, /core\.hooksPath=\/dev\/null/);
   assert.match(publish, /git push --no-verify/);
   assert.match(publish, /steps\.prepare_commit\.outputs\.commit_sha/);
+});
+
+test('security documentation records model-process persistence and command-file threats', async () => {
+  const securityModel = await readRepositoryFile('docs/security-model.md');
+  const operations = await readRepositoryFile('docs/operations/hourly-development.md');
+  const adr = await readRepositoryFile('docs/adr/0007-automation-authority.md');
+
+  for (const document of [securityModel, operations, adr]) {
+    assert.match(document, /separate operating-system user/i);
+    assert.match(document, /disposable local clone/i);
+    assert.match(document, /Git control plane/i);
+    assert.match(document, /token-free commit/i);
+    assert.match(document, /hooks disabled/i);
+  }
+  assert.match(securityModel, /GitHub command files/i);
+  assert.match(securityModel, /detached background process/i);
 });
