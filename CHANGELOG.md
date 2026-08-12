@@ -8,6 +8,11 @@ The project follows Semantic Versioning after the first release.
 
 ### Changed
 
+- Hourly product development now treats a successful OpenCode process with an
+  unchanged working tree as an incomplete candidate, resets candidate output,
+  tries the next configured NVIDIA NIM model, fails visibly when every product
+  candidate is a failure or no-op, and permits an unchanged remediation head
+  only after bounded candidate exhaustion.
 - Hourly development now routes an open same-repository pull request into an
   RCA-driven exact-head remediation session, verifies candidate actions against
   live review and Check evidence, publishes only a normal fast-forward repair

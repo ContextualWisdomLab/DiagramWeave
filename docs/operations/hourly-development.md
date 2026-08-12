@@ -40,9 +40,11 @@ Independent approval cannot be manufactured. Queued or pending Checks cannot be 
 
 ### Product-development mode
 
-When the verified inventory contains no open pull request, the workflow may run exactly one bounded OpenCode session against NVIDIA NIM and package one buyer-visible increment as one new pull request. Immediately before creating that PR it re-fetches the queue; if another PR appeared after the initial gate, it fails closed rather than creating duplicate work.
+When the verified inventory contains no open pull request, the workflow runs an ordered, bounded sequence of configured NVIDIA NIM candidates and may package one buyer-visible increment as one new pull request. Immediately before creating that PR it re-fetches the queue; if another PR appeared after the initial gate, it fails closed rather than creating duplicate work.
 
-The delegated session preserves DiagramWeave's source-first manual editing mode, uses or improves Contextual Orchestrator for product LLM work, retains modular MSA compatibility with central `.github`, naruon, and other CWL services, and satisfies the repository's test, coverage, docstring, security, documentation, and design contracts.
+A model process exit code of zero proves only that the process terminated normally. It is not evidence that product work was completed. After each candidate returns, the trusted shell checks the working tree while excluding metadata-only `PR_MESSAGE.md`. A clean working tree causes that candidate to be discarded and the next configured model to run. Partial output from a failed or clean no-op candidate is reset before the next attempt. If every product candidate fails or completes without a meaningful mutation, the workflow fails visibly and creates no branch or pull request.
+
+The delegated sessions preserve DiagramWeave's source-first manual editing mode, use or improve Contextual Orchestrator for product LLM work, retain modular MSA compatibility with central `.github`, naruon, and other CWL services, and satisfy the repository's test, coverage, docstring, security, documentation, and design contracts.
 
 ### Common verification boundary
 
@@ -95,7 +97,9 @@ All product LLM functionality must use or improve `ContextualWisdomLab/contextua
 - A required Check is queued or pending: do not call it successful. Continue with the next safe, non-conflicting activity when one exists.
 - Dry run: print the selected task contract without reading or requiring the NVIDIA model credential.
 - Selected model path lacks `NVIDIA_NIM_API_KEY`: fail before installing or invoking OpenCode.
-- Every NVIDIA NIM model candidate fails: reset partial work, fail visibly, and publish nothing.
+- A model candidate exits successfully but leaves no meaningful repository mutation: treat it as incomplete, reset the candidate, and try the next configured model. Exit code zero alone is not completion evidence.
+- Every product-mode candidate fails or completes without a meaningful mutation: fail visibly and publish nothing.
+- Remediation candidates are exhausted without a safe mutation: only then leave the exact PR head unchanged; do not claim that the blocker was repaired.
 - Repository verification fails: publish nothing.
 - A product PR appears between inventory and publication: fail closed and create no duplicate pull request.
 - Delayed schedule: rely on the next scheduled run or invoke a manual dry run; do not add a duplicate scheduler.
