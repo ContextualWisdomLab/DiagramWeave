@@ -325,7 +325,7 @@ test('candidate exhaustion preserves HEAD, leaves remediation clean, and fails p
     );
     assert.match(
       `${product.stdout}\n${product.stderr}`,
-      /no product mutation/i,
+      /without a product mutation/i,
     );
   } finally {
     await rm(harness.root, { force: true, recursive: true });
