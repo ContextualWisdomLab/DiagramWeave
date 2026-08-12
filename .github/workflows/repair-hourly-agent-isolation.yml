@@ -27,6 +27,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          # This exact-head retry follows the corrected regression assertion.
           python3 - <<'PY'
           from pathlib import Path
 
