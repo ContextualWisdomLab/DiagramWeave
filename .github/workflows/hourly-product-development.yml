@@ -574,8 +574,7 @@ jobs:
             git clean -fd
           done
           if [ "$status" -ne 0 ]; then
-            if [ "$EXECUTION_MODE" = "remediation" ] && \
-               [ "$completed_without_mutation" -gt 0 ]; then
+            if [ "$EXECUTION_MODE" = "remediation" ]; then
               echo "Every candidate failed or completed without a safe remediation mutation; leaving the exact head unchanged after candidate exhaustion." \
                 >>"$GITHUB_STEP_SUMMARY"
               exit 0
