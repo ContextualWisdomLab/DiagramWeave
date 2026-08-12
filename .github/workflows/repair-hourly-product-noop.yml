@@ -23,6 +23,17 @@ jobs:
           ref: fix/hourly-product-noop-fallback
           fetch-depth: 0
 
+      - name: Confirm test-first RED contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          if node --test tests/hourly-noop-fallback-contract.test.js; then
+            echo "::error::The no-op fallback contract unexpectedly passed before production repair."
+            exit 1
+          fi
+          echo "Confirmed the new no-op fallback contract fails on the unrepaired workflow." \
+            >>"$GITHUB_STEP_SUMMARY"
+
       - name: Apply test-backed scheduler repair
         shell: bash
         run: |
