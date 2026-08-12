@@ -60,6 +60,18 @@ test('definition composition rejects malformed mutation envelopes before delegat
   }
 
   await assert.rejects(
+    session.notify('textDocument/didOpen', {
+      textDocument: {
+        uri: 'https://example.com/remote.puml',
+        languageId: 'plantuml',
+        version: 1,
+        text: '@startuml\n@enduml\n',
+      },
+    }),
+    (error) => assertError(error, 'document_uri_invalid'),
+  );
+
+  await assert.rejects(
     session.notify('textDocument/didClose', {
       textDocument: { uri: 'https://example.com/remote.puml' },
     }),
