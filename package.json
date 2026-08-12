@@ -17,5 +17,8 @@
     "docstrings": "node scripts/check-docstrings.mjs",
     "syntax": "node scripts/check-syntax.mjs",
     "verify": "npm run syntax && npm run test && npm run coverage && npm run docstrings"
+  },
+  "devDependencies": {
+    "c8": "12.0.0"
   }
 }

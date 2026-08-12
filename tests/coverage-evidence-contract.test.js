@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { parseCoverageSummary } from "../scripts/run-coverage.mjs";
+import {
+  COVERAGE_ARGS,
+  parseCoverageSummary,
+} from "../scripts/run-coverage.mjs";
 
 test("converts Node built-in totals into standard coverage evidence", () => {
   const output = `
@@ -29,4 +32,11 @@ test("refuses to synthesize evidence when Node reports no total row", () => {
     () => parseCoverageSummary("no coverage table"),
     /coverage total row was not found/,
   );
+});
+
+test("emits summary and changed-line coverage evidence", () => {
+  assert.ok(COVERAGE_ARGS.includes("--reporter=json-summary"));
+  assert.ok(COVERAGE_ARGS.includes("--reporter=json"));
+  assert.ok(COVERAGE_ARGS.includes("--check-coverage"));
+  assert.ok(COVERAGE_ARGS.includes("--statements=100"));
 });
