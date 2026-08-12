@@ -19,5 +19,7 @@ export function finalWorkflowStep(workflow, name) {
   const marker = `      - name: ${name}\n`;
   const start = workflow.indexOf(marker);
   assert.notEqual(start, -1, `${name} step must exist`);
+  const nextStep = workflow.indexOf('      - name: ', start + marker.length);
+  assert.equal(nextStep, -1, `${name} step must be final`);
   return workflow.slice(start);
 }
