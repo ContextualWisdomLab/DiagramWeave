@@ -200,6 +200,7 @@ test('rejects malformed SVG boundaries and multiple root documents', async () =>
     '<svg><g',
     '<svg><!-- unterminated</svg>',
     '<svg><![CDATA[unterminated</svg>',
+    '<svg>unterminated text',
     '<svg><?instruction</svg>',
     '<svg><?xml version="1.0"?></svg>',
     '<svg><!-- invalid--comment --></svg>',
