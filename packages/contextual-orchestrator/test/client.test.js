@@ -201,6 +201,7 @@ test('client sends a bounded OpenAI-compatible request and validates the proposa
   assert.equal(observedOptions.headers['content-type'], 'application/json');
   assert.equal(observedOptions.headers.authorization, 'Bearer operator_secret');
   assert.equal(body.model, 'contextual-orchestrator');
+  assert.equal(body.mode, 'auto');
   assert.equal(body.temperature, 0);
   assert.equal(body.stream, false);
   assert.equal(body.messages.length, 2);
