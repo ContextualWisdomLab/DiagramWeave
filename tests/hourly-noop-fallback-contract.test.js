@@ -97,6 +97,12 @@ async function createModelHarness(modelScript) {
     'utf8',
   );
   await writeFile(join(workspace, 'opencode.json'), 'trusted config\n', 'utf8');
+  await mkdir(join(workspace, 'nested'));
+  await writeFile(
+    join(workspace, 'nested', 'opencode.json'),
+    'untrusted nested config\n',
+    'utf8',
+  );
   await writeFile(promptPath, 'bounded test prompt\n', 'utf8');
   await writeFile(summaryPath, '', 'utf8');
   await writeFile(modelLogPath, '', 'utf8');
@@ -231,6 +237,9 @@ test('candidate control flow filters status, cleans failed output, and retries i
     assert.equal(
       await readFile(join(harness.workspace, 'opencode.json'), 'utf8'),
       'trusted config\n',
+    );
+    await assert.rejects(
+      readFile(join(harness.workspace, 'nested', 'opencode.json')),
     );
     assert.match(
       await readFile(join(harness.workspace, 'product.txt'), 'utf8'),
