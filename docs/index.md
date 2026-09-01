@@ -4,11 +4,11 @@ DiagramWeave is a source-first, AI-native editor platform for PlantUML and futur
 
 ## Start here
 
-- [Repository README](../README.md) — packages, trust model, development, and release status.
+- [Repository README](https://github.com/ContextualWisdomLab/DiagramWeave/blob/main/README.md) — product overview, packages, trust model, development, and release status.
 - [Product requirements](product/diagramweave-prd.md) — product scope and roadmap.
 - [Architecture](architecture.md) — component and authority boundaries.
 - [Security model](security-model.md) — trust assumptions and safety controls.
-- [Change history](../CHANGELOG.md) — repository change record.
+- [Change history](https://github.com/ContextualWisdomLab/DiagramWeave/blob/main/CHANGELOG.md) — repository change record.
 
 ## Current product
 
