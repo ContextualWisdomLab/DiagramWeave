@@ -79,7 +79,7 @@ The preview does not save or apply the edit. The host remains responsible for re
 
 ### Local PlantUML renderer
 
-`@contextualwisdomlab/diagramweave-plantuml-renderer` invokes a host-supplied Java executable and PlantUML JAR without a shell, with an empty child environment, bounded source/output/diagnostic/deadline limits, PlantUML `SANDBOX`, metadata suppression, and sanitized fixed-shape diagnostics.
+`@contextualwisdomlab/diagramweave-plantuml-renderer` invokes a host-supplied Java executable and PlantUML JAR without a shell, with an empty child environment, bounded source/output/diagnostic/deadline limits, PlantUML `SANDBOX`, metadata suppression, and sanitized fixed-shape diagnostics. Its supported public bounds are exposed through `plantUmlRendererLimits`.
 
 DiagramWeave does **not** bundle or download PlantUML. ContextualWisdomLab integrations must supply a commercially compatible **Apache License 2.0 or MIT PlantUML distribution** and retain its required notices; GPL/LGPL PlantUML artifacts are not an accepted inbound path for this ecosystem. PlantUML publishes Apache-2.0 and MIT builds that retain UML rendering capability, so the product does not need a copyleft artifact as its supported renderer boundary.
 
@@ -97,6 +97,9 @@ The CLI uses stable discovery order, rejects symbolic links and output collision
 ### Language Server
 
 `@contextualwisdomlab/diagramweave-language-server` provides a transport-neutral LSP 3.18 session for local diagnostics and conservative source-backed language features, including document symbols, declaration completion, folding ranges, hover, same-document definition, and references.
+
+The public compatibility contract remains explicit. Document outlines use capability-negotiated `textDocument/documentSymbol`. The Hierarchical-outline product slice returns the authoritative tree when a client advertises `hierarchicalDocumentSymbolSupport: true`; legacy clients receive `SymbolInformation[]`. Declaration completion is capability-gated
+`textDocument/completion`, and Studio, IDE extensions, naruon, and other CWL hosts reuse this package. Folding advertises `foldingRangeProvider` and serves `textDocument/foldingRange`; same-document reference navigation serves `textDocument/references`.
 
 `@contextualwisdomlab/diagramweave-language-server-stdio` exposes the same session through bounded JSON-RPC stdio as `dweave-lsp`. Hosts supply Java and the approved PlantUML artifact explicitly:
 
