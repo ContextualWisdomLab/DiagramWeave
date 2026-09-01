@@ -1,5 +1,7 @@
 # DiagramWeave
 
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/ContextualWisdomLab/DiagramWeave)
+
 DiagramWeave is a source-first, AI-native editor platform for PlantUML and future text diagram languages. Manual editing remains authoritative and fully usable without an account, network connection, or LLM. Model output is treated as an untrusted, revision-bound proposal that must pass local validation and explicit review before application.
 
 ## Foundation packages
