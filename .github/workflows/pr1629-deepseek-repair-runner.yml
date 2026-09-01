@@ -1,0 +1,101 @@
+name: PR 1629 DeepSeek repair runner
+
+on:
+  push:
+    branches:
+      - chore/pr1629-deepseek-repair-runner
+    paths:
+      - .github/workflows/pr1629-deepseek-repair-runner.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: diagramweave-pr1629-deepseek-repair
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    if: github.repository == 'ContextualWisdomLab/DiagramWeave'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      TARGET_REPOSITORY: ContextualWisdomLab/.github
+      TARGET_BRANCH: fix/no-heuristic-review-admission-current-main
+      TARGET_HEAD: 2bb0a0a721e1e47ea9c41d93e83dcb7c85dc2506
+      TARGET_TOKEN: ${{ secrets.PR_REVIEW_MERGE_TOKEN || secrets.OPENCODE_APPROVE_TOKEN }}
+    steps:
+      - name: Require cross-repository writer token
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "$TARGET_TOKEN" ]; then
+            echo 'PR_REVIEW_MERGE_TOKEN or OPENCODE_APPROVE_TOKEN is required' >&2
+            exit 1
+          fi
+
+      - name: Harden runner
+        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+        with:
+          egress-policy: audit
+
+      - name: Checkout immutable target head
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          repository: ${{ env.TARGET_REPOSITORY }}
+          ref: ${{ env.TARGET_HEAD }}
+          token: ${{ env.TARGET_TOKEN }}
+          fetch-depth: 0
+          persist-credentials: true
+          path: target
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+
+      - name: Install hash-locked test tooling
+        working-directory: target
+        run: >-
+          python -m pip install --disable-pip-version-check --require-hashes
+          -r requirements-opencode-review-ci-hashes.txt
+
+      - name: Verify immutable target input
+        working-directory: target
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$TARGET_HEAD"
+          test "$(git status --short)" = ""
+          remote_head="$(git ls-remote origin "refs/heads/$TARGET_BRANCH" | awk '{print $1}')"
+          test "$remote_head" = "$TARGET_HEAD"
+          git checkout -B "$TARGET_BRANCH" "$TARGET_HEAD"
+
+      - name: Execute RED-GREEN repair transaction
+        working-directory: target
+        run: python scripts/ci/repair_pr1629_deepseek_preflight_followup.py
+
+      - name: Commit and publish only verified source
+        working-directory: target
+        shell: bash
+        run: |
+          set -euo pipefail
+          test ! -e scripts/ci/repair_pr1629_deepseek_preflight.py
+          test ! -e scripts/ci/repair_pr1629_deepseek_preflight_followup.py
+          test ! -e .github/workflows/pr1629-deepseek-preflight-repair.yml
+          git diff --check
+          git add -A
+          if git diff --cached --quiet; then
+            echo 'repair produced no publishable change' >&2
+            exit 1
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'fix(review): recover transient DeepSeek preflight failures'
+
+          remote_head="$(git ls-remote origin "refs/heads/$TARGET_BRANCH" | awk '{print $1}')"
+          if [ "$remote_head" != "$TARGET_HEAD" ]; then
+            echo "target branch moved: expected $TARGET_HEAD, found $remote_head" >&2
+            exit 1
+          fi
+          git push origin "HEAD:refs/heads/$TARGET_BRANCH"
