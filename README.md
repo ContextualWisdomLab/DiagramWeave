@@ -2,13 +2,44 @@
 
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/ContextualWisdomLab/DiagramWeave)
 
-DiagramWeave is a source-first, AI-native editor platform for PlantUML and future text diagram languages. Manual editing remains authoritative and fully usable without an account, network connection, or LLM. Model output is treated as an untrusted, revision-bound proposal that must pass local validation and explicit review before application.
+**Source-first diagram editing with revision-safe AI proposals, local rendering, and IDE-grade language tooling.**
 
-## Foundation packages
+DiagramWeave is a modular editor platform for PlantUML and future text diagram languages. The diagram source remains authoritative: manual editing works without an account, network connection, or LLM, while model output is treated as an untrusted proposal bound to the exact source revision and must pass local validation before a host can apply it.
 
-### `@contextualwisdomlab/diagramweave-core`
+The repository provides independently reusable packages for source revision control, optional Contextual Orchestrator proposals, local rendering, deterministic CLI workflows, and Language Server Protocol integration. The Studio application remains a product direction rather than a shipped release.
 
-A zero-dependency trust kernel for deterministic revisions and safe source patches:
+## Why DiagramWeave
+
+AI-assisted diagram editing becomes risky when a model can silently rewrite source, when rendering executes with ambient host authority, or when IDE features invent structure that the source does not prove. DiagramWeave separates those responsibilities.
+
+| Need | What DiagramWeave provides |
+| --- | --- |
+| Safe manual editing | Source remains the authoritative document |
+| AI assistance | Revision-bound edit proposals, never implicit mutations |
+| Local rendering | Bounded PlantUML subprocess boundary with sanitized diagnostics |
+| CI usage | Deterministic validation/rendering CLI |
+| IDE integration | Transport-neutral LSP plus bounded stdio adapter |
+| Reuse by other CWL products | Small workspace packages instead of a mandatory Studio app |
+| Evidence preservation | Exact source hash, validated scope, immutable proposal/diagnostic objects |
+
+## Current maturity
+
+The root package is private and versioned `0.0.0`: **DiagramWeave is an unreleased foundation, not a published product release**. The current repository already contains reusable Core, Contextual Orchestrator adapter, PlantUML renderer, CLI, Language Server, and stdio transport packages. A complete Studio UI, broad diagram-language support, release packaging, cross-platform product evidence, and production distribution remain separate milestones.
+
+No customer, deployment, certification, adoption, or published-package claim is implied by the presence of source code or passing repository tests.
+
+## Quick start
+
+DiagramWeave currently requires Node.js 22 or 24.
+
+```bash
+npm ci
+npm run verify
+```
+
+`npm run verify` runs syntax checks, behavior tests, 100% production line/branch/function coverage gates, and production JSDoc coverage.
+
+For a minimal source-proposal workflow, use the Core package:
 
 ```js
 import {
@@ -34,169 +65,40 @@ const preview = previewEditProposal(source, proposal);
 console.log(preview.nextSource);
 ```
 
-Core never reads files, calls a model, renders a diagram, writes a database, or applies hidden mutations.
+The preview does not save or apply the edit. The host remains responsible for review, acceptance, persistence, and version control.
 
-### `@contextualwisdomlab/diagramweave-contextual-orchestrator`
+## Product surfaces
 
-The default remote adapter for [Contextual Orchestrator](https://github.com/ContextualWisdomLab/contextual-orchestrator):
+### Core
 
-```js
-import {
-  createContextualOrchestratorClient,
-} from '@contextualwisdomlab/diagramweave-contextual-orchestrator';
+`@contextualwisdomlab/diagramweave-core` is the zero-dependency trust kernel. It owns deterministic source hashes, proposal validation, scope/revision checks, and safe preview behavior. It does not read files, call models, render diagrams, or perform hidden mutations.
 
-const client = createContextualOrchestratorClient({
-  baseUrl: 'https://orchestrator.example.com',
-  token: await hostKeychain.read('diagramweave_orchestrator_token'),
-});
+### Contextual Orchestrator adapter
 
-const proposal = await client.requestEditProposal({
-  documentId: 'diagram_document_alpha',
-  source,
-  operationType: 'modify_selection',
-  requestedScope: { start: 24, end: 29 },
-  instruction: 'Change the selected label to goodbye.',
-});
-```
+`@contextualwisdomlab/diagramweave-contextual-orchestrator` requests bounded edit proposals through [`ContextualWisdomLab/contextual-orchestrator`](https://github.com/ContextualWisdomLab/contextual-orchestrator). Provider routing and credentials remain owned by Contextual Orchestrator. The adapter returns Core-validated proposals and never saves them automatically.
 
-The adapter permits remote HTTPS and loopback-only HTTP, bounds context, sends no files or environment variables automatically, rejects provider error bodies, parses strict assistant JSON, and returns only Core-validated proposals. It never saves or applies the returned edit.
+### Local PlantUML renderer
 
-### `@contextualwisdomlab/diagramweave-plantuml-renderer`
+`@contextualwisdomlab/diagramweave-plantuml-renderer` invokes a host-supplied Java executable and PlantUML JAR without a shell, with an empty child environment, bounded source/output/diagnostic/deadline limits, PlantUML `SANDBOX`, metadata suppression, and sanitized fixed-shape diagnostics.
 
-A local, sandboxed renderer that receives PlantUML only through stdin and returns a bounded, immutable SVG or PNG artifact:
+DiagramWeave does **not** bundle or download PlantUML. ContextualWisdomLab integrations must supply a commercially compatible **Apache License 2.0 or MIT PlantUML distribution** and retain its required notices; GPL/LGPL PlantUML artifacts are not an accepted inbound path for this ecosystem. PlantUML publishes Apache-2.0 and MIT builds that retain UML rendering capability, so the product does not need a copyleft artifact as its supported renderer boundary.
 
-```js
-import {
-  createPlantUmlRenderer,
-  parsePlantUmlStandardReport,
-  plantUmlRendererLimits,
-  sanitizePlantUmlDiagnostics,
-} from '@contextualwisdomlab/diagramweave-plantuml-renderer';
+### CLI
 
-const renderer = createPlantUmlRenderer({
-  javaPath: '/absolute/path/to/java',
-  jarPath: '/absolute/path/to/plantuml.jar',
-});
-
-const artifact = await renderer.render({
-  source,
-  format: 'svg',
-});
-
-const svg = Buffer.from(artifact.dataBase64, 'base64').toString('utf8');
-```
-
-`plantUmlRendererLimits` exposes the frozen default and supported range contract for host configuration. The renderer requires host-supplied absolute Java and JAR paths. It invokes no shell, passes an empty child environment, enables PlantUML `SANDBOX`, disables source metadata, enforces fail-fast syntax checking plus source/output/diagnostic/deadline limits, validates the output structure, and never exposes raw stderr or raw PlantUML labels.
-
-`parsePlantUmlStandardReport` converts bounded `-stdrpt:1` output into deeply frozen, LSP-compatible line diagnostics. `sanitizePlantUmlDiagnostics` revalidates and clones those records before they cross package, worker, service, CLI, Studio, Language Server, or naruon boundaries. Only fixed product messages, bounded lines, a zero-width range, severity `1`, and code `plantuml.syntax` are exposed.
-
-DiagramWeave does not bundle or download PlantUML in this foundation, so distributors must choose a compatible PlantUML artifact and satisfy its license notices separately.
-
-### `@contextualwisdomlab/diagramweave-cli`
-
-A deterministic manual and CI surface for validating or rendering one PlantUML file or an entire directory without an LLM:
+`@contextualwisdomlab/diagramweave-cli` provides deterministic validation and rendering for one file or a directory:
 
 ```bash
 dweave validate ./diagrams --java /absolute/path/to/java --jar /absolute/path/to/plantuml.jar
 dweave render ./diagrams --output ./artifacts --java /absolute/path/to/java --jar /absolute/path/to/plantuml.jar
 ```
 
-The CLI discovers `.puml` and `.plantuml` files in stable lexical order, rejects symbolic links and output collisions, writes artifacts exclusively or by explicit atomic replacement, and emits source-free human or JSON reports. Located syntax failures include the safe relative path and PlantUML line while JSON retains the LSP-compatible zero-based range. The CLI validates and clones renderer diagnostics instead of trusting an arbitrary thrown object.
+The CLI uses stable discovery order, rejects symbolic links and output collisions, publishes artifacts with bounded filesystem rules, and can emit source-free structured diagnostics. See [`packages/cli/README.md`](packages/cli/README.md) for the full command and embedding contract.
 
-The package is independently reusable by naruon, CI, and other CWL hosts. See [`packages/cli/README.md`](packages/cli/README.md) for the complete command, diagnostic, exit-code, filesystem, and embedding contracts.
+### Language Server
 
-### `@contextualwisdomlab/diagramweave-language-server`
+`@contextualwisdomlab/diagramweave-language-server` provides a transport-neutral LSP 3.18 session for local diagnostics and conservative source-backed language features, including document symbols, declaration completion, folding ranges, hover, same-document definition, and references.
 
-A transport-neutral LSP 3.18 session for local PlantUML diagnostics,
-capability-negotiated document outlines, deterministic declaration completion,
-conservative folding ranges, evidence-bounded declaration hover, same-document
-Go to Definition, and conservative Find All References:
-
-```js
-import {
-  createLanguageServerSession,
-} from '@contextualwisdomlab/diagramweave-language-server';
-
-const session = createLanguageServerSession({
-  javaPath: '/absolute/path/to/java',
-  jarPath: '/absolute/path/to/plantuml.jar',
-  publishNotification(method, params) {
-    host.sendNotification(method, params);
-  },
-});
-
-await session.request('initialize', {
-  capabilities: {
-    textDocument: {
-      documentSymbol: {
-        hierarchicalDocumentSymbolSupport: true,
-      },
-      completion: {},
-      foldingRange: {
-        rangeLimit: 1024,
-        lineFoldingOnly: true,
-      },
-      hover: {
-        contentFormat: ['markdown', 'plaintext'],
-      },
-      definition: {},
-      references: {},
-    },
-  },
-});
-```
-
-The session uses full-document synchronization, local file-URI identifiers,
-source-free renderer diagnostics, exact version/generation checks,
-capability-negotiated `textDocument/documentSymbol`, capability-gated
-`textDocument/completion`, capability-gated `textDocument/foldingRange`,
-capability-gated `textDocument/hover`, capability-gated `textDocument/definition`,
-and capability-gated `textDocument/references`. Clients that explicitly advertise
-`hierarchicalDocumentSymbolSupport: true` receive the bounded immutable
-`DocumentSymbol[]` tree. Other clients receive source-order
-`SymbolInformation[]` from the same authoritative tree, with the validated local
-URI, enclosing range, and immediate `containerName` when ownership was proven.
-
-The outline recognizes high-signal explicit PlantUML declarations and adds
-`children` only for complete unquoted package or namespace brace scopes with
-stack-ordered, indentation-matched standalone closers. Ambiguous, unmatched,
-quoted, commented, macro, include, and renderer-dependent structure remains
-flat. Completion filters the same declaration families from a fixed local
-catalog and returns exact UTF-16 text edits only at safe line-leading prefixes.
-It performs no LLM, renderer, file, include, macro, workspace, or network work.
-
-Folding advertises `foldingRangeProvider: true` only when the client supplies a
-valid plain `textDocument.foldingRange` capability. It reuses the same
-authoritative document-symbol tree, honors `rangeLimit` up to the 1,024-symbol
-ceiling, accepts boolean `lineFoldingOnly`, and returns immutable source-order
-package and namespace ranges without a second parser.
-
-Hover advertises `hoverProvider: true` only when the client supplies a valid
-plain `textDocument.hover` capability. It negotiates a bounded ordered
-`contentFormat` preference, defaults to plaintext, and returns evidence only
-when the requested UTF-16 position lies inside one exact authoritative
-declaration-label selection range. The result contains fixed declaration detail,
-displayed name, immediate proven package or namespace context, and the same
-frozen range used by the outline. Valid non-label positions return `null`, and
-Markdown uses a dynamically sized fence that source labels cannot terminate.
-
-Definition and references reuse the same authoritative declaration tree and
-conservative explicit-identifier grammar. `textDocument/definition` resolves only
-a uniquely proven same-document declaration. `textDocument/references` requires
-a boolean `context.includeDeclaration`, returns deeply frozen source-order
-`Location[]`, and fails by omission for ambiguous or unsupported identities. The
-reference set is capped at 4,096 locations and overflow fails closed rather than
-silently truncating evidence. Neither operation invokes an LLM, renderer,
-filesystem, include processor, macro processor, workspace scan, shell, or
-network service.
-
-Studio, IDE extensions, naruon, and other CWL hosts reuse this package without
-importing a process transport.
-
-### `@contextualwisdomlab/diagramweave-language-server-stdio`
-
-A bounded JSON-RPC stdio adapter and `dweave-lsp` executable for standard IDE
-integration:
+`@contextualwisdomlab/diagramweave-language-server-stdio` exposes the same session through bounded JSON-RPC stdio as `dweave-lsp`. Hosts supply Java and the approved PlantUML artifact explicitly:
 
 ```bash
 DIAGRAMWEAVE_JAVA_PATH=/absolute/path/to/java \
@@ -204,95 +106,73 @@ DIAGRAMWEAVE_PLANTUML_JAR_PATH=/absolute/path/to/plantuml.jar \
 dweave-lsp
 ```
 
-The adapter validates ASCII Content-Length framing and UTF-8 JSON-RPC 2.0,
-serializes input and output, bounds messages and queues, and returns exit code
-zero only after successful shutdown followed by exit. It imports the same
-transport-neutral session, so diagnostics, negotiated document symbols,
-declaration completion, conservative folding ranges, declaration hover,
-same-document definition, and same-document references do not diverge between
-embedded and process-based hosts. Invalid completion, hover, definition, and
-reference positions are returned as fixed JSON-RPC Invalid params responses
-without source or URI values.
-
-## Product direction
-
-The repository is the modular foundation for:
-
-- **DiagramWeave Studio:** manual source editor, preview, diagnostics, hierarchical outline, completion, declaration hover, Go to Definition, Find All References, Context Inspector, diff review, recovery, and accessible approval flows;
-- **DiagramWeave Renderer:** implemented local PlantUML package with stdin-only rendering, `SANDBOX`, metadata suppression, bounded resources, safe line diagnostics, and local and remote includes unavailable;
-- **DiagramWeave Language Server:** implemented diagnostics, capability-negotiated hierarchical or legacy-flat document outlines, deterministic declaration completion, conservative package and namespace folding ranges, evidence-bounded explicit-declaration hover, conservative same-document definition and references, and bounded stdio integration reusable by Studio and external IDEs;
-- **DiagramWeave CLI:** implemented deterministic validation, rendering, atomic publication, and structured diagnostic foundation, with formatting and policy checks remaining future work;
-- **naruon and CWL integration:** embeddable Core, renderer, diagnostics, CLI, Language Server, stdio transport, and provider adapters without requiring the Studio application.
-
-The detailed product contract is in [`docs/product/diagramweave-prd.md`](docs/product/diagramweave-prd.md). Component boundaries and trust decisions are in [`docs/architecture.md`](docs/architecture.md) and [`docs/security-model.md`](docs/security-model.md).
+Language features fail by omission when the source does not prove a safe answer. They do not invoke an LLM, renderer, workspace scan, include processor, macro processor, shell, or network service merely to fabricate semantic evidence.
 
 ## Trust model
 
-1. Source files are authoritative.
-2. The host chooses and displays context sent to an LLM.
-3. The LLM returns an edit proposal, never an implicit mutation.
-4. The proposal references the exact SHA-256 source revision.
-5. Schema, range, replacement, and scope expansion are validated locally.
-6. Expanded edits require an explicit reason and host approval.
-7. Raw child output remains inside the renderer boundary; hosts receive only bounded, fixed-message diagnostics.
-8. Outline, completion, folding, hover, definition, and reference records are derived only from sanitized accepted open-document snapshots and are never inferred from remote content.
-9. Outline hierarchy requires complete stack-ordered package or namespace braces with matching indentation; ambiguous or malformed structure remains flat.
-10. Non-hierarchical clients receive immutable `SymbolInformation[]` from the same authoritative symbol tree rather than a second parser.
-11. Declaration completion fails by omission in comments, strings, relations, directives, completed declarations, and ambiguous cursor positions.
-12. Folding ranges are derived only from complete nonempty package or namespace scopes in the same authoritative symbol tree; ambiguous structure produces no fold.
-13. Declaration hover matches only exact authoritative label selections, returns `null` elsewhere, and cannot invoke an LLM, renderer, file reader, include processor, macro processor, workspace scan, shell, or network service.
-14. Same-document definition and references use exact case-sensitive identity, fail by omission for ambiguity, and never promote comments, labels, directives, or unrelated text into semantic evidence.
-15. Reference results are bounded to 4,096 locations and overflow fails closed rather than returning incomplete evidence.
-16. The user remains responsible for accepting, rejecting, saving, and committing changes.
+```text
+Authoritative diagram source
+          │
+          ├──────────────► local parser / LSP evidence
+          │
+          ├──────────────► sandboxed local renderer
+          │
+          └─ optional bounded context ─► Contextual Orchestrator
+                                           │
+                                           ▼
+                                    untrusted proposal
+                                           │
+                         revision / schema / scope validation
+                                           │
+                                           ▼
+                                      host review
+                                           │
+                                      apply or reject
+```
 
-## Development
+The critical invariants are simple: source is authoritative; context disclosure is host-controlled; proposals reference an exact SHA-256 revision; scope expansion requires an explicit reason and host approval; renderer output is sanitized before crossing the boundary; and IDE records are derived only from accepted local source evidence.
 
-DiagramWeave requires Node.js 22 or 24.
+See [`docs/security-model.md`](docs/security-model.md) for the full trust model and [`docs/architecture.md`](docs/architecture.md) for package boundaries.
+
+## Ecosystem integration
+
+DiagramWeave remains independently reusable. Naruon, CI systems, IDE extensions, or a future Studio can consume its packages without importing one another's application state.
+
+- `contextual-orchestrator` owns provider/model routing and credentials.
+- Naruon may consume DiagramWeave's published package/CLI/LSP contracts but does not become DiagramWeave's source authority.
+- Hosts own file persistence, user approval, keychain/secret access, and process transport outside the bounded packages.
+- The renderer owns only validated local rendering; it does not own the PlantUML distribution or its license.
+
+## Verification
 
 ```bash
-npm ci
 npm run verify
 ```
 
-`npm run verify` enforces syntax, behavior, production line/branch/function coverage at 100%, and production JSDoc coverage. Runtime code uses Node.js built-ins and independently reusable DiagramWeave workspace packages.
+Repository verification proves the current source contract only. It does not establish a published release, cross-platform production deployment, third-party renderer license compliance, or customer acceptance. Integration decisions must use checks and reviews bound to the unchanged exact pull-request head.
 
-## Documentation
+## Documentation map
 
-- [Product requirements](docs/product/diagramweave-prd.md)
-- [Declaration-completion product slice](docs/product/declaration-completion.md)
-- [Hierarchical-outline product slice](docs/product/hierarchical-document-outline.md)
-- [Document-symbol compatibility product slice](docs/product/document-symbol-compatibility.md)
-- [Conservative folding-ranges product slice](docs/product/folding-ranges.md)
-- [Evidence-bounded declaration-hover product slice](docs/product/declaration-hover.md)
-- [Same-document definition product slice](docs/product/same-document-definitions.md)
-- [Same-document references product slice](docs/product/same-document-references.md)
-- [Architecture](docs/architecture.md)
-- [Security model](docs/security-model.md)
-- [Structured diagnostics research](docs/research/plantuml-structured-diagnostics.md)
-- [PlantUML document-symbol research](docs/research/plantuml-document-symbols.md)
-- [PlantUML declaration-completion research](docs/research/plantuml-declaration-completion.md)
-- [PlantUML hierarchical-symbol research](docs/research/plantuml-hierarchical-document-symbols.md)
-- [LSP document-symbol compatibility research](docs/research/lsp-document-symbol-compatibility.md)
-- [PlantUML folding-ranges research](docs/research/plantuml-folding-ranges.md)
-- [PlantUML declaration-hover research](docs/research/plantuml-declaration-hover.md)
-- [PlantUML same-document definition research](docs/research/plantuml-same-document-definitions.md)
-- [PlantUML same-document reference research](docs/research/plantuml-same-document-references.md)
-- [Contextual Orchestrator operations](docs/operations/contextual-orchestrator.md)
-- [PlantUML renderer operations](docs/operations/plantuml-renderer.md)
-- [Document-symbol operations](docs/operations/document-symbols.md)
-- [Declaration-completion operations](docs/operations/declaration-completion.md)
-- [Hierarchical document-symbol operations](docs/operations/hierarchical-document-symbols.md)
-- [Document-symbol compatibility operations](docs/operations/document-symbol-compatibility.md)
-- [Folding-ranges operations](docs/operations/folding-ranges.md)
-- [Declaration-hover operations](docs/operations/declaration-hover.md)
-- [Same-document definition operations](docs/operations/same-document-definitions.md)
-- [Same-document reference operations](docs/operations/same-document-references.md)
-- [DiagramWeave Language Server](packages/language-server/README.md)
-- [DiagramWeave stdio Language Server](packages/language-server-stdio/README.md)
-- [DiagramWeave CLI](packages/cli/README.md)
-- [Security reporting](SECURITY.md)
-- [Change history](CHANGELOG.md)
+| Goal | Start here |
+| --- | --- |
+| Product requirements | [`docs/product/diagramweave-prd.md`](docs/product/diagramweave-prd.md) |
+| Architecture | [`docs/architecture.md`](docs/architecture.md) |
+| Security/trust model | [`docs/security-model.md`](docs/security-model.md) |
+| CLI integration | [`packages/cli/README.md`](packages/cli/README.md) |
+| Language Server | [`packages/language-server/README.md`](packages/language-server/README.md) |
+| stdio LSP adapter | [`packages/language-server-stdio/README.md`](packages/language-server-stdio/README.md) |
+| Contextual Orchestrator operations | [`docs/operations/contextual-orchestrator.md`](docs/operations/contextual-orchestrator.md) |
+| Renderer operations | [`docs/operations/plantuml-renderer.md`](docs/operations/plantuml-renderer.md) |
+| Research notes | [`docs/research/`](docs/research/) |
+| Change history | [`CHANGELOG.md`](CHANGELOG.md) |
+| Security reporting | [`SECURITY.md`](SECURITY.md) |
 
-## Release status
+Detailed feature-slice and operations documents remain in `docs/product/` and `docs/operations/`; the root README intentionally stays at product and integration level.
 
-No product release has been published. Version `0.0.0` represents an unreleased foundation. A version bump and release require an integrated, reviewed release candidate, updated `CHANGELOG.md`, cross-platform evidence, package verification, and repository policy compliance.
+## Contributing
+
+Preserve source authority and package boundaries. New AI behavior must remain proposal-only until deterministic validation and explicit host review; new language features must be source-evidence-backed; renderer changes must preserve the no-shell, no-ambient-environment and bounded-output contract. Update tests and the relevant product/architecture/security documentation together when a public contract changes.
+
+## License
+
+DiagramWeave source is licensed under the [MIT License](LICENSE). Third-party tools and artifacts retain their own terms. ContextualWisdomLab-supported PlantUML integration uses the upstream Apache-2.0 or MIT flavor rather than a GPL-family distribution.
