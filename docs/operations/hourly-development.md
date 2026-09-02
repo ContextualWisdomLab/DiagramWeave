@@ -40,7 +40,7 @@ Independent approval cannot be manufactured. Queued or pending Checks cannot be 
 
 ### Product-development mode
 
-When the verified inventory contains no open pull request, the workflow may run exactly one bounded OpenCode session against NVIDIA NIM and package one buyer-visible increment as one new pull request. Immediately before creating that PR it re-fetches the queue; if another PR appeared after the initial gate, it fails closed rather than creating duplicate work.
+When the verified inventory contains no open pull request, the workflow may run exactly one bounded OpenCode session routed through the local contextual-orchestrator gateway sidecar and package one buyer-visible increment as one new pull request. Immediately before creating that PR it re-fetches the queue; if another PR appeared after the initial gate, it fails closed rather than creating duplicate work.
 
 The delegated session preserves DiagramWeave's source-first manual editing mode, uses or improves Contextual Orchestrator for product LLM work, retains modular MSA compatibility with central `.github`, naruon, and other CWL services, and satisfies the repository's test, coverage, docstring, security, documentation, and design contracts.
 
@@ -62,13 +62,15 @@ Do not add a personal access token merely to dispatch another central scheduler 
 
 ### Remediation and product-development agent
 
-The development agent authenticates to NVIDIA NIM with the `NVIDIA_NIM_API_KEY` organization secret. That value is injected as `NVIDIA_API_KEY` only after the inventory gate selects an actual model-backed path, and only into the OpenCode model-execution step.
+The development agent's model traffic is served by a loopback `contextual-orchestrator` gateway sidecar, not by a direct provider call. The workflow vendors `ContextualWisdomLab/contextual-orchestrator` at a pinned commit (`ORCHESTRATOR_PIN_SHA`, the same commit `ContextualWisdomLab/.github`'s central review sidecar and `contextual-orchestrator`'s own hourly loop pin to), installs its hash-pinned dependencies, and starts it with auto-discovery against whichever of five organization provider secrets are present: `BYTEZ_API_KEY`, `NVIDIA_NIM_API_KEY`, `NVIDIA_NIM_API_KEY_SUB`, `OPENROUTER_API_KEY`, `OPENAI_API_KEY`. At least one must be present for a model-backed path; a missing individual secret only narrows the gateway's discovered pool.
+
+OpenCode itself never receives a raw provider key. It is configured with an `{env:CONTEXTUAL_ORCHESTRATOR_TOKEN}` reference to the gateway's own ephemeral, per-run bearer token, and its model is set to the gateway's fail-closed, zero-cost virtual pool: `contextual_orchestrator_gateway/orchestrator/free`. The gateway's own auto-discovery, not this workflow, owns fallback across real underlying models and providers.
 
 The built-in token is used by shell steps for inventory, bounded evidence capture, exact-head comparison, branch push, and product PR creation. The OpenCode process is launched with `GH_TOKEN`, `GITHUB_TOKEN`, `REPOSITORY_TOKEN`, and Actions OIDC request variables removed from its environment. Git publication uses an ephemeral masked HTTP header rather than a credential-bearing remote URL.
 
 This replaces the retired Copilot Agent Tasks integration and its `COPILOT_GITHUB_TOKEN` user token. No Copilot subscription is required and the Agent Tasks preview API is not called.
 
-If a model-backed path is selected and the NIM secret is absent, the run fails visibly and creates nothing. Missing credentials are not repaired by inventing new secret names.
+If a model-backed path is selected and every one of the five provider secrets is absent, the run fails visibly and creates nothing. Missing credentials are not repaired by inventing new secret names.
 
 ## Dry run
 
@@ -77,11 +79,11 @@ Use the Actions interface to run either workflow with `dry_run: true`.
 - PR maintenance invokes the pinned central scheduler in dry-run mode and does not require a separate repository-dispatch credential.
 - The development workflow performs the live PR inventory, selects the mode that a real run would use, and prints the exact bounded agent contract without checking out code, reading the model secret, or invoking a model.
 
-A dry run does not require `NVIDIA_NIM_API_KEY`. It still requires successful pull-request inventory so an API failure cannot be disguised as a successful simulation.
+A dry run does not require any of the five gateway provider secrets, including `NVIDIA_NIM_API_KEY`. It still requires successful pull-request inventory so an API failure cannot be disguised as a successful simulation.
 
 ## Contextual Orchestrator boundary
 
-All product LLM functionality must use or improve `ContextualWisdomLab/contextual-orchestrator` through the DiagramWeave adapter. The hourly workflow itself does not call the product inference API. Its OpenCode session uses NVIDIA NIM only as the delegated development agent's reasoning backend and instructs the agent to preserve the Contextual Orchestrator product boundary.
+All product LLM functionality must use or improve `ContextualWisdomLab/contextual-orchestrator` through the DiagramWeave adapter (`packages/contextual-orchestrator`, see `docs/operations/contextual-orchestrator.md`). The hourly workflow itself does not call that product inference API path. Its OpenCode session's own reasoning backend is served by a separate, workflow-local `contextual-orchestrator` gateway sidecar (see above) routed to the same organization's `orchestrator/free` pool, and the delegated agent is instructed to preserve the product's distinct Contextual Orchestrator boundary rather than conflate the two.
 
 ## Failure handling
 
@@ -93,9 +95,10 @@ All product LLM functionality must use or improve `ContextualWisdomLab/contextua
 - Valid finding has a feasible repository change: reproduce it test-first, implement the smallest correction, run complete verification, push normally, and re-fetch exact-head state.
 - Independent approval remains absent: do not synthesize it.
 - A required Check is queued or pending: do not call it successful. Continue with the next safe, non-conflicting activity when one exists.
-- Dry run: print the selected task contract without reading or requiring the NVIDIA model credential.
-- Selected model path lacks `NVIDIA_NIM_API_KEY`: fail before installing or invoking OpenCode.
-- Every NVIDIA NIM model candidate fails: reset partial work, fail visibly, and publish nothing.
+- Dry run: print the selected task contract without reading or requiring any gateway provider credential.
+- Selected model path lacks every one of the five gateway provider secrets: fail before installing or invoking OpenCode.
+- The vendored gateway sidecar fails to become healthy, or the checked-out commit does not match `ORCHESTRATOR_PIN_SHA`: fail before invoking OpenCode.
+- The gateway-routed development agent fails or times out: fail visibly and publish nothing.
 - Repository verification fails: publish nothing.
 - A product PR appears between inventory and publication: fail closed and create no duplicate pull request.
 - Delayed schedule: rely on the next scheduled run or invoke a manual dry run; do not add a duplicate scheduler.
@@ -105,4 +108,4 @@ All product LLM functionality must use or improve `ContextualWisdomLab/contextua
 
 To disable autonomous model-backed remediation and product creation, disable `Hourly Product Development` in GitHub Actions or remove its `schedule` event through a pull request. To disable repository-local hourly PR governance, disable `Hourly PR Maintenance`; organization-central event and sweep policies may still process PRs according to organization policy.
 
-Do not remove `NVIDIA_NIM_API_KEY` as an intentional disablement mechanism. Once deterministic gates select the model path, a missing required credential is an operational failure and remains visible rather than producing a false-green skip.
+Do not remove `NVIDIA_NIM_API_KEY` or the other four gateway provider secrets as an intentional disablement mechanism. Once deterministic gates select the model path, a fully missing credential set is an operational failure and remains visible rather than producing a false-green skip.

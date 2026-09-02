@@ -8,6 +8,18 @@ The project follows Semantic Versioning after the first release.
 
 ### Changed
 
+- Hourly development's own OpenCode reasoning backend no longer calls NVIDIA
+  NIM directly. It now vendors a pinned `ContextualWisdomLab/contextual-orchestrator`
+  gateway sidecar, seeds it from whichever of five organization provider
+  secrets are present, and routes through the fail-closed, zero-cost
+  `orchestrator/free` virtual pool, matching the pattern already landed in
+  `ContextualWisdomLab/.github`'s central review sidecar and
+  `contextual-orchestrator`'s own hourly loop. The sequential 3-model
+  `OPENCODE_MODEL_CANDIDATES` fallback list is retired; the gateway's own
+  auto-discovery now owns fallback across real providers and models. This is
+  unrelated to DiagramWeave's own product `Contextual Orchestrator` adapter
+  (`packages/contextual-orchestrator`), which is unchanged. See
+  [ContextualWisdomLab/DiagramWeave#35](https://github.com/ContextualWisdomLab/DiagramWeave/issues/35).
 - Hourly development now routes an open same-repository pull request into an
   RCA-driven exact-head remediation session, verifies candidate actions against
   live review and Check evidence, publishes only a normal fast-forward repair

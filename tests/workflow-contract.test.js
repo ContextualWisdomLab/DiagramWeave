@@ -46,7 +46,7 @@ test('hourly PR maintenance uses only the pinned reusable governance workflow', 
   );
 });
 
-test('hourly development performs RCA remediation or one bounded NIM product increment', async () => {
+test('hourly development performs RCA remediation or one bounded gateway-routed product increment', async () => {
   const workflow = await readRepositoryFile(
     '.github/workflows/hourly-product-development.yml',
   );
@@ -56,14 +56,27 @@ test('hourly development performs RCA remediation or one bounded NIM product inc
   assert.match(workflow, /group: hourly-product-development-\$\{\{ github\.repository \}\}/);
   assert.match(workflow, /cancel-in-progress: false/);
   assert.match(workflow, new RegExp(`github\\.repository == '${repositoryName}'`));
-  assert.match(workflow, /NVIDIA_API_KEY: \$\{\{ secrets\.NVIDIA_NIM_API_KEY \}\}/);
+  assert.match(workflow, /BYTEZ_API_KEY: \$\{\{ secrets\.BYTEZ_API_KEY \}\}/);
+  assert.match(workflow, /NVIDIA_NIM_API_KEY: \$\{\{ secrets\.NVIDIA_NIM_API_KEY \}\}/);
+  assert.match(workflow, /NVIDIA_NIM_API_KEY_SUB: \$\{\{ secrets\.NVIDIA_NIM_API_KEY_SUB \}\}/);
+  assert.match(workflow, /OPENROUTER_API_KEY: \$\{\{ secrets\.OPENROUTER_API_KEY \}\}/);
+  assert.match(workflow, /OPENAI_API_KEY: \$\{\{ secrets\.OPENAI_API_KEY \}\}/);
   assert.match(workflow, /gh pr list/);
   assert.match(workflow, /--state open/);
   assert.match(workflow, /reason=open_pull_request_remediation/);
   assert.match(workflow, /reason=pull_request_inventory_unavailable/);
-  assert.match(workflow, /reason=nim_api_key_unavailable/);
-  assert.match(workflow, /https:\/\/integrate\.api\.nvidia\.com\/v1/);
-  assert.match(workflow, /\{env:NVIDIA_API_KEY\}/);
+  assert.match(workflow, /reason=orchestrator_credential_unavailable/);
+  assert.match(workflow, /ContextualWisdomLab\/contextual-orchestrator\.git/);
+  assert.match(workflow, /ORCHESTRATOR_PIN_SHA: ["']045d17da5e2aea56a97e241ee158ab1628d78660["']/);
+  assert.match(workflow, /--require-hashes/);
+  assert.match(workflow, /--auto-discover-model-agents/);
+  assert.match(workflow, /scripts\.ci\.serve_seeded_gateway/);
+  assert.match(workflow, /contextual_orchestrator_gateway\/orchestrator\/free/);
+  assert.match(workflow, /\{env:CONTEXTUAL_ORCHESTRATOR_TOKEN\}/);
+  assert.doesNotMatch(workflow, /integrate\.api\.nvidia\.com/);
+  assert.doesNotMatch(workflow, /nvidia-nim\/nvidia\//);
+  assert.doesNotMatch(workflow, /enabled_providers/);
+  assert.doesNotMatch(workflow, /OPENCODE_MODEL_CANDIDATES/);
   assert.match(workflow, /persist-credentials: false/);
   assert.match(workflow, /env -u GH_TOKEN -u GITHUB_TOKEN -u REPOSITORY_TOKEN/);
   assert.match(workflow, /OPENCODE_VERSION: ["']1\.17\.13["']/);
@@ -142,7 +155,7 @@ test('hourly gate fails closed, preserves dry-run isolation, and selects exact-h
   assert.ok(jobStart >= 0 && stepsStart > jobStart);
   assert.doesNotMatch(
     workflow.slice(jobStart, stepsStart),
-    /NVIDIA_API_KEY: \$\{\{ secrets\.NVIDIA_NIM_API_KEY \}\}/,
+    /secrets\.(BYTEZ_API_KEY|NVIDIA_NIM_API_KEY|NVIDIA_NIM_API_KEY_SUB|OPENROUTER_API_KEY|OPENAI_API_KEY)/,
   );
 
   const checkout = workflowStep(
@@ -184,32 +197,54 @@ test('hourly gate fails closed, preserves dry-run isolation, and selects exact-h
   const dryRunStep = workflowStep(
     workflow,
     'Record dry-run decision',
-    'Require the NVIDIA NIM model credential',
+    'Require at least one contextual-orchestrator provider credential',
   );
   assert.match(dryRunStep, /steps\.gate\.outputs\.reason == 'dry_run'/);
 
   const credentialStep = workflowStep(
     workflow,
-    'Require the NVIDIA NIM model credential',
+    'Require at least one contextual-orchestrator provider credential',
     'Install the pinned OpenCode CLI',
   );
   assert.match(credentialStep, /if: steps\.gate\.outputs\.dispatch == 'true'/);
   assert.match(
     credentialStep,
-    /NVIDIA_API_KEY: \$\{\{ secrets\.NVIDIA_NIM_API_KEY \}\}/,
+    /NVIDIA_NIM_API_KEY: \$\{\{ secrets\.NVIDIA_NIM_API_KEY \}\}/,
   );
-  assert.match(credentialStep, /reason=nim_api_key_unavailable/);
+  assert.match(credentialStep, /provider_secret_count/);
+  assert.match(credentialStep, /reason=orchestrator_credential_unavailable/);
   assert.match(credentialStep, /exit 1/);
+
+  const vendorStep = workflowStep(
+    workflow,
+    'Vendor the contextual-orchestrator gateway',
+    'Start the contextual-orchestrator gateway with auto-discovery',
+  );
+  assert.match(vendorStep, /ORCHESTRATOR_PIN_SHA/);
+  assert.match(vendorStep, /--require-hashes/);
+
+  const gatewayStep = workflowStep(
+    workflow,
+    'Start the contextual-orchestrator gateway with auto-discovery',
+    'Point OpenCode at the local gateway',
+  );
+  assert.match(
+    gatewayStep,
+    /NVIDIA_NIM_API_KEY: \$\{\{ secrets\.NVIDIA_NIM_API_KEY \}\}/,
+  );
+  assert.match(gatewayStep, /CONTEXTUAL_ORCHESTRATOR_TOKEN/);
+  assert.match(gatewayStep, /healthz/);
 
   const modelStep = workflowStep(
     workflow,
-    'Run the NVIDIA NIM development agent',
+    'Run the gateway-routed development agent',
     'Set up Node.js for exact repository verification',
   );
   assert.match(
     modelStep,
-    /NVIDIA_API_KEY: \$\{\{ secrets\.NVIDIA_NIM_API_KEY \}\}/,
+    /opencode run "\$prompt" --model contextual_orchestrator_gateway\/orchestrator\/free/,
   );
+  assert.doesNotMatch(modelStep, /secrets\./);
 
   const publish = finalWorkflowStep(workflow, 'Publish one bounded mutation');
   assert.match(publish, /remote_head_sha/);
