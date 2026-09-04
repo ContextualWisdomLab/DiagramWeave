@@ -746,11 +746,11 @@ jobs:
             tail -n +2 PR_MESSAGE.md >"$body_file"
             rm -f PR_MESSAGE.md
           else
-            echo "Autonomous NVIDIA NIM increment; see the diff and CHANGELOG.md." \
+            echo "Autonomous orchestrator/free increment; see the diff and CHANGELOG.md." \
               >"$body_file"
           fi
 
-          branch="nim-agent/product-dev-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          branch="orchestrator-agent/product-dev-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           git checkout -b "$branch"
           git add -A
           git commit -m "$title"

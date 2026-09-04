@@ -75,6 +75,10 @@ test('hourly development performs RCA remediation or one bounded gateway-routed 
   assert.match(workflow, /\{env:CONTEXTUAL_ORCHESTRATOR_TOKEN\}/);
   assert.doesNotMatch(workflow, /integrate\.api\.nvidia\.com/);
   assert.doesNotMatch(workflow, /nvidia-nim\/nvidia\//);
+  assert.doesNotMatch(workflow, /Autonomous NVIDIA NIM increment/);
+  assert.doesNotMatch(workflow, /nim-agent\/product-dev/);
+  assert.match(workflow, /Autonomous orchestrator\/free increment/);
+  assert.match(workflow, /orchestrator-agent\/product-dev/);
   assert.doesNotMatch(workflow, /enabled_providers/);
   assert.doesNotMatch(workflow, /OPENCODE_MODEL_CANDIDATES/);
   assert.match(workflow, /persist-credentials: false/);

@@ -25,9 +25,9 @@ The project follows Semantic Versioning after the first release.
   live review and Check evidence, publishes only a normal fast-forward repair
   after full repository verification, and re-fetches post-push state.
 - When no pull request is open, the same credential-isolated OpenCode workflow
-  uses NVIDIA NIM (`NVIDIA_NIM_API_KEY`) to create at most one bounded product
-  pull request; it no longer assumes `COPILOT_GITHUB_TOKEN` or the Copilot
-  Agent Tasks API and rechecks the queue immediately before creation.
+  uses the gateway-owned `orchestrator/free` pool to create at most one bounded
+  product pull request; it no longer assumes `COPILOT_GITHUB_TOKEN` or the
+  Copilot Agent Tasks API and rechecks the queue immediately before creation.
 
 ### Security
 
