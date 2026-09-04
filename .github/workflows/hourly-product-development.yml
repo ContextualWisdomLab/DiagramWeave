@@ -41,7 +41,6 @@ jobs:
       REPOSITORY_TOKEN: ${{ github.token }}
       OPENCODE_VERSION: "1.17.13"
       OPENCODE_SHA256: 157afa289d1a8d9372de0ce19ac726119b937a1f6b201808d46f06e4e59bb348
-      OPENCODE_RUN_TIMEOUT_SECONDS: "2400"
       # Same governed commit ContextualWisdomLab/.github's central review
       # sidecar (scripts/ci/contextual_orchestrator_review_sidecar.sh) and
       # ContextualWisdomLab/contextual-orchestrator's own hourly loop pin to;
@@ -544,7 +543,8 @@ jobs:
           set -euo pipefail
           gateway_token="$(python -c 'import secrets; print(secrets.token_urlsafe(32))')"
           echo "::add-mask::$gateway_token"
-          echo "CONTEXTUAL_ORCHESTRATOR_TOKEN=$gateway_token" >>"$GITHUB_ENV"
+          token_file="$RUNNER_TEMP/contextual-orchestrator.token"
+          (umask 077 && printf '%s' "$gateway_token" >"$token_file")
           cd "$RUNNER_TEMP/contextual-orchestrator"
           # ORCHESTRATOR_PIN_SHA's scripts/ci/serve_seeded_gateway.py predates
           # that script's own --auth-token-key (KV-registered bootstrap token)
@@ -575,9 +575,18 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cat >"$GITHUB_WORKSPACE/opencode.json" <<'CONFIG'
+          agent_workspace="$RUNNER_TEMP/diagramweave-agent"
+          rm -rf "$agent_workspace"
+          git clone --quiet --local --no-hardlinks "$GITHUB_WORKSPACE" "$agent_workspace"
+          mkdir -p "$RUNNER_TEMP/agent-home" "$RUNNER_TEMP/agent-config"
+          sudo chown 65532:65532 "$RUNNER_TEMP/agent-home" "$RUNNER_TEMP/agent-config"
+          sudo chown -R 65532:65532 "$agent_workspace"
+          sudo chown -R root:root "$agent_workspace/.git"
+          sudo chmod -R go-w "$agent_workspace/.git"
+          gateway_token="$(cat "$RUNNER_TEMP/contextual-orchestrator.token")"
+          cat >"$agent_workspace/opencode.json" <<CONFIG
           {
-            "$schema": "https://opencode.ai/config.json",
+            "\$schema": "https://opencode.ai/config.json",
             "model": "contextual_orchestrator_gateway/orchestrator/free",
             "provider": {
               "contextual_orchestrator_gateway": {
@@ -585,7 +594,7 @@ jobs:
                 "name": "Contextual Orchestrator Gateway",
                 "options": {
                   "baseURL": "http://127.0.0.1:8000/v1",
-                  "apiKey": "{env:CONTEXTUAL_ORCHESTRATOR_TOKEN}"
+                  "apiKey": "$gateway_token"
                 },
                 "models": {
                   "orchestrator/free": { "name": "fail-closed zero-cost orchestration" }
@@ -594,21 +603,22 @@ jobs:
             }
           }
           CONFIG
-          echo "/opencode.json" >>"$GITHUB_WORKSPACE/.git/info/exclude"
+          sudo chown 65532:65532 "$agent_workspace/opencode.json"
 
       - name: Run the gateway-routed development agent
         if: steps.gate.outputs.dispatch == 'true'
         shell: bash
         run: |
           set -euo pipefail
-          cd "$GITHUB_WORKSPACE"
-
           prompt="$(cat "$RUNNER_TEMP/diagramweave-agent-prompt.md")"
           echo "::group::opencode contextual_orchestrator_gateway/orchestrator/free"
-          if ! timeout --kill-after=30s "${OPENCODE_RUN_TIMEOUT_SECONDS}s" \
-            env -u GH_TOKEN -u GITHUB_TOKEN -u REPOSITORY_TOKEN \
-            -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL \
-            opencode run "$prompt" --model contextual_orchestrator_gateway/orchestrator/free; then
+          if ! sudo -u '#65532' -g '#65532' env -i \
+            HOME="$RUNNER_TEMP/agent-home" \
+            PATH="$PATH" \
+            XDG_CONFIG_HOME="$RUNNER_TEMP/agent-config" \
+            opencode run "$prompt" \
+              --dir "$RUNNER_TEMP/diagramweave-agent" \
+              --model contextual_orchestrator_gateway/orchestrator/free; then
             echo "::endgroup::"
             echo "::error::The gateway-routed development agent failed; no work was proposed."
             exit 1
@@ -631,24 +641,37 @@ jobs:
           EXECUTION_MODE: ${{ steps.gate.outputs.mode }}
         run: |
           set -euo pipefail
-          cd "$GITHUB_WORKSPACE"
-          rm -f opencode.json
+          agent_workspace="$RUNNER_TEMP/diagramweave-agent"
+          sudo chown -R "$(id -u):$(id -g)" "$agent_workspace"
+          rm -f "$agent_workspace/opencode.json"
           if [ "$EXECUTION_MODE" = "remediation" ]; then
-            rm -f PR_MESSAGE.md
+            rm -f "$agent_workspace/PR_MESSAGE.md"
           fi
 
           meaningful_status="$(
-            git status --porcelain --untracked-files=all \
+            git -C "$agent_workspace" status --porcelain --untracked-files=all \
               | grep -vE '^\?\? PR_MESSAGE\.md$' || true
           )"
           if [ -z "$meaningful_status" ]; then
-            rm -f PR_MESSAGE.md
+            rm -f "$agent_workspace/PR_MESSAGE.md"
             echo "mutation=false" >>"$GITHUB_OUTPUT"
             echo "No safe repository mutation was produced." >>"$GITHUB_STEP_SUMMARY"
             exit 0
           fi
 
           echo "mutation=true" >>"$GITHUB_OUTPUT"
+          git -C "$agent_workspace" add -N -- .
+          git -C "$agent_workspace" diff --name-only -z --diff-filter=ACDMRTUXB | \
+            python -c 'import os,sys; root=os.environ["RUNNER_TEMP"]+"/diagramweave-agent"; paths=sys.stdin.buffer.read().split(b"\0"); bad=[p for p in paths if p and os.path.lexists(q:=os.path.join(root, os.fsdecode(p))) and (os.path.islink(q) or not os.path.isfile(q))]; sys.exit(f"unsafe changed file: {bad[0]!r}" if bad else 0)'
+          if git -C "$agent_workspace" diff --summary | grep -Eq 'mode change|create mode 160000'; then
+            echo "::error::The agent proposed an unsafe file-mode or submodule change."
+            exit 1
+          fi
+          patch_file="$RUNNER_TEMP/diagramweave-agent.patch"
+          git -C "$agent_workspace" diff --binary --full-index --no-ext-diff >"$patch_file"
+          cd "$GITHUB_WORKSPACE"
+          git apply --check "$patch_file"
+          git apply "$patch_file"
           git diff --check
           npm ci --ignore-scripts --no-audit --no-fund
           npm run verify
@@ -665,11 +688,13 @@ jobs:
           TARGET_HEAD_SHA: ${{ steps.gate.outputs.target_head_sha }}
         run: |
           set -euo pipefail
+          export HOME="$RUNNER_TEMP/publisher-home"
+          mkdir -p "$HOME"
           cd "$GITHUB_WORKSPACE"
-          rm -f opencode.json
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config core.hooksPath /dev/null
           git_basic_auth="$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 | tr -d '\n')"
           git_auth_header="AUTHORIZATION: basic $git_basic_auth"
           echo "::add-mask::$git_basic_auth"

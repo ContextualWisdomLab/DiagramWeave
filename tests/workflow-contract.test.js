@@ -72,7 +72,7 @@ test('hourly development performs RCA remediation or one bounded gateway-routed 
   assert.match(workflow, /--auto-discover-model-agents/);
   assert.match(workflow, /scripts\.ci\.serve_seeded_gateway/);
   assert.match(workflow, /contextual_orchestrator_gateway\/orchestrator\/free/);
-  assert.match(workflow, /\{env:CONTEXTUAL_ORCHESTRATOR_TOKEN\}/);
+  assert.match(workflow, /contextual-orchestrator\.token/);
   assert.doesNotMatch(workflow, /integrate\.api\.nvidia\.com/);
   assert.doesNotMatch(workflow, /nvidia-nim\/nvidia\//);
   assert.doesNotMatch(workflow, /Autonomous NVIDIA NIM increment/);
@@ -82,7 +82,21 @@ test('hourly development performs RCA remediation or one bounded gateway-routed 
   assert.doesNotMatch(workflow, /enabled_providers/);
   assert.doesNotMatch(workflow, /OPENCODE_MODEL_CANDIDATES/);
   assert.match(workflow, /persist-credentials: false/);
-  assert.match(workflow, /env -u GH_TOKEN -u GITHUB_TOKEN -u REPOSITORY_TOKEN/);
+  assert.match(workflow, /sudo -u '#65532' -g '#65532' env -i/);
+  assert.match(workflow, /git clone --quiet --local --no-hardlinks/);
+  assert.match(workflow, /sudo chmod -R go-w "\$agent_workspace\/\.git"/);
+  assert.match(workflow, /sudo chown -R "\$\(id -u\):\$\(id -g\)" "\$agent_workspace"/);
+  assert.match(workflow, /git apply --check "\$patch_file"/);
+  assert.match(workflow, /git config core\.hooksPath \/dev\/null/);
+  assert.doesNotMatch(workflow, /OPENCODE_RUN_TIMEOUT_SECONDS/);
+  assert.doesNotMatch(
+    workflowStep(
+      workflow,
+      'Run the gateway-routed development agent',
+      'Set up Node.js for exact repository verification',
+    ),
+    /timeout --kill-after/,
+  );
   assert.match(workflow, /OPENCODE_VERSION: ["']1\.17\.13["']/);
   assert.match(workflow, /sha256sum -c -/);
   assert.match(workflow, /gh pr create/);
@@ -236,7 +250,8 @@ test('hourly gate fails closed, preserves dry-run isolation, and selects exact-h
     gatewayStep,
     /NVIDIA_NIM_API_KEY: \$\{\{ secrets\.NVIDIA_NIM_API_KEY \}\}/,
   );
-  assert.match(gatewayStep, /CONTEXTUAL_ORCHESTRATOR_TOKEN/);
+  assert.match(gatewayStep, /contextual-orchestrator\.token/);
+  assert.doesNotMatch(gatewayStep, /GITHUB_ENV/);
   assert.match(gatewayStep, /healthz/);
 
   const modelStep = workflowStep(
@@ -246,9 +261,10 @@ test('hourly gate fails closed, preserves dry-run isolation, and selects exact-h
   );
   assert.match(
     modelStep,
-    /opencode run "\$prompt" --model contextual_orchestrator_gateway\/orchestrator\/free/,
+    /opencode run "\$prompt"[\s\S]*--model contextual_orchestrator_gateway\/orchestrator\/free/,
   );
   assert.doesNotMatch(modelStep, /secrets\./);
+  assert.match(modelStep, /RUNNER_TEMP\/diagramweave-agent/);
 
   const publish = finalWorkflowStep(workflow, 'Publish one bounded mutation');
   assert.match(publish, /remote_head_sha/);
