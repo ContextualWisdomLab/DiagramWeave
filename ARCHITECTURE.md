@@ -64,7 +64,9 @@ the trust kernel.
 14. LSP positions use UTF-16 code units; multilingual and emoji ranges are
     regression-tested across LF, CRLF, and CR source.
 15. Organization-central `.github` workflows own merge governance. Scheduled
-    product development uses OpenCode with `NVIDIA_NIM_API_KEY`, not Copilot.
+    product development routes OpenCode through the pinned local
+    `contextual-orchestrator` gateway's `orchestrator/free` pool, not Copilot
+    or a direct provider credential.
 16. No release occurs while packages remain `0.0.0` under `Unreleased` or while
     Studio, cross-platform runtime evidence, signing, SBOM/provenance, and
     rollback evidence remain incomplete.
