@@ -231,6 +231,8 @@ jobs:
 
           owner="${GITHUB_REPOSITORY%%/*}"
           repository_name="${GITHUB_REPOSITORY#*/}"
+          # GraphQL variables must remain literal.
+          # shellcheck disable=SC2016
           gh api graphql \
             -F owner="$owner" \
             -F repository_name="$repository_name" \
