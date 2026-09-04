@@ -383,6 +383,7 @@ export function createContextualOrchestratorClient(options) {
           headers,
           body: JSON.stringify({
             model: normalized.model,
+            mode: 'auto',
             messages,
             temperature: 0,
             stream: false,
