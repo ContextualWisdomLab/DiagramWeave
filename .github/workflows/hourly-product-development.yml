@@ -393,6 +393,9 @@ jobs:
           Write PR_MESSAGE.md at the repository root with the title on the first line and a
           body containing reproducible verification evidence, citations where relevant, and
           explicit residual risks.
+          A successful model process exit without a meaningful working-tree mutation is not
+          completion. Implement the bounded increment; an unchanged tree causes the trusted
+          shell to discard that candidate and try the next configured model.
           PROMPT
             fi
 
@@ -537,6 +540,7 @@ jobs:
         shell: bash
         env:
           NVIDIA_API_KEY: ${{ secrets.NVIDIA_NIM_API_KEY }}
+          EXECUTION_MODE: ${{ steps.gate.outputs.mode }}
         run: |
           set -euo pipefail
           cd "$GITHUB_WORKSPACE"
@@ -549,18 +553,33 @@ jobs:
               env -u GH_TOKEN -u GITHUB_TOKEN -u REPOSITORY_TOKEN \
               -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL \
               opencode run "$prompt" --model "$model"; then
-              status=0
+              meaningful_status="$(
+                git status --porcelain --untracked-files=all \
+                  | grep -vE '^\?\? PR_MESSAGE\.md$' || true
+              )"
+              if [ -n "$meaningful_status" ]; then
+                status=0
+                echo "::endgroup::"
+                echo "Agent session produced a repository mutation with \`$model\`." \
+                  >>"$GITHUB_STEP_SUMMARY"
+                break
+              fi
               echo "::endgroup::"
-              echo "Agent session completed with \`$model\`." >>"$GITHUB_STEP_SUMMARY"
-              break
+              echo "::warning::Model $model completed without a repository mutation; trying the next candidate."
+            else
+              echo "::endgroup::"
+              echo "::warning::Model $model failed; discarding partial work and trying the next candidate."
             fi
-            echo "::endgroup::"
-            echo "::warning::Model $model failed; discarding partial work and trying the next candidate."
             git reset --hard HEAD
-            git clean -fd
+            git clean -fdx -e /opencode.json
           done
           if [ "$status" -ne 0 ]; then
-            echo "::error::Every NVIDIA NIM model candidate failed; no work was proposed."
+            if [ "$EXECUTION_MODE" = "remediation" ]; then
+              echo "Every candidate failed or completed without a safe remediation mutation; leaving the exact head unchanged after candidate exhaustion." \
+                >>"$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            echo "::error::Every NVIDIA NIM model candidate failed or completed without a product mutation; no product increment was proposed."
             exit 1
           fi
 
@@ -592,7 +611,14 @@ jobs:
           if [ -z "$meaningful_status" ]; then
             rm -f PR_MESSAGE.md
             echo "mutation=false" >>"$GITHUB_OUTPUT"
-            echo "No safe repository mutation was produced." >>"$GITHUB_STEP_SUMMARY"
+            if [ "$EXECUTION_MODE" = "product" ]; then
+              echo "::error::Product-development mode completed without a repository mutation."
+              echo "A clean model exit is not a completed product increment." \
+                >>"$GITHUB_STEP_SUMMARY"
+              exit 1
+            fi
+            echo "No safe remediation mutation was produced after candidate exhaustion." \
+              >>"$GITHUB_STEP_SUMMARY"
             exit 0
           fi
 
