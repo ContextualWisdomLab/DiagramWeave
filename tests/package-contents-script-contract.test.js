@@ -12,6 +12,11 @@ test('CI runs exact workspace package dry runs after repository verification', a
     'utf8',
   );
   assert.match(workflow, /- name: Verify package contents\n\s+run: node scripts\/check-package-contents\.mjs/u);
+  assert.match(
+    workflow,
+    /group: \$\{\{ github\.workflow \}\}-\$\{\{ github\.repository \}\}-\$\{\{ github\.event\.pull_request\.number \|\| github\.run_id \}\}/u,
+  );
+  assert.match(workflow, /cancel-in-progress: true/u);
 
   const source = await readFile(scriptPath, 'utf8');
   assert.match(source, /npm pack/u);
