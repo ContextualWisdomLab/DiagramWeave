@@ -2,10 +2,13 @@
 
 **Status:** Accepted
 **Date:** 2026-08-09
+**Updated:** 2026-08-24
 
 ## Context
 
 Protected `main` already contains an hourly product-development workflow with two materially different actors. The OpenCode/model subprocess receives the bounded product prompt and NVIDIA model credential while GitHub repository tokens and OIDC request credentials are explicitly removed from that process. A later trusted workflow step, running under narrowly scoped GitHub job permissions, may turn a verified working-tree result into an ordinary branch and pull request. Treating those two actors as one “autonomous development” authority obscures the actual credential and review boundary.
+
+GitHub's protected-branch record distinguishes the act of opening or updating a pull request from the checks and reviews required before anyone may integrate into a protected branch (GitHub, n.d.). DiagramWeave adopts that split: publication of a review candidate is not approval, merge, or release.
 
 ## Decision
 
@@ -21,3 +24,8 @@ Neither the model process nor the trusted publisher may manufacture independent 
 - Model-controlled content cannot directly decide that its own change is publishable; deterministic verification and the trusted handoff boundary mediate publication.
 - A successfully opened PR is only a review candidate, never merge or release evidence.
 - Future changes that give the model process repository credentials, permit unverified publication, or combine publisher and counted-review authority require a new ADR and security/threat-model review.
+
+## References — APA 7th edition
+
+GitHub. (n.d.). *About protected branches*. Retrieved August 24, 2026, from
+https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches
