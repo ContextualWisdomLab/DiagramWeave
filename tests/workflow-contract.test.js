@@ -253,6 +253,8 @@ test('hourly gate fails closed, preserves dry-run isolation, and selects exact-h
   assert.match(gatewayStep, /contextual-orchestrator\.token/);
   assert.doesNotMatch(gatewayStep, /GITHUB_ENV/);
   assert.match(gatewayStep, /healthz/);
+  assert.match(gatewayStep, /\/v1\/chat\/completions/);
+  assert.match(gatewayStep, /choices\[0\]\.message\.content/);
 
   const modelStep = workflowStep(
     workflow,

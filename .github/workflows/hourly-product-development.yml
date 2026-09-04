@@ -558,17 +558,32 @@ jobs:
             --auth-token "$gateway_token" \
             --host 127.0.0.1 --port 8000 \
             >"$RUNNER_TEMP/contextual-orchestrator-gateway.log" 2>&1 &
+          gateway_ready=false
           for _attempt in $(seq 1 30); do
             if curl -fsS -H "Authorization: Bearer $gateway_token" \
               http://127.0.0.1:8000/healthz >/dev/null 2>&1; then
-              echo "gateway ready"
-              exit 0
+              gateway_ready=true
+              break
             fi
             sleep 2
           done
-          echo "::error::contextual-orchestrator gateway did not become healthy"
-          tail -50 "$RUNNER_TEMP/contextual-orchestrator-gateway.log"
-          exit 1
+          if [ "$gateway_ready" != true ]; then
+            echo "::error::contextual-orchestrator gateway did not become healthy"
+            tail -50 "$RUNNER_TEMP/contextual-orchestrator-gateway.log"
+            exit 1
+          fi
+          response_file="$RUNNER_TEMP/contextual-orchestrator-preflight.json"
+          if ! curl -fsS \
+            -H "Authorization: Bearer $gateway_token" \
+            -H "Content-Type: application/json" \
+            --data '{"model":"orchestrator/free","messages":[{"role":"user","content":"Reply READY."}],"max_tokens":16}' \
+            http://127.0.0.1:8000/v1/chat/completions >"$response_file" || \
+            ! jq -e '.choices[0].message.content | type == "string" and length > 0' \
+              "$response_file" >/dev/null; then
+            echo "::error::contextual-orchestrator has no verified usable model route"
+            exit 1
+          fi
+          echo "gateway and model route ready"
 
       - name: Point OpenCode at the local gateway
         if: steps.gate.outputs.dispatch == 'true'
