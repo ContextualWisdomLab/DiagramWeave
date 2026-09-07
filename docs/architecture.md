@@ -129,6 +129,9 @@ Package: `@contextualwisdomlab/diagramweave-plantuml-renderer`
 Responsibilities:
 
 - require absolute host-supplied Java and PlantUML JAR paths;
+- accept for distribution only a PlantUML compiled artifact from the official
+  Apache-2.0 or MIT download lane after installer verification of its pinned
+  version, digest, and `java -jar <plantuml.jar> -license` output;
 - pass source only through stdin with no temporary source file;
 - spawn without a shell and with an empty child environment;
 - force PlantUML `SANDBOX`, UTF-8, source-metadata suppression, standard reporting, and SVG/PNG pipe mode;
@@ -142,6 +145,8 @@ Responsibilities:
 Non-responsibilities:
 
 - bundling or downloading Java, PlantUML, Graphviz, or fonts;
+- selecting an unverified PlantUML artifact or inferring its license from the
+  DiagramWeave source license;
 - enabling local or remote includes;
 - persisting source or artifacts;
 - implementing a full PlantUML parser or character-accurate diagnostics;
@@ -160,6 +165,10 @@ import {
 The public diagnostic uses the Language Server Protocol range shape, error severity `1`, code `plantuml.syntax`, a fixed product message, and a one-based `data.plantUmlLineNumber`. Raw stderr, raw labels, source excerpts, paths, and credentials never cross the renderer boundary.
 
 The renderer is independently reusable by Studio, CLI, naruon, the Language Server, or another CWL host. A future include-capable renderer must be a separate explicit policy mode; it must not weaken this package's `SANDBOX` contract.
+
+Packaging hosts own the verified PlantUML artifact and installer boundary. They
+must preserve its upstream notices, record it in the SBOM and provenance, and
+fail closed if the pinned version, digest, or self-reported license differs.
 
 ### DiagramWeave CLI
 

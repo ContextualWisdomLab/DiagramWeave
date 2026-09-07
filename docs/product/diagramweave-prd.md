@@ -278,6 +278,10 @@ Foundation에는 데이터베이스가 없다.
 - renderer에 deadline과 입력·stdout·stderr 크기 제한을 둔다. Professional 1.0 이전에 운영체제 수준 CPU·메모리 격리를 추가한다.
 - structured diagnostic은 bounded integer, fixed code, fixed message와 LSP range만 허용한다.
 - raw renderer stderr, raw PlantUML label, source excerpt, Java/JAR 경로와 credential은 공개 error·diagnostic·CLI report에 포함하지 않는다.
+- 배포·설치 경로는 PlantUML 공식 배포 페이지의 Apache-2.0 또는 MIT
+  compiled artifact만 허용한다. installer는 승인 전에 artifact version과
+  digest를 고정하고 `java -jar <plantuml.jar> -license` 결과를 검증하며,
+  포함된 artifact를 NOTICE, SBOM, provenance에 기록한다.
 - source 주석과 모델 출력은 prompt와 tool instruction으로 신뢰하지 않는다.
 - AI package는 파일, 환경 변수, shell, provider key에 직접 접근하지 않는다.
 - 전송 범위는 사전 확인·축소·취소 가능하다.
