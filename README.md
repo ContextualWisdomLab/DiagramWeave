@@ -81,7 +81,7 @@ The preview does not save or apply the edit. The host remains responsible for re
 
 `@contextualwisdomlab/diagramweave-plantuml-renderer` invokes a host-supplied Java executable and PlantUML JAR without a shell, with an empty child environment, bounded source/output/diagnostic/deadline limits, PlantUML `SANDBOX`, metadata suppression, and sanitized fixed-shape diagnostics. Its supported public bounds are exposed through `plantUmlRendererLimits`.
 
-DiagramWeave does **not** bundle or download PlantUML. ContextualWisdomLab integrations must supply a commercially compatible **Apache License 2.0 or MIT PlantUML distribution** and retain its required notices; GPL/LGPL PlantUML artifacts are not an accepted inbound path for this ecosystem. PlantUML publishes Apache-2.0 and MIT builds that retain UML rendering capability, so the product does not need a copyleft artifact as its supported renderer boundary.
+DiagramWeave does **not** bundle or download PlantUML. ContextualWisdomLab integrations must obtain a commercially compatible **Apache License 2.0 or MIT compiled distribution** from the [official PlantUML downloads](https://plantuml.com/download) and retain its required notices; GPL/LGPL PlantUML artifacts are not an accepted inbound path for this ecosystem. Before approval, record the JAR version and digest and confirm its self-reported license with `java -jar /absolute/path/to/plantuml.jar -license`. The [official FAQ](https://plantuml.com/faq) confirms that the alternative builds retain UML rendering while optional integrations can differ by license flavor.
 
 ### CLI
 

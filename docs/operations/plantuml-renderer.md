@@ -138,14 +138,15 @@ Errors may expose `field`, `stream`, `exitCode`, `signal`, and a frozen `diagnos
 
 ## Licensing and distribution
 
-PlantUML's official FAQ describes multiple distribution variants and different license obligations. DiagramWeave deliberately ships no PlantUML binary in this slice. Before an installer or appliance bundles one, the release process must:
+PlantUML's [official downloads](https://plantuml.com/download) and [FAQ](https://plantuml.com/faq) describe multiple compiled variants, their feature differences, and their license obligations. DiagramWeave deliberately ships no PlantUML binary in this slice. Before an installer or appliance bundles one, the release process must:
 
-1. select the exact PlantUML artifact and license variant;
-2. preserve required copyright and license notices;
-3. record the artifact hash and version;
-4. verify redistribution and modification obligations with legal review;
-5. include the license in SBOM, provenance, installer, and source-offer processes where applicable;
-6. test the exact bundled artifact against renderer contract fixtures.
+1. select the exact upstream Apache-2.0 or MIT compiled artifact;
+2. run `java -jar /absolute/path/to/plantuml.jar -license` and verify that the artifact reports the selected license;
+3. preserve required copyright and license notices;
+4. record the artifact hash and version;
+5. verify redistribution and modification obligations with legal review;
+6. include the license in SBOM, provenance, and installer records where applicable;
+7. test the exact bundled artifact against renderer contract fixtures.
 
 ## Operational limitations
 
@@ -175,6 +176,12 @@ https://microsoft.github.io/language-server-protocol/specifications/lsp/3.18/spe
 OASIS Open. (2023, August 28). *Static Analysis Results Interchange Format
 (SARIF) Version 2.1.0 Plus Errata 01*.
 https://docs.oasis-open.org/sarif/sarif/v2.1.0/errata01/os/sarif-v2.1.0-errata01-os-complete.html
+
+PlantUML. (n.d.). *PlantUML downloads and source code*. Retrieved
+September 7, 2026, from https://plantuml.com/download
+
+PlantUML. (n.d.). *Frequently asked questions*. Retrieved September 7, 2026,
+from https://plantuml.com/faq
 
 PlantUML. (n.d.). *Command-line usage: Standard report (stdrpt)*. Retrieved
 August 4, 2026, from https://plantuml.com/command-line

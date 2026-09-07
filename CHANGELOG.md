@@ -8,7 +8,7 @@ The project follows Semantic Versioning after the first release.
 
 ### Changed
 
-- The repository public surface now has a product-first README with the exact Ask DeepWiki badge and a bounded `docs/index.md` landing source for future GitHub Pages publication, while preserving the existing source-first trust, LSP compatibility, unreleased-status, and PlantUML licensing boundaries.
+- The repository public surface now has a product-first README with the exact Ask DeepWiki badge and a bounded `docs/index.md` landing source for future GitHub Pages publication, while preserving the existing source-first trust, LSP compatibility, unreleased-status, and PlantUML licensing boundaries. The renderer guidance now binds Apache-2.0/MIT artifact selection to PlantUML's official distribution pages and requires version, digest, and self-reported-license verification before approval.
 - Hourly development now routes an open same-repository pull request into an
   RCA-driven exact-head remediation session, verifies candidate actions against
   live review and Check evidence, publishes only a normal fast-forward repair
