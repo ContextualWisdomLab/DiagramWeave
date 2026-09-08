@@ -140,8 +140,9 @@ Foundation packages emit no logs or telemetry. A host adding observability exclu
 - Autonomous tasks cannot merge, publish, release, or weaken branch protection.
 - Releases require dependency, secret, SAST, package-content, license, provenance, and rollback evidence.
 - A PlantUML-bearing release verifies the official Apache-2.0 or MIT artifact's
-  pinned version, digest, and `-license` output and preserves its notices in the
-  SBOM and provenance; the installer rejects any mismatch.
+  pinned version, digest, and `-license` output, preserves upstream notices in
+  the release package, and records the artifact in the SBOM and provenance; the
+  installer rejects any mismatch.
 
 ## Vulnerability reporting
 

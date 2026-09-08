@@ -129,9 +129,6 @@ Package: `@contextualwisdomlab/diagramweave-plantuml-renderer`
 Responsibilities:
 
 - require absolute host-supplied Java and PlantUML JAR paths;
-- accept for distribution only a PlantUML compiled artifact from the official
-  Apache-2.0 or MIT download lane after installer verification of its pinned
-  version, digest, and `java -jar <plantuml.jar> -license` output;
 - pass source only through stdin with no temporary source file;
 - spawn without a shell and with an empty child environment;
 - force PlantUML `SANDBOX`, UTF-8, source-metadata suppression, standard reporting, and SVG/PNG pipe mode;
