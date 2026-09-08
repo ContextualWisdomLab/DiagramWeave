@@ -63,6 +63,13 @@ Contextual Orchestrator remains responsible for its provider-host egress checks,
 
 The local renderer package runs PlantUML with `SANDBOX` as a fixed profile. It requires absolute Java and JAR paths, invokes no shell, receives source only through stdin, passes an empty environment, and disables generated source metadata.
 
+The renderer does not grant or infer a license for the host-supplied JAR. A
+packaging host may distribute only an official PlantUML Apache-2.0 or MIT
+compiled artifact whose version and digest are pinned and whose
+`java -jar <plantuml.jar> -license` output matches the selected lane. The host
+must preserve upstream notices and bind the artifact to its SBOM and provenance;
+any mismatch fails closed before installation or release.
+
 The implemented boundary enforces:
 
 - no remote or local include mode;
@@ -111,6 +118,7 @@ Malformed known fields, invalid UTF-8, unsupported protocol versions, and missin
 | Renderer denial of service | Separate child, byte caps, deadline, kill; host-level CPU/memory sandbox for hostile scale |
 | Hidden automatic mutation | Core returns values only; approval and write action are separate |
 | Supply-chain replacement | Lockfile, immutable Action SHAs, review and exact-head checks |
+| Wrong PlantUML license flavor or replaced JAR | Official Apache-2.0/MIT distribution lane, pinned version and digest, `-license` verification, notices, SBOM, and provenance |
 
 ## Logging and telemetry
 
@@ -131,6 +139,10 @@ Foundation packages emit no logs or telemetry. A host adding observability exclu
 - CI runs syntax, behavior, 100% line/branch/function coverage, and production JSDoc gates.
 - Autonomous tasks cannot merge, publish, release, or weaken branch protection.
 - Releases require dependency, secret, SAST, package-content, license, provenance, and rollback evidence.
+- A PlantUML-bearing release verifies the official Apache-2.0 or MIT artifact's
+  pinned version, digest, and `-license` output, preserves upstream notices in
+  the release package, and records the artifact in the SBOM and provenance; the
+  installer rejects any mismatch.
 
 ## Vulnerability reporting
 

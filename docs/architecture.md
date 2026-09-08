@@ -142,6 +142,8 @@ Responsibilities:
 Non-responsibilities:
 
 - bundling or downloading Java, PlantUML, Graphviz, or fonts;
+- selecting an unverified PlantUML artifact or inferring its license from the
+  DiagramWeave source license;
 - enabling local or remote includes;
 - persisting source or artifacts;
 - implementing a full PlantUML parser or character-accurate diagnostics;
@@ -160,6 +162,10 @@ import {
 The public diagnostic uses the Language Server Protocol range shape, error severity `1`, code `plantuml.syntax`, a fixed product message, and a one-based `data.plantUmlLineNumber`. Raw stderr, raw labels, source excerpts, paths, and credentials never cross the renderer boundary.
 
 The renderer is independently reusable by Studio, CLI, naruon, the Language Server, or another CWL host. A future include-capable renderer must be a separate explicit policy mode; it must not weaken this package's `SANDBOX` contract.
+
+Packaging hosts own the verified PlantUML artifact and installer boundary. They
+must preserve its upstream notices, record it in the SBOM and provenance, and
+fail closed if the pinned version, digest, or self-reported license differs.
 
 ### DiagramWeave CLI
 
