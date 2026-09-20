@@ -8,6 +8,10 @@ The project follows Semantic Versioning after the first release.
 
 ### Changed
 
+- Architecture Decision Records 0001–0007 now include Context, Decision, and
+  Consequences plus verified APA 7th-edition references to official Language
+  Server Protocol 3.18, JSON-RPC 2.0, NIST FIPS 180-4, PlantUML language and
+  security, RFC 3986/8259, and GitHub protected-branch catalog records.
 - Hourly development now routes an open same-repository pull request into an
   RCA-driven exact-head remediation session, verifies candidate actions against
   live review and Check evidence, publishes only a normal fast-forward repair
