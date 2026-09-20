@@ -17,8 +17,8 @@ text document, with a display name, kind, full `range`, and narrower
 negotiated (Microsoft, n.d.). PlantUML's official class-diagram and
 sequence-diagram records define explicit package, class, participant, and
 related declaration syntax, including aliases and quoted display names
-(PlantUML, n.d.-a, n.d.-c). Those records do not authorize inferring symbols
-from relations, includes, or renderer output.
+(PlantUML, n.d.-a, n.d.-b, n.d.-c). Those records do not authorize inferring
+symbols from relations, includes, or renderer output.
 
 PlantUML outlines must therefore fail by omission rather than invent implicit,
 malformed, included, or macro-generated symbols.

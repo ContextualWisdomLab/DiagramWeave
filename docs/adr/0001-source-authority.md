@@ -28,17 +28,17 @@ and cannot silently replace the caller's source. Hosts own save, commit, and
 persistence. This enables offline and manual operation and deterministic
 stale-proposal rejection.
 
-The foundation introduces no DiagramWeave-owned database. A host may persist
-files, but it must write the exact accepted source rather than a reconstructed
-or rendered substitute.
-
 ## Consequences
 
 - Core `hashSource` remains the only revision algorithm for proposals, renderer
   artifacts, and CLI reports.
-- A proposal, preview, or render whose base digest does not match the current
-  source fails closed (`revision_conflict`); it is never patched onto newer
-  text.
+- A proposal whose base digest does not match the current source fails closed
+  (`revision_conflict`); it is never patched onto newer text. Renderer artifacts
+  bind to the same digest for identity, but the local render path does not emit
+  `revision_conflict`.
+- The foundation introduces no DiagramWeave-owned database. A host may persist
+  files, but it must write the exact accepted source rather than a
+  reconstructed or rendered substitute.
 - Studio, naruon, IDE adapters, and other CWL hosts can embed Core without
   taking file I/O, network, or persistence into the trust kernel.
 - Manual editing, validation, and local render stay usable without an account,

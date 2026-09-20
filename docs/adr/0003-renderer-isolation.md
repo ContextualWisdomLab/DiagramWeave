@@ -12,7 +12,7 @@ unsafe as a default reusable boundary for Studio, CLI, naruon, and other CWL
 hosts.
 
 PlantUML documents a `SANDBOX` security profile in which the process cannot
-access local files or URLs and allowlists are ignored (PlantUML, n.d.-c). The
+access local files or URLs and allowlists are ignored (PlantUML, n.d.-b). The
 official command-line record documents stdin `-pipe` transfer, `-nometadata`
 suppression of encoded source in generated files, and `-stdrpt:1` standard
 error reports (PlantUML, n.d.-a). Those published controls are the basis for a
@@ -60,8 +60,5 @@ https://microsoft.github.io/language-server-protocol/specifications/lsp/3.18/spe
 PlantUML. (n.d.-a). *Command line*. Retrieved August 24, 2026, from
 https://plantuml.com/command-line
 
-PlantUML. (n.d.-b). *PlantUML*. Retrieved August 24, 2026, from
-https://plantuml.com/
-
-PlantUML. (n.d.-c). *Deploy PlantUML safely*. Retrieved August 24, 2026, from
+PlantUML. (n.d.-b). *Deploy PlantUML safely*. Retrieved August 24, 2026, from
 https://plantuml.com/security

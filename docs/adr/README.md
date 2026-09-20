@@ -4,7 +4,8 @@ The status inside each ADR is authoritative. `Accepted` means the decision gover
 
 Each governing ADR records Context, Decision, and Consequences and keeps a
 verified APA 7th-edition bibliography. Citations use a DOI or the publisher's
-official catalog URL and omit records that could not be opened.
+official record URL (catalog or primary documentation page) and omit records
+that could not be opened.
 
 | ADR | Decision | Status |
 |---|---|---|
