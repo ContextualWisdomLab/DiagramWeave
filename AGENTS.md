@@ -24,7 +24,10 @@
 
 ## Automation contract
 
-- Scheduled product development uses OpenCode with `NVIDIA_NIM_API_KEY`; do not use or introduce `COPILOT_GITHUB_TOKEN`.
+- Scheduled product development routes OpenCode only through the pinned local
+  `contextual-orchestrator` gateway and its `orchestrator/free` pool. Provider
+  credentials remain gateway-owned; do not pass them to OpenCode or introduce
+  `COPILOT_GITHUB_TOKEN`.
 - Do not change the credential contract of the existing independent review agent.
 - Prefer the immutable organization-central `.github` workflows over repository-local policy copies.
 - Process open PRs before creating another bounded product-development PR.

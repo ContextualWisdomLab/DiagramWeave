@@ -17,8 +17,10 @@ concurrency:
 
 # The default token is read-only. The single bounded job may push either one
 # verified repair commit to an existing same-repository PR branch or one new
-# product branch. The OpenCode process receives NVIDIA NIM credentials only;
-# every GitHub credential is stripped from the agent process.
+# product branch. Model traffic is served by a loopback contextual-orchestrator
+# gateway sidecar seeded with the org's provider credentials; the OpenCode
+# process itself receives only that gateway's ephemeral local bearer token,
+# and every GitHub credential is stripped from the agent process.
 permissions:
   contents: read
 
@@ -39,11 +41,11 @@ jobs:
       REPOSITORY_TOKEN: ${{ github.token }}
       OPENCODE_VERSION: "1.17.13"
       OPENCODE_SHA256: 157afa289d1a8d9372de0ce19ac726119b937a1f6b201808d46f06e4e59bb348
-      OPENCODE_MODEL_CANDIDATES: >-
-        nvidia-nim/nvidia/llama-3.3-nemotron-super-49b-v1.5
-        nvidia-nim/nvidia/nemotron-3-super-120b-a12b
-        nvidia-nim/deepseek-ai/deepseek-v4-pro
-      OPENCODE_RUN_TIMEOUT_SECONDS: "2400"
+      # Same governed commit ContextualWisdomLab/.github's central review
+      # sidecar (scripts/ci/contextual_orchestrator_review_sidecar.sh) and
+      # ContextualWisdomLab/contextual-orchestrator's own hourly loop pin to;
+      # update only through a reviewed pull request.
+      ORCHESTRATOR_PIN_SHA: "045d17da5e2aea56a97e241ee158ab1628d78660"
     steps:
       - name: Select remediation or product-development mode
         id: gate
@@ -454,19 +456,35 @@ jobs:
             cat "$RUNNER_TEMP/diagramweave-agent-prompt.md"
           } >>"$GITHUB_STEP_SUMMARY"
 
-      - name: Require the NVIDIA NIM model credential
+      - name: Require at least one contextual-orchestrator provider credential
         if: steps.gate.outputs.dispatch == 'true'
         shell: bash
         env:
-          NVIDIA_API_KEY: ${{ secrets.NVIDIA_NIM_API_KEY }}
+          BYTEZ_API_KEY: ${{ secrets.BYTEZ_API_KEY }}
+          NVIDIA_NIM_API_KEY: ${{ secrets.NVIDIA_NIM_API_KEY }}
+          NVIDIA_NIM_API_KEY_SUB: ${{ secrets.NVIDIA_NIM_API_KEY_SUB }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
           set -euo pipefail
-          if [ -z "${NVIDIA_API_KEY:-}" ]; then
-            echo "::error::NVIDIA_NIM_API_KEY is required only for the selected model-backed path."
-            echo "reason=nim_api_key_unavailable" >>"$GITHUB_STEP_SUMMARY"
+          # Missing individual secrets are allowed; the gateway's own
+          # auto-discovery skips an unregistered provider. Only a fully empty
+          # set is fatal, matching ContextualWisdomLab/.github's central
+          # sidecar contract.
+          provider_secret_count=0
+          for secret_name in BYTEZ_API_KEY NVIDIA_NIM_API_KEY NVIDIA_NIM_API_KEY_SUB OPENROUTER_API_KEY OPENAI_API_KEY; do
+            value="${!secret_name:-}"
+            if [ -n "$value" ]; then
+              echo "::add-mask::$value"
+              provider_secret_count=$((provider_secret_count + 1))
+            fi
+          done
+          if [ "$provider_secret_count" -lt 1 ]; then
+            echo "::error::At least one of BYTEZ_API_KEY / NVIDIA_NIM_API_KEY / NVIDIA_NIM_API_KEY_SUB / OPENROUTER_API_KEY / OPENAI_API_KEY is required only for the selected model-backed path."
+            echo "reason=orchestrator_credential_unavailable" >>"$GITHUB_STEP_SUMMARY"
             exit 1
           fi
-          echo "::add-mask::$NVIDIA_API_KEY"
+          echo "provider secrets present: $provider_secret_count of 5" >>"$GITHUB_STEP_SUMMARY"
 
       - name: Install the pinned OpenCode CLI
         if: steps.gate.outputs.dispatch == 'true'
@@ -485,84 +503,143 @@ jobs:
           "${install_dir}/opencode" --version
           echo "$install_dir" >>"$GITHUB_PATH"
 
-      - name: Configure OpenCode for NVIDIA NIM
+      - name: Set up Python for the gateway sidecar
+        if: steps.gate.outputs.dispatch == 'true'
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: "3.12"
+
+      - name: Vendor the contextual-orchestrator gateway
         if: steps.gate.outputs.dispatch == 'true'
         shell: bash
         run: |
           set -euo pipefail
-          cat >"$GITHUB_WORKSPACE/opencode.json" <<'CONFIG'
+          orchestrator_source="$RUNNER_TEMP/contextual-orchestrator"
+          rm -rf "$orchestrator_source"
+          git clone --quiet --filter=blob:none --no-checkout \
+            https://github.com/ContextualWisdomLab/contextual-orchestrator.git \
+            "$orchestrator_source"
+          git -C "$orchestrator_source" -c advice.detachedHead=false \
+            checkout --quiet "$ORCHESTRATOR_PIN_SHA"
+          checked_out="$(git -C "$orchestrator_source" rev-parse HEAD)"
+          if [ "$checked_out" != "$ORCHESTRATOR_PIN_SHA" ]; then
+            echo "::error::vendored contextual-orchestrator HEAD $checked_out != pin $ORCHESTRATOR_PIN_SHA"
+            exit 1
+          fi
+          python -m pip install --quiet --disable-pip-version-check --no-cache-dir \
+            --require-hashes \
+            -r "$orchestrator_source/requirements.lock"
+
+      - name: Start the contextual-orchestrator gateway with auto-discovery
+        if: steps.gate.outputs.dispatch == 'true'
+        shell: bash
+        env:
+          BYTEZ_API_KEY: ${{ secrets.BYTEZ_API_KEY }}
+          NVIDIA_NIM_API_KEY: ${{ secrets.NVIDIA_NIM_API_KEY }}
+          NVIDIA_NIM_API_KEY_SUB: ${{ secrets.NVIDIA_NIM_API_KEY_SUB }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          set -euo pipefail
+          gateway_token="$(python -c 'import secrets; print(secrets.token_urlsafe(32))')"
+          echo "::add-mask::$gateway_token"
+          token_file="$RUNNER_TEMP/contextual-orchestrator.token"
+          (umask 077 && printf '%s' "$gateway_token" >"$token_file")
+          cd "$RUNNER_TEMP/contextual-orchestrator"
+          # ORCHESTRATOR_PIN_SHA's scripts/ci/serve_seeded_gateway.py predates
+          # that script's own --auth-token-key (KV-registered bootstrap token)
+          # support upstream; --auth-token is the explicit-value flag proven
+          # to work at this exact pinned commit (verified directly against
+          # it). Re-verify this choice if the pin is ever bumped.
+          nohup python -m scripts.ci.serve_seeded_gateway \
+            --serve \
+            --agents examples/agents.mock.json \
+            --auto-discover-model-agents \
+            --auth-token "$gateway_token" \
+            --host 127.0.0.1 --port 8000 \
+            >"$RUNNER_TEMP/contextual-orchestrator-gateway.log" 2>&1 &
+          gateway_ready=false
+          for _attempt in $(seq 1 30); do
+            if curl -fsS -H "Authorization: Bearer $gateway_token" \
+              http://127.0.0.1:8000/healthz >/dev/null 2>&1; then
+              gateway_ready=true
+              break
+            fi
+            sleep 2
+          done
+          if [ "$gateway_ready" != true ]; then
+            echo "::error::contextual-orchestrator gateway did not become healthy"
+            tail -50 "$RUNNER_TEMP/contextual-orchestrator-gateway.log"
+            exit 1
+          fi
+          response_file="$RUNNER_TEMP/contextual-orchestrator-preflight.json"
+          if ! curl -fsS \
+            -H "Authorization: Bearer $gateway_token" \
+            -H "Content-Type: application/json" \
+            --data '{"model":"orchestrator/free","messages":[{"role":"user","content":"Reply READY."}],"max_tokens":16}' \
+            http://127.0.0.1:8000/v1/chat/completions >"$response_file" || \
+            ! jq -e '.choices[0].message.content | type == "string" and length > 0' \
+              "$response_file" >/dev/null; then
+            echo "::error::contextual-orchestrator has no verified usable model route"
+            exit 1
+          fi
+          echo "gateway and model route ready"
+
+      - name: Point OpenCode at the local gateway
+        if: steps.gate.outputs.dispatch == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          agent_workspace="$RUNNER_TEMP/diagramweave-agent"
+          rm -rf "$agent_workspace"
+          git clone --quiet --local --no-hardlinks "$GITHUB_WORKSPACE" "$agent_workspace"
+          mkdir -p "$RUNNER_TEMP/agent-home" "$RUNNER_TEMP/agent-config"
+          sudo chown 65532:65532 "$RUNNER_TEMP/agent-home" "$RUNNER_TEMP/agent-config"
+          sudo chown -R 65532:65532 "$agent_workspace"
+          sudo chown -R root:root "$agent_workspace/.git"
+          sudo chmod -R go-w "$agent_workspace/.git"
+          gateway_token="$(cat "$RUNNER_TEMP/contextual-orchestrator.token")"
+          cat >"$agent_workspace/opencode.json" <<CONFIG
           {
-            "$schema": "https://opencode.ai/config.json",
-            "enabled_providers": ["nvidia-nim"],
-            "model": "nvidia-nim/nvidia/llama-3.3-nemotron-super-49b-v1.5",
-            "small_model": "nvidia-nim/meta/llama-3.3-70b-instruct",
+            "\$schema": "https://opencode.ai/config.json",
+            "model": "contextual_orchestrator_gateway/orchestrator/free",
             "provider": {
-              "nvidia-nim": {
+              "contextual_orchestrator_gateway": {
                 "npm": "@ai-sdk/openai-compatible",
-                "name": "NVIDIA NIM",
+                "name": "Contextual Orchestrator Gateway",
                 "options": {
-                  "baseURL": "https://integrate.api.nvidia.com/v1",
-                  "apiKey": "{env:NVIDIA_API_KEY}"
+                  "baseURL": "http://127.0.0.1:8000/v1",
+                  "apiKey": "$gateway_token"
                 },
                 "models": {
-                  "nvidia/llama-3.3-nemotron-super-49b-v1.5": {
-                    "name": "NVIDIA Llama 3.3 Nemotron Super 49B v1.5",
-                    "tool_call": true,
-                    "limit": {"context": 131072, "output": 8192}
-                  },
-                  "nvidia/nemotron-3-super-120b-a12b": {
-                    "name": "NVIDIA Nemotron 3 Super 120B",
-                    "tool_call": true,
-                    "limit": {"context": 131072, "output": 8192}
-                  },
-                  "deepseek-ai/deepseek-v4-pro": {
-                    "name": "DeepSeek V4 Pro (NIM)",
-                    "tool_call": true,
-                    "limit": {"context": 131072, "output": 8192}
-                  },
-                  "meta/llama-3.3-70b-instruct": {
-                    "name": "Meta Llama 3.3 70B Instruct (NIM)",
-                    "tool_call": true,
-                    "limit": {"context": 131072, "output": 8192}
-                  }
+                  "orchestrator/free": { "name": "fail-closed zero-cost orchestration" }
                 }
               }
             }
           }
           CONFIG
-          echo "/opencode.json" >>"$GITHUB_WORKSPACE/.git/info/exclude"
+          sudo chown 65532:65532 "$agent_workspace/opencode.json"
 
-      - name: Run the NVIDIA NIM development agent
+      - name: Run the gateway-routed development agent
         if: steps.gate.outputs.dispatch == 'true'
         shell: bash
-        env:
-          NVIDIA_API_KEY: ${{ secrets.NVIDIA_NIM_API_KEY }}
         run: |
           set -euo pipefail
-          cd "$GITHUB_WORKSPACE"
-
           prompt="$(cat "$RUNNER_TEMP/diagramweave-agent-prompt.md")"
-          status=1
-          for model in $OPENCODE_MODEL_CANDIDATES; do
-            echo "::group::opencode $model"
-            if timeout --kill-after=30s "${OPENCODE_RUN_TIMEOUT_SECONDS}s" \
-              env -u GH_TOKEN -u GITHUB_TOKEN -u REPOSITORY_TOKEN \
-              -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL \
-              opencode run "$prompt" --model "$model"; then
-              status=0
-              echo "::endgroup::"
-              echo "Agent session completed with \`$model\`." >>"$GITHUB_STEP_SUMMARY"
-              break
-            fi
+          echo "::group::opencode contextual_orchestrator_gateway/orchestrator/free"
+          if ! sudo -u '#65532' -g '#65532' env -i \
+            HOME="$RUNNER_TEMP/agent-home" \
+            PATH="$PATH" \
+            XDG_CONFIG_HOME="$RUNNER_TEMP/agent-config" \
+            opencode run "$prompt" \
+              --dir "$RUNNER_TEMP/diagramweave-agent" \
+              --model contextual_orchestrator_gateway/orchestrator/free; then
             echo "::endgroup::"
-            echo "::warning::Model $model failed; discarding partial work and trying the next candidate."
-            git reset --hard HEAD
-            git clean -fd
-          done
-          if [ "$status" -ne 0 ]; then
-            echo "::error::Every NVIDIA NIM model candidate failed; no work was proposed."
+            echo "::error::The gateway-routed development agent failed; no work was proposed."
             exit 1
           fi
+          echo "::endgroup::"
+          echo "Agent session completed via contextual-orchestrator's orchestrator/free pool." >>"$GITHUB_STEP_SUMMARY"
 
       - name: Set up Node.js for exact repository verification
         if: steps.gate.outputs.dispatch == 'true'
@@ -579,24 +656,37 @@ jobs:
           EXECUTION_MODE: ${{ steps.gate.outputs.mode }}
         run: |
           set -euo pipefail
-          cd "$GITHUB_WORKSPACE"
-          rm -f opencode.json
+          agent_workspace="$RUNNER_TEMP/diagramweave-agent"
+          sudo chown -R "$(id -u):$(id -g)" "$agent_workspace"
+          rm -f "$agent_workspace/opencode.json"
           if [ "$EXECUTION_MODE" = "remediation" ]; then
-            rm -f PR_MESSAGE.md
+            rm -f "$agent_workspace/PR_MESSAGE.md"
           fi
 
           meaningful_status="$(
-            git status --porcelain --untracked-files=all \
+            git -C "$agent_workspace" status --porcelain --untracked-files=all \
               | grep -vE '^\?\? PR_MESSAGE\.md$' || true
           )"
           if [ -z "$meaningful_status" ]; then
-            rm -f PR_MESSAGE.md
+            rm -f "$agent_workspace/PR_MESSAGE.md"
             echo "mutation=false" >>"$GITHUB_OUTPUT"
             echo "No safe repository mutation was produced." >>"$GITHUB_STEP_SUMMARY"
             exit 0
           fi
 
           echo "mutation=true" >>"$GITHUB_OUTPUT"
+          git -C "$agent_workspace" add -N -- .
+          git -C "$agent_workspace" diff --name-only -z --diff-filter=ACDMRTUXB | \
+            python -c 'import os,sys; root=os.environ["RUNNER_TEMP"]+"/diagramweave-agent"; paths=sys.stdin.buffer.read().split(b"\0"); bad=[p for p in paths if p and os.path.lexists(q:=os.path.join(root, os.fsdecode(p))) and (os.path.islink(q) or not os.path.isfile(q))]; sys.exit(f"unsafe changed file: {bad[0]!r}" if bad else 0)'
+          if git -C "$agent_workspace" diff --summary | grep -Eq 'mode change|create mode 160000'; then
+            echo "::error::The agent proposed an unsafe file-mode or submodule change."
+            exit 1
+          fi
+          patch_file="$RUNNER_TEMP/diagramweave-agent.patch"
+          git -C "$agent_workspace" diff --binary --full-index --no-ext-diff >"$patch_file"
+          cd "$GITHUB_WORKSPACE"
+          git apply --check "$patch_file"
+          git apply "$patch_file"
           git diff --check
           npm ci --ignore-scripts --no-audit --no-fund
           npm run verify
@@ -613,11 +703,13 @@ jobs:
           TARGET_HEAD_SHA: ${{ steps.gate.outputs.target_head_sha }}
         run: |
           set -euo pipefail
+          export HOME="$RUNNER_TEMP/publisher-home"
+          mkdir -p "$HOME"
           cd "$GITHUB_WORKSPACE"
-          rm -f opencode.json
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config core.hooksPath /dev/null
           git_basic_auth="$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 | tr -d '\n')"
           git_auth_header="AUTHORIZATION: basic $git_basic_auth"
           echo "::add-mask::$git_basic_auth"
@@ -694,11 +786,11 @@ jobs:
             tail -n +2 PR_MESSAGE.md >"$body_file"
             rm -f PR_MESSAGE.md
           else
-            echo "Autonomous NVIDIA NIM increment; see the diff and CHANGELOG.md." \
+            echo "Autonomous orchestrator/free increment; see the diff and CHANGELOG.md." \
               >"$body_file"
           fi
 
-          branch="nim-agent/product-dev-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          branch="orchestrator-agent/product-dev-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           git checkout -b "$branch"
           git add -A
           git commit -m "$title"
