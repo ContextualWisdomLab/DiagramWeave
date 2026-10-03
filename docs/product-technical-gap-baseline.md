@@ -60,7 +60,7 @@ DiagramWeave currently owns no database and therefore has no implemented ERD. So
 | DW-CO-001 | No immutable `orchestrator/free` gateway release | `ContextualWisdomLab/contextual-orchestrator` Releases = 0; owner Issue `#1023` | Complete owner RED→GREEN→immutable release, then consumer pin | Owner-blocked |
 | DW-STUDIO-001 | No buyer-operable Studio vertical slice | DiagramWeave Issue `#29`; architecture marks Studio future | Build first product slice with normal/loading/empty/error/permission/responsive states and ko/en/ja/zh/vi/es/de/fr layout evidence | Open |
 | DW-OPS-001 | Proposal verification and publication authority are not fully separated | DiagramWeave Issue `#28`; ADR-0007 | Introduce independent verification artifact and privileged publisher after released gateway exists | Open |
-| DW-WF-001 | Orphaned automation identities remain | DiagramWeave Issue `#27` | Inventory by exact workflow/ref identity and retire only after successor carryover evidence | Open |
+| DW-WF-001 | Workflow lifecycle recurrence evidence is incomplete | Live Actions registry on 2026-10-03: 45 identities; 40 `disabled_manually`; active repository paths are exactly the 3 protected-tree workflows; 2 other active identities are GitHub-owned dynamic CodeQL records | Keep Issue `#27` open for the read-only recurrence detector, pagination receipts, and immutable before/after evidence; do not disable by name | Operational repair observed / detector open |
 | DW-REL-001 | Product has no immutable release | GitHub Releases = 0; private `0.0.0` workspace | Publish only after buyer slice, security, package, SBOM, provenance, and recovery evidence are green | Open |
 
 ## Loop
