@@ -1,6 +1,6 @@
 # ADR-0008: Adaptive contextual-orchestrator mode is the proposal default
 
-- Status: Accepted
+- Status: Proposed
 - Date: 2026-08-16
 
 ## Context
