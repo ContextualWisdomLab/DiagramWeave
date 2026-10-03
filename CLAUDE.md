@@ -15,8 +15,10 @@ Before changing code:
    7th-edition references in durable documentation;
 5. keep JSON-RPC, source, URI, renderer, filesystem, LLM, and credential inputs
    inside their explicit trust boundaries;
-6. use OpenCode with `NVIDIA_NIM_API_KEY` for scheduled product-development
-   automation and never introduce `COPILOT_GITHUB_TOKEN`;
+6. keep model-backed product development fail-closed until the immutable
+   `contextual-orchestrator` gateway release exists; a future caller requests
+   only `orchestrator/free` with the gateway token, never receives provider
+   credentials, and must never introduce `COPILOT_GITHUB_TOKEN`;
 7. do not weaken checks, branch protection, review independence, package gates,
    or release evidence.
 

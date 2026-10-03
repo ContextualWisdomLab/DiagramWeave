@@ -24,10 +24,17 @@
 
 ## Automation contract
 
-- Scheduled product development uses OpenCode with `NVIDIA_NIM_API_KEY`; do not use or introduce `COPILOT_GITHUB_TOKEN`.
+- Model-backed product development remains manual and fail-closed until
+  `ContextualWisdomLab/contextual-orchestrator#1023` publishes an immutable
+  gateway release. A future caller may request only `orchestrator/free` through
+  that released contract with the gateway token; it may not name a provider,
+  model, group, paid fallback, or caller-owned default timeout.
+- Do not use provider credentials, clone owner source, start a branch sidecar,
+  or introduce `COPILOT_GITHUB_TOKEN` in this consumer repository.
 - Do not change the credential contract of the existing independent review agent.
 - Prefer the immutable organization-central `.github` workflows over repository-local policy copies.
-- Process open PRs before creating another bounded product-development PR.
+- Process open PRs before creating another bounded product-development PR after
+  the released gateway contract is available.
 - Waiting GitHub reviews or checks are not a reason to stop useful work, but no pending or historical check may be represented as a current success.
 
 ## Code-owner review gates — disabled (on hold)
