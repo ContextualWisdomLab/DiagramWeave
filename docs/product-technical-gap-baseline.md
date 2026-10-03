@@ -8,7 +8,7 @@
 
 DiagramWeave is a source-first, local-first diagram editing platform whose buyer-visible product is DiagramWeave Studio. The current repository is still pre-release: the GitHub Releases inventory is empty, `package.json` is private at version `0.0.0`, and Studio remains a future surface. This baseline binds claims to protected `main`, exact pull-request heads, immutable owner releases, tests, and published artifacts rather than branch intent.
 
-At this evidence point, PR `#34` is open at exact head `2d3c4ded7efe397d01f2f3c3ec9fb062516f43ba`; its required Checks are green but it has no qualifying independent approval, so it is not merged capability. The automation-boundary repair described by ADR-0008 is Proposed on a separate branch and does not revise protected-main truth until merge.
+At this evidence point, PR `#34` is open at exact head `2d3c4ded7efe397d01f2f3c3ec9fb062516f43ba`. Its repository CI, Semgrep, security, and CodeQL runs are green, but the same-head Noema review Check failed and there is no qualifying independent approval, so it is not merged capability. PR `#30` already reserves ADR-0008 for adaptive proposal routing; the automation-boundary repair therefore uses ADR-0009. Both remain Proposed branch evidence and do not revise protected-main truth until ordinary merge.
 
 ## PRD and TRD alignment
 
@@ -16,7 +16,7 @@ At this evidence point, PR `#34` is open at exact head `2d3c4ded7efe397d01f2f3c3
 |---|---|---|---|---|
 | Source authority | Manual editing remains useful without account, network, or LLM | Core, CLI, renderer, and Language Server contracts exist on protected `main` | Preserve while adding Studio | Implemented foundation |
 | Buyer surface | DiagramWeave Studio composes editing, preview, diagnostics, proposal review, and recovery | Studio is documented as a future surface; Issue `#29` tracks the first vertical slice | Build one realistic file-open/edit/validate/render/review flow with accessibility, i18n, Storybook states, and measured performance | Open |
-| Model gateway | Optional provider-neutral proposal adapter | Direct-provider automation exists on protected `main`; owner `contextual-orchestrator` has zero GitHub Releases and Issue `#1023` tracks the immutable gateway | Merge ADR-0008 fail-closed repair; later pin the released gateway and request only `orchestrator/free` | Proposed / owner-blocked |
+| Model gateway | Optional provider-neutral proposal adapter | Direct-provider automation exists on protected `main`; owner `contextual-orchestrator` has zero GitHub Releases and Issue `#1023` tracks the immutable gateway | Merge ADR-0009 fail-closed repair; later pin the released gateway and request only `orchestrator/free` | Proposed / owner-blocked |
 | Publication authority | Proposal generation, verification, publication, review, merge, and release are separate | ADR-0007 states the boundary, while the protected workflow combines model execution and write-capable publication in one job | Complete Issue `#28` with distinct credentials and exact-revision evidence | Open |
 | Release evidence | Immutable version, changelog, SBOM, provenance, API/schema and behavior evidence | No DiagramWeave GitHub Release exists | Release only after protected contracts and buyer surface meet acceptance evidence | Open |
 
@@ -56,7 +56,7 @@ DiagramWeave currently owns no database and therefore has no implemented ERD. So
 
 | ID | Buyer-visible or governance Gap | Exact evidence | Next bounded action | Status |
 |---|---|---|---|---|
-| DW-AUT-001 | Direct-provider scheduled workflow violates the canonical owner boundary | Protected main `2f95243`; ADR-0008 proposal and RED workflow tests | Merge fail-closed consumer repair after exact-head Checks and review | Proposed |
+| DW-AUT-001 | Direct-provider scheduled workflow violates the canonical owner boundary | Protected main `2f95243`; ADR-0009 proposal and RED workflow tests | Merge fail-closed consumer repair after exact-head Checks and review | Proposed |
 | DW-CO-001 | No immutable `orchestrator/free` gateway release | `ContextualWisdomLab/contextual-orchestrator` Releases = 0; owner Issue `#1023` | Complete owner RED→GREEN→immutable release, then consumer pin | Owner-blocked |
 | DW-STUDIO-001 | No buyer-operable Studio vertical slice | DiagramWeave Issue `#29`; architecture marks Studio future | Build first product slice with normal/loading/empty/error/permission/responsive states and ko/en/ja/zh/vi/es/de/fr layout evidence | Open |
 | DW-OPS-001 | Proposal verification and publication authority are not fully separated | DiagramWeave Issue `#28`; ADR-0007 | Introduce independent verification artifact and privileged publisher after released gateway exists | Open |

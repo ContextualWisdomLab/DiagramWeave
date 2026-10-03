@@ -1,4 +1,4 @@
-# ADR-0008: Fail closed until the orchestrator gateway is immutably released
+# ADR-0009: Fail closed until the orchestrator gateway is immutably released
 
 **Status:** Proposed
 **Date:** 2026-10-03
