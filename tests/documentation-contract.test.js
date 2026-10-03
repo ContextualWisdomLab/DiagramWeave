@@ -29,6 +29,7 @@ const governingAdrs = [
   '0005-transport-neutral-lsp.md',
   '0006-provider-neutral-orchestrator.md',
   '0007-automation-authority.md',
+  '0008-adaptive-contextual-orchestrator-default.md',
 ];
 
 const readDocument = (path) => readFileSync(path, 'utf8');

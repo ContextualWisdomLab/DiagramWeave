@@ -8,6 +8,7 @@ The project follows Semantic Versioning after the first release.
 
 ### Changed
 
+- Contextual Orchestrator edit-proposal requests now use `mode: "auto"`, leaving model/provider choice, workflow depth, verification, fallback, and known-price optimization to the orchestration plane instead of fixing the consumer to one model call.
 - Hourly development now routes an open same-repository pull request into an
   RCA-driven exact-head remediation session, verifies candidate actions against
   live review and Check evidence, publishes only a normal fast-forward repair
