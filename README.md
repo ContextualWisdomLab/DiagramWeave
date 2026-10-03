@@ -257,6 +257,7 @@ npm run verify
 ## Documentation
 
 - [Product requirements](docs/product/diagramweave-prd.md)
+- [Product–technical Gap baseline](docs/product-technical-gap-baseline.md)
 - [Declaration-completion product slice](docs/product/declaration-completion.md)
 - [Hierarchical-outline product slice](docs/product/hierarchical-document-outline.md)
 - [Document-symbol compatibility product slice](docs/product/document-symbol-compatibility.md)
@@ -276,6 +277,7 @@ npm run verify
 - [PlantUML same-document definition research](docs/research/plantuml-same-document-definitions.md)
 - [PlantUML same-document reference research](docs/research/plantuml-same-document-references.md)
 - [Contextual Orchestrator operations](docs/operations/contextual-orchestrator.md)
+- [Hourly development and pull-request governance](docs/operations/hourly-development.md)
 - [PlantUML renderer operations](docs/operations/plantuml-renderer.md)
 - [Document-symbol operations](docs/operations/document-symbols.md)
 - [Declaration-completion operations](docs/operations/declaration-completion.md)
@@ -290,6 +292,7 @@ npm run verify
 - [DiagramWeave CLI](packages/cli/README.md)
 - [Security reporting](SECURITY.md)
 - [Change history](CHANGELOG.md)
+- [Architecture decisions](docs/adr/README.md)
 
 ## Release status
 

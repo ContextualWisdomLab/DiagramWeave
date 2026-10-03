@@ -11,6 +11,7 @@ The status inside each ADR is authoritative. `Accepted` means the decision gover
 | [0005](0005-transport-neutral-lsp.md) | LSP feature semantics are transport-neutral; stdio owns framing only | Accepted |
 | [0006](0006-provider-neutral-orchestrator.md) | Model access stays behind an optional Contextual Orchestrator adapter | Accepted |
 | [0007](0007-automation-authority.md) | Autonomous development is separated from review/merge/release authority | Accepted |
+| [0009](0009-fail-closed-unreleased-orchestrator-consumer.md) | Model-backed automation waits for an immutable owner gateway release | Proposed |
 
 ## Status vocabulary
 

@@ -8,20 +8,16 @@ The project follows Semantic Versioning after the first release.
 
 ### Changed
 
-- Hourly development now routes an open same-repository pull request into an
-  RCA-driven exact-head remediation session, verifies candidate actions against
-  live review and Check evidence, publishes only a normal fast-forward repair
-  after full repository verification, and re-fetches post-push state.
-- When no pull request is open, the same credential-isolated OpenCode workflow
-  uses NVIDIA NIM (`NVIDIA_NIM_API_KEY`) to create at most one bounded product
-  pull request; it no longer assumes `COPILOT_GITHUB_TOKEN` or the Copilot
-  Agent Tasks API and rechecks the queue immediately before creation.
+- Model-backed product development is now manual and fail-closed until
+  `ContextualWisdomLab/contextual-orchestrator#1023` publishes an immutable
+  `orchestrator/free` gateway release. Scheduled organization-central pull-request
+  governance remains independent and active.
 
 ### Security
 
-- Hourly remediation and product-branch pushes now use a masked,
-  command-scoped HTTP authorization header. Repository tokens are no longer
-  embedded in Git remote URLs or persisted in repository configuration.
+- Removed direct NVIDIA NIM endpoints, model fallback lists, provider secrets,
+  source checkout, and repository write permissions from the product-development
+  workflow. The disabled entry point can only emit a release-gate error.
 
 ### Added
 
